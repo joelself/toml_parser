@@ -2,6 +2,8 @@
 
 ###A TOML file parser and manipulator in Rust using [nom](https://github.com/Geal/nom)
 
+[![ghit.me](https://ghit.me/badge.svg?repo=joelself/toml_parser)](https://ghit.me/repo/joelself/toml_parser)
+
 Currently a work in progress as it can only parse comments, end-of-lines, and key_names.
 
 To modify the source simply ```git clone https://github.com/joelself/toml_parser.git```.
