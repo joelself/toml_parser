@@ -1,0 +1,9 @@
+[package]
+name = "toml_parser"
+version = "0.1.0"
+authors = ["Joel Self <joel@dislocal.com>"]
+
+[dependencies.nom]
+version = "~1.0.0"
+features = ["regexp"]
+
