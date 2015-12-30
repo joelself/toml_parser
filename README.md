@@ -4,28 +4,8 @@
 
 [![ghit.me](https://ghit.me/badge.svg?repo=joelself/toml_parser)](https://ghit.me/repo/joelself/toml_parser)
 
-Currently a work in progress as it can only parse comments, end-of-lines, and key_names.
+Based on the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54). Currently a work in progress as it can only parse Newlines, Whitespace, Comments, (partially) Key-Value Pairs, Standard Tables, Array Tables, Integers, Floats, Basic Strings, and Multiline Basic Strings. Still needs the rest of Key-Value Pairs, Literal Strings, Booleans, Datetimes, Array, Inline Tables, Expressions, and TOML (the top level).
 
-To modify the source simply ```git clone https://github.com/joelself/toml_parser.git```.
-TOML Parser uses the beta channel of Rust because it uses ```Vector.extend_from_slice```.
-This is most easily managed using [multirust](https://github.com/brson/multirust).
-Install multirust:
+Needs structs to represent various high-level pieces, probably Arrays, Inline Tables, Expressions, and TOML as well as accept methods for traversing the structure. Also needs tests for each named function.
 
-```shell
-curl -sf https://raw.githubusercontent.com/brson/multirust/master/blastoff.sh | sh
-```
-
-Change to the ```toml_parser``` directory:
-
-```shell
-cd toml_parser
-```
-
-Then run:
-
-```shell
-multirust override beta
-cargo build
-```
-
-This will set only the ```toml_parser``` directory to the Rust beta channel and build the binary. Everywhere else Rust will be on the default channel (stable).
+To get the source simply ```git clone https://github.com/joelself/toml_parser.git```. To make changes fork the repository, then clone it and make changes.
