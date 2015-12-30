@@ -6,5 +6,6 @@ authors = ["Joel Self <joel@dislocal.com>"]
 [dependencies.nom]
 git = "https://github.com/Geal/nom.git"
 
-features = ["regexp"]
+features = ["regexp_macros"]
 [dependencies.regex]
+[dependencies.regex_macros]
