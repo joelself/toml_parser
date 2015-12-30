@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Joel Self <joel@dislocal.com>"]
 
 [dependencies.nom]
-version = "~1.0.0"
-features = ["regexp"]
+git = "https://github.com/Geal/nom.git"
 
+features = ["regexp"]
+[dependencies.regex]

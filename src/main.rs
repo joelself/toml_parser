@@ -2,66 +2,126 @@
 mod ast;
 #[macro_use]
 extern crate nom;
-use std::str;
+extern crate regex;
+// TOML
+// TODO: toml
+// TODO: expression
 
-fn is_space(chr: u8) -> bool {
-    chr as u8 == 0x20 || chr as u8 == 0x09
+// Newline
+named!(newline<&str, &str>, alt!(tag_s!("\n") | tag_s!("\r\n")));
+
+named!(newlines<&str, Vec<&str> >, many1!(newline));
+
+// Whitespace
+fn is_space(chr: char) -> bool {
+    chr as u32 == 0x20 || chr as u32 == 0x09
 }
 
-/*fn is_digit(chr: u8) -> bool {
-  chr as u8 >= 0x30 && chr as u8 <= 0x39
+named!(ws<&str, &str>, take_while_s!(is_space));
+
+// Comment
+fn not_eol(chr: char) -> bool {
+  chr as u32 == 0x09 || (chr as u32 >= 0x20 && chr as u32 <=0x10FFF)
 }
 
-fn is_escape_char(chr: u8) -> bool {
-    chr as char == '0' || chr as char == 't' || chr as char == 'n' || chr as char == 'r' || chr as char == '"' || chr as char == '\\'
-}*/
+named!(comment<&str, ast::Comment>,
+       chain!(
+              tag_s!("#") ~
+ comment_txt: take_while_s!(not_eol),
+              || {ast::Comment{text: comment_txt}}
+             )
+      );
 
-named!(space<&[u8], &[u8]>, alt!( tag!(" ") | tag!("\t") )); // space
-named!(whitespace<&[u8], &[u8]>, take_while!(is_space)); // ws
-named!(newline<&[u8], &[u8]>, alt!(tag!("\r\n") | tag!("\n"))); //nl
-named!(key_segment<&[u8], &[u8]>, take_until!("[].")); // key_segment
-named!(dotted_key_segment<&[u8], &[u8]>,
-       chain!(
-           tag!(".") ~
-  segment: key_segment,
-           || {segment}
-       )
-);
-named!(dotted_key_segments< Vec<&[u8]> >, many0!(dotted_key_segment));
-named!(key_name<&[u8], Vec<&[u8]> >,
-       chain!(
-  segment: key_segment ~
- segments: dotted_key_segments,
-           || {let mut v = vec![segment];
-               v.extend_from_slice(&*segments);
-               v}
-       )
-);
+// Key-Value pairs
+fn is_keychar(chr: char) -> bool {
+  let uchr = chr as u32;
+  uchr >= 0x41 && uchr <= 0x5A || // A-Z
+  uchr >= 0x61 && uchr <= 0x7A || // A-Z
+  uchr >= 0x30 && uchr <= 0x39 || // 0-9
+  uchr == 0x2D || uchr == 0x5f // "-", "_"
+}
 
-named!(comment<&[u8], &[u8]>,
-       chain!(
-           tag!("#") ~
-   result: alt!(take_until!("\r\n") |
-                take_until!("\n")),
-           || {result}
-       )
-); // comment
 
-named!(ignorable<&[u8], &[u8]>, alt!( comment | space | newline ));
-named!(ignore<&[u8], Vec<&[u8]> >, many0!(ignorable)); // ignore
-named!(line_end<&[u8], ast::LineEnd>,
+// named!(basic_unescaped<&str, &str>, re_match!(r" |!|[#-\[]|[\]-􏿿]"));
+// named!(escaped<&str, &str>, re_match!("(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(u[0-9A-Z]{4})|(U[0-9A-Z]{8})"));
+// named!(basic_char<&str, &str>, alt!(basic_unescaped | escaped));
+named!(unquoted_key<&str, &str>, take_while1_s!(is_keychar));
+named!(quoted_key<&str, &str>, re_find!("\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})){1,}\""));
+
+named!(key<&str, &str>, alt!(unquoted_key | quoted_key));
+named!(keyval_sep<&str, ast::WSSep>,
        chain!(
-       ws: whitespace ~
-  comment: comment? ~
-       nl: newline ,
-           || {ast::LineEnd{ws: str::from_utf8(ws).unwrap(),
-                           comment: str::from_utf8(comment.unwrap()).unwrap(),
-                           nl: str::from_utf8(nl).unwrap()}}
-       )
-); // line_end
+         ws1: ws ~
+              tag_s!("=") ~
+         ws2: ws,
+              || {ast::WSSep{ws1: ws1, ws2: ws2}}     
+             )
+      );
+// TODO: named!(val<&str, &str>, ...);
+// TODO: named!(keyval<&str, ast::KeyVal>, ...);
+
+// Standard Table
+named!(table_sub_key<&str, ast::WSKeySep>,
+       chain!(
+         ws1: ws ~
+              tag_s!(".") ~
+         ws2: ws ~
+         key: key,
+              || {ast::WSKeySep{ws: ast::WSSep{ws1: ws1, ws2: ws2}, key: key}} 
+             )
+      );
+named!(table_sub_keys<&str, Vec<ast::WSKeySep> >, many0!(table_sub_key));
+named!(std_table<&str, ast::Table>,
+       chain!(
+              tag_s!("[") ~
+         ws1: ws ~
+         key: key ~
+     subkeys: table_sub_keys ~
+         ws2: ws ~
+              tag_s!("]"),
+              || {ast::Table{ttype: ast::TableType::Standard,
+                             ws: ast::WSSep{ws1: ws1, ws2: ws2},
+                             key: key, subkeys: subkeys}}
+             )
+      );
+
+// Array Table
+named!(array_table<&str, ast::Table>,
+       chain!(
+              tag_s!("[[") ~
+         ws1: ws ~
+         key: key ~
+     subkeys: table_sub_keys ~
+         ws2: ws ~
+              tag_s!("]]"),
+              || {ast::Table{ttype: ast::TableType::Array,
+                             ws: ast::WSSep{ws1: ws1, ws2: ws2},
+                             key: key, subkeys: subkeys}}
+             )
+      );
+
+// Integer
+named!(integer<&str, &str>, re_find!("(\\+|-)?([1-9](\\d|(_\\d))+|\\d)"));
+
+// Float
+named!(float<&str, &str>,
+       re_find!("(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
+
+// String
+// TODO: named!(string<&str, &str>, alt!(basic_string | ml_basic_string | literal_string | ml_literal_string));
+
+// Basic String
+named!(basic_string<&str, &str>,
+       re_find!("\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})){0,}\""));
+
+// Multiline Basic String
+named!(ml_basic_string<&str, &str>,
+       re_find!("\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*\"\"\""));
 
 fn main() {
-    let r = line_end(b" \t #this is comment\r\n");
+    let s = r#""""
+             HOH\\nA#[]
+             """"#;
+    let r = ml_basic_string(s);
     println!("{:?}", r);
-    //assert_eq!(r, Done(b"X", true));
 }
