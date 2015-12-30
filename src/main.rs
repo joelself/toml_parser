@@ -118,10 +118,28 @@ named!(basic_string<&str, &str>,
 named!(ml_basic_string<&str, &str>,
        re_find!("\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*\"\"\""));
 
+// Literal String
+named!(literal_string<&str, &str>,
+       re_find!("'(	|[ -&]|[\\(-􏿿])*'"));
+
+//Multiline Literal String
+// TODO: finish this function
+named!(ml_literal_string<&str, &str>, 
+	   re_find("'''(	|)*'''"));
 fn main() {
     let s = r#""""
              HOH\\nA#[]
              """"#;
     let r = ml_basic_string(s);
     println!("{:?}", r);
+}
+
+#[cfg(test)]
+mod test {
+	use nom::IResult::{Done};
+	use ::literal_string;
+	#[test]
+	fn test_literal_string() {
+		assert_eq!(literal_string("'Abc џ'"), Done("", "'Abc џ'"));	
+	}
 }
