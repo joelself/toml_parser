@@ -4,9 +4,9 @@
 
 [![ghit.me](https://ghit.me/badge.svg?repo=joelself/toml_parser)](https://ghit.me/repo/joelself/toml_parser)
 
-Based on the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54). Currently a work in progress as it can only parse Newlines, Whitespace, Comments, (partially) Key-Value Pairs, Standard Tables, Array Tables, Integers, Floats, Basic Strings, Multiline Basic Strings, Literal Strings, Booleans, (partially) Datetimes. Still needs the rest of Key-Value Pairs,the rest of Datetimes, Arrays, Inline Tables, Expressions, and TOML (the top level).
+Based on the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54). Currently a work in progress as it can only parse Newlines, Whitespace, Comments, Key-Value Pairs, Standard Tables, Array Tables, Integers, Floats, Basic Strings, Multiline Basic Strings, Literal Strings, Booleans, Datetimes, and Arrays. Still needs Inline tables, Expressions, allow Inline tables and Arrays to be vals and the top-level TOML.
 
-Needs structs to represent various high-level pieces, probably Arrays, Datetime, Inline Tables, Expressions, and TOML as well as accept methods for traversing the structure. Also needs tests for each named function. Some tests have been written.
+All high level structs representing the ABNF are implemented except for (partially) Val, Expression, Inline table and TOML.
 
 To get the source simply ```git clone https://github.com/joelself/toml_parser.git```.
 I took a dependencies on `regex_macros` which requires you be on the nightly version of Rust. Fortunately [multirust](https://github.com/brson/multirust) makes this dead simple without forcing all of your Rust evironment to be on Nightly.
