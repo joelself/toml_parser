@@ -4,8 +4,8 @@ pub enum Val<'a> {
 	Float(&'a str),
 	Boolean(&'a str),
 	DateTime(DateTime<'a>),
-	/*Array(Array<'a>),
-	InlineTable(InlineTable<'a>),*/
+	Array(Box<Array<'a>>),
+	/*InlineTable(InlineTable<'a>),*/
 }
 
 impl<'a> PartialEq for Val<'a> {
@@ -15,8 +15,8 @@ impl<'a> PartialEq for Val<'a> {
 			(&Val::Float(ref i), &Val::Float(ref j)) if i == j => true,
 			(&Val::Boolean(ref i), &Val::Boolean(ref j)) if i == j => true,
 			(&Val::DateTime(ref i), &Val::DateTime(ref j)) if i == j => true,
-			/*(Val::Array(ref i), Val::Array(ref j)) if i == j => true,
-			(Val::InlineTable(ref i), Val::InlineTable(ref j)) if i == j => true,*/
+			(&Val::Array(ref i), &Val::Array(ref j)) if i == j => true,
+			/*(&Val::InlineTable(ref i), &Val::InlineTable(ref j)) if i == j => true,*/
 			_ => false
 		}
 	}
@@ -235,12 +235,13 @@ impl<'a> PartialEq for CommentOrNewLines<'a> {
 	}
 }
 
+// <val><<array_sep.ws1>,<array_sep.ws2>?><comment_nl?><array_vals?>
 #[derive(Debug, Eq)]
 pub struct ArrayValues<'a> {
 	pub val: Val<'a>,
 	pub array_sep: Option<WSSep<'a>>,
 	pub comment_nl: Option<CommentOrNewLines<'a>>,
-	pub array_vals: Option<Box<Option<ArrayValues<'a>>>>,
+	pub array_vals: Option<Box<ArrayValues<'a>>>,
 }
 
 impl<'a> PartialEq for ArrayValues<'a> {
@@ -263,3 +264,45 @@ impl<'a> PartialEq for ArrayValues<'a> {
 		}
 	}
 }
+
+// [<values?>]
+#[derive(Debug, Eq)]
+pub struct Array<'a> {
+	pub values: Option<ArrayValues<'a>>,
+}
+
+impl<'a> PartialEq for Array<'a> {
+	fn eq(&self, other: &Array<'a>) -> bool {
+		self.values == other.values
+	}
+}
+
+// <key><keyval_sep.ws1>=<keyval_sep.ws2><val><<table_sep.ws1>,<table_sep.ws2>?><keyvals?>
+#[derive(Debug, Eq)]
+pub struct TableKeyVals<'a> {
+	pub key: &'a str,
+	pub keyval_sep: WSSep<'a>,
+	pub val: Val<'a>,
+	pub table_sep: Option<WSSep<'a>>,
+	pub keyvals: Option<Box<TableKeyVals<'a>>>,
+}
+
+impl<'a> PartialEq for TableKeyVals<'a> {
+	fn eq(&self, other: &TableKeyVals<'a>) -> bool {
+		self.key == other.key &&
+		self.keyval_sep == other.keyval_sep &&
+		self.val == other.val &&
+		match (&self.table_sep, &other.table_sep) {
+			(&Some(ref i), &Some(ref j)) if i == j => true,
+			(&None, &None) => true,
+			_ => false
+		} &&
+		match (&self.keyvals, &other.keyvals) {
+			(&Some(ref i), &Some(ref j)) if i == j => true,
+			(&None, &None) => true,
+			_ => false
+		}
+	}
+} 
+
+

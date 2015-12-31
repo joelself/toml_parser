@@ -16,5 +16,6 @@ pub use self::structs::DateTime;
 pub use self::structs::CommentNewLines;
 pub use self::structs::CommentOrNewLines;
 pub use self::structs::ArrayValues;
+pub use self::structs::Array;
 
 

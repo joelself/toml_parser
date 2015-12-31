@@ -5,7 +5,7 @@ mod ast;
 use ast::{Val, Comment, WSSep, KeyVal, WSKeySep, TableType, Table,
           PartialTime, TimeOffsetAmount, TimeOffset, FullTime, PosNeg,
           FullDate, DateTime, CommentNewLines, CommentOrNewLines,
-          ArrayValues};
+          ArrayValues, Array};
 #[macro_use]
 extern crate nom;
 extern crate regex;
@@ -65,12 +65,11 @@ named!(keyval_sep<&str, WSSep>,
              )
       );
 
-named!(val<&str, Val>, alt!(complete!(date_time)    => {|dt|    Val::DateTime(dt)} |
-                            complete!(float)        => {|flt|   Val::Float(flt)}   |
-                            complete!(integer)      => {|int|   Val::Integer(int)} |
-                            complete!(boolean)      => {|b|     Val::Boolean(b)}
-                             /*|
-                            complete!(array)        => {|arr|   Val::Array(arr)}   |
+named!(val<&str, Val>, alt!(complete!(array)        => {|arr|   Val::Array(Box::new(arr))}  |
+                            complete!(date_time)    => {|dt|    Val::DateTime(dt)}          |
+                            complete!(float)        => {|flt|   Val::Float(flt)}            |
+                            complete!(integer)      => {|int|   Val::Integer(int) }         |
+                            complete!(boolean)      => {|b|     Val::Boolean(b)}   /*|
                             complete!(inline_table) => {|itab|  Val::InlineTable(itab)}*/
                             )
       );
@@ -247,47 +246,54 @@ named!(comment_or_nl<&str, CommentOrNewLines>,
            )
       );
 
-named!(array_values<&str, Option<ArrayValues> >,
-            opt!(
-                 alt!(
-                      complete!(
-                                chain!(
-                                  val: val ~
-                            array_sep: array_sep ~
-                           comment_nl: comment_or_nl? ~
-                           array_vals: array_values,
-                                       || {ArrayValues{val: val,
-                                                       array_sep: Some(array_sep),
-                                                       comment_nl: comment_nl,
-                                                       array_vals: Some(Box::new(array_vals))}}
-                                      )
-                                ) |
-                      complete!(
-                                chain!(
-                                  val: val ~
-                            array_sep: array_sep? ~
-                           comment_nl: comment_or_nl? ,
-                                       || {ArrayValues{val: val,
-                                                       array_sep: array_sep,
-                                                       comment_nl: comment_nl,
-                                                       array_vals: None}}
-                                      )
-                               )
+named!(array_values<&str, ArrayValues>,
+       alt!(
+            complete!(
+                      chain!(
+                        val: val ~
+                  array_sep: array_sep ~
+                 comment_nl: comment_or_nl? ~
+                 array_vals: array_values,
+                             || {ArrayValues{val: val,
+                                             array_sep: Some(array_sep),
+                                             comment_nl: comment_nl,
+                                             array_vals: Some(Box::new(array_vals))}}
+                            )
+                      ) |
+            complete!(
+                      chain!(
+                        val: val ~
+                  array_sep: array_sep? ~
+                 comment_nl: comment_or_nl? ,
+                             || {ArrayValues{val: val,
+                                             array_sep: array_sep,
+                                             comment_nl: comment_nl,
+                                             array_vals: None}}
+                            )
                      )
-                  )
+           )
       );
-named!(array<&str, Option<ArrayValues> >,
+
+named!(array<&str, Array>,
        chain!(
               tag_s!("[") ~
-  array_vals: array_values ~
+  array_vals: array_values? ~
               tag_s!("]"),
-              || {array_vals}
+              || {Array{values: array_vals}}
              )
       );
+// Inline Table
+// Note inline-table-sep and array-sep are identical so we'll reuse array-sep
+
+// TODO: Implement this function and the rest of inline tabes
+//named!(inline_table_keyvals_non_empty<&str, &str>);
+
 // For testing as I go
 // TODO: remove when finished
 fn main() {
-    let s = "[2010-10-10T10:10:10.33Z,5.45 ,true, 56, \t 1950-03-30T21:04:14.123+05:00]";
+    //let s = "[2010-10-10T10:10:10.33Z , true, 56, \t 1950-03-30T21:04:14.123+05:00]";
+    let s = "[[3,4], [4,5], [6]]";
+    println!("{}", s);
     let r = array(s);
     println!("{:?}", r);
 }
@@ -299,7 +305,7 @@ mod test {
          time_offset_amount, time_offset, full_time, full_date,
          date_time, array};
   use ast::{Val, PartialTime, TimeOffsetAmount, TimeOffset, FullTime, PosNeg, WSSep,
-            FullDate, DateTime, ArrayValues};
+            FullDate, DateTime, ArrayValues, Array};
 
 	#[test]
 	fn test_literal_string() {
@@ -385,15 +391,86 @@ mod test {
 
   #[test]
   fn test_non_nested_array() {
-    assert_eq!(array("[2010-10-10T10:10:10.33Z,5.45 ,true, 56, \t 1950-03-30T21:04:14.123+05:00]"),
-               Done("", Some(ArrayValues { val: Val::DateTime(DateTime { date:
-                FullDate { year: "2010", month: "10", day: "10" }, time: FullTime { partial_time:
-                 PartialTime { hour: "10", minute: "10", second: "10", fraction: "33" }, time_offset: TimeOffset::Z } }),
-               array_sep: Some(WSSep { ws1: "", ws2: "" }), comment_nl: None, array_vals: Some(Box::new(Some(ArrayValues
-                { val: Val::DateTime(DateTime { date: FullDate { year: "1950", month: "03", day: "30" },
-                time: FullTime { partial_time: PartialTime { hour: "21", minute: "04", second: "14", fraction:
-                "123" }, time_offset: TimeOffset::Time(TimeOffsetAmount { pos_neg: PosNeg::Pos, hour: "05", minute: "00" }) } }),
-                array_sep: None, comment_nl: None, array_vals: None }))) })));
+    assert_eq!(array("[2010-10-10T10:10:10.33Z, 1950-03-30T21:04:14.123+05:00]"),
+               Done("", Array {
+                values: Some(ArrayValues {
+                  val: Val::DateTime(DateTime {
+                    date: FullDate {
+                      year: "2010", month: "10", day: "10"
+                    },
+                    time: FullTime {
+                      partial_time: PartialTime {
+                        hour: "10", minute: "10", second: "10", fraction: "33"
+                      },
+                      time_offset: TimeOffset::Z
+                    }
+                  }),
+                  array_sep: Some(WSSep {
+                    ws1: "", ws2: " "
+                  }),
+                  comment_nl: None, array_vals: Some(Box::new(ArrayValues {
+                    val: Val::DateTime(DateTime {
+                      date: FullDate {
+                        year: "1950", month: "03", day: "30"
+                      },
+                      time: FullTime {
+                        partial_time: PartialTime {
+                          hour: "21", minute: "04", second: "14", fraction: "123"
+                        },
+                        time_offset: TimeOffset::Time(TimeOffsetAmount {
+                          pos_neg: PosNeg::Pos, hour: "05", minute: "00"
+                        })
+                      }
+                    }),
+                    array_sep: None, comment_nl: None, array_vals: None
+                  }))
+                })
+              }));
   }
 
+  #[test]
+  fn test_nested_array() {
+    assert_eq!(array("[[3,4], [4,5], [6]]"),
+               Done("", Array {
+                          values: Some(ArrayValues {
+                            val: Val::Array(Box::new(Array {
+                              values: Some(ArrayValues {
+                                val: Val::Integer("3"), array_sep: Some(WSSep {
+                                  ws1: "", ws2: ""
+                                }),
+                                comment_nl: None, array_vals: Some(Box::new(ArrayValues {
+                                  val: Val::Integer("4"), array_sep: None, comment_nl: None, array_vals: None
+                                }))
+                              })
+                            })),
+                            array_sep: Some(WSSep {
+                              ws1: "", ws2: " "
+                            }),
+                            comment_nl: None, array_vals: Some(Box::new(ArrayValues {
+                              val: Val::Array(Box::new(Array {
+                                values: Some(ArrayValues {
+                                  val: Val::Integer("4"), array_sep: Some(WSSep {
+                                    ws1: "", ws2: ""
+                                  }),
+                                  comment_nl: None, array_vals: Some(Box::new(ArrayValues {
+                                    val: Val::Integer("5"), array_sep: None, comment_nl: None, array_vals: None
+                                  }))
+                                })
+                              })),
+                              array_sep: Some(WSSep {
+                                ws1: "", ws2: " "
+                              }), comment_nl: None, array_vals: Some(Box::new(ArrayValues {
+                                val: Val::Array(Box::new(Array {
+                                  values: Some(ArrayValues {
+                                    val: Val::Integer("6"), array_sep: None, comment_nl: None, array_vals: None
+                                  })
+                                })),
+                                array_sep: None, comment_nl: None, array_vals: None
+                              }))
+                            }))
+                          })
+                        }
+                   )
+              );
+  }
 }
