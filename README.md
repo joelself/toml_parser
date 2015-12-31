@@ -4,7 +4,7 @@
 
 [![ghit.me](https://ghit.me/badge.svg?repo=joelself/toml_parser)](https://ghit.me/repo/joelself/toml_parser)
 
-Based on the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54). Currently a work in progress as it can only parse Newlines, Whitespace, Comments, Key-Value Pairs, Standard Tables, Array Tables, Integers, Floats, Basic Strings, Multiline Basic Strings, Literal Strings, Booleans, Datetimes, and Arrays. Still needs Inline tables, Expressions, allow Inline tables and Arrays to be vals and the top-level TOML.
+Based on the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54). Currently a work in progress as it can only parse Newlines, Whitespace, Comments, Key-Value Pairs, Standard Tables, Array Tables, Integers, Floats, Basic Strings, Multiline Basic Strings, Literal Strings, Booleans, Datetimes, and Arrays. Still needs Inline tables, Expressions, allow Inline tables to be vals and the top-level TOML.
 
 All high level structs representing the ABNF are implemented except for (partially) Val, Expression, Inline table and TOML.
 
