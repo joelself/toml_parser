@@ -1,8 +1,40 @@
+#[derive(Debug, Eq)]
+pub enum Val<'a> {
+	Integer(&'a str),
+	Float(&'a str),
+	Boolean(&'a str),
+	DateTime(DateTime<'a>),
+	/*Array(Array<'a>),
+	InlineTable(InlineTable<'a>),*/
+}
 
-#[derive(Debug)]
+impl<'a> PartialEq for Val<'a> {
+	fn eq(&self, other: &Val<'a>) -> bool {
+		match (self, other) {
+			(&Val::Integer(ref i), &Val::Integer(ref j)) if i == j => true,
+			(&Val::Float(ref i), &Val::Float(ref j)) if i == j => true,
+			(&Val::Boolean(ref i), &Val::Boolean(ref j)) if i == j => true,
+			(&Val::DateTime(ref i), &Val::DateTime(ref j)) if i == j => true,
+			/*(Val::Array(ref i), Val::Array(ref j)) if i == j => true,
+			(Val::InlineTable(ref i), Val::InlineTable(ref j)) if i == j => true,*/
+			_ => false
+		}
+	}
+}
+#[derive(Debug, Eq)]
 pub enum TableType {
 	Standard,
 	Array,
+}
+
+impl PartialEq for TableType {
+	fn eq(&self, other: &TableType) -> bool {
+		match (self, other) {
+			(&TableType::Standard, &TableType::Standard) => true,
+			(&TableType::Array, &TableType::Array) => true,
+			_ => false
+		}
+	}
 }
 
 #[derive(Debug, Eq)]
@@ -38,23 +70,44 @@ impl PartialEq for PosNeg {
 }
 
 // #<text>
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub struct Comment<'a> {
 	pub text: &'a str,
 }
 
-#[derive(Debug)]
+impl<'a> PartialEq for Comment<'a> {
+	fn eq(&self, other: &Comment<'a>) -> bool {
+		self.text == other.text
+	}
+}
+
+#[derive(Debug, Eq)]
 pub struct WSSep<'a> {
 	pub ws1: &'a str,
 	pub ws2: &'a str,
 }
 
+impl<'a> PartialEq for WSSep<'a> {
+	fn eq(&self, other: &WSSep<'a>) -> bool {
+		self.ws1 == other.ws1 &&
+		self.ws2 == other.ws2
+	}
+}
+
 // <key><keyval_sep.ws1>=<keyval_sep.ws2><val>
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub struct KeyVal<'a> {
 	pub key: &'a str,
 	pub keyval_sep: WSSep<'a>,
-	pub val: &'a str,
+	pub val: Val<'a>,
+}
+
+impl<'a> PartialEq for KeyVal<'a> {
+	fn eq(&self, other: &KeyVal<'a>) -> bool {
+		self.key == other.key &&
+		self.keyval_sep == other.keyval_sep &&
+		self.val == other.val
+	}
 }
 
 // <ws.ws1>.<ws.ws2><key>
@@ -149,5 +202,64 @@ impl<'a> PartialEq for DateTime<'a> {
 	fn eq(&self, other: &DateTime<'a>) -> bool {
 		self.date == other.date &&
 		self.time == other.time
+	}
+}
+
+// <comment><newlines+>
+#[derive(Debug, Eq)]
+pub struct CommentNewLines<'a> {
+	pub comment: Comment<'a>,
+	pub newlines: Vec<&'a str>,
+}
+
+impl<'a> PartialEq for CommentNewLines<'a> {
+	fn eq(&self, other: &CommentNewLines<'a>) -> bool {
+		self.comment == other.comment &&
+		self.newlines == other.newlines
+	}
+}
+
+#[derive(Debug, Eq)]
+pub enum CommentOrNewLines<'a> {
+	Comment(CommentNewLines<'a>),
+	NewLines(Vec<&'a str>),
+}
+
+impl<'a> PartialEq for CommentOrNewLines<'a> {
+	fn eq(&self, other: &CommentOrNewLines<'a>) -> bool {
+		match (self, other) {
+			(&CommentOrNewLines::Comment(ref i), &CommentOrNewLines::Comment(ref j)) if i == j => true,
+			(&CommentOrNewLines::NewLines(ref i), &CommentOrNewLines::NewLines(ref j)) if i == j => true,
+			_ => false
+		}
+	}
+}
+
+#[derive(Debug, Eq)]
+pub struct ArrayValues<'a> {
+	pub val: Val<'a>,
+	pub array_sep: Option<WSSep<'a>>,
+	pub comment_nl: Option<CommentOrNewLines<'a>>,
+	pub array_vals: Option<Box<Option<ArrayValues<'a>>>>,
+}
+
+impl<'a> PartialEq for ArrayValues<'a> {
+	fn eq(&self, other: &ArrayValues<'a>) -> bool {
+		self.val == other.val &&
+		match (&self.array_sep, &other.array_sep) {
+			(&Some(ref i), &Some(ref j)) if i == j => true,
+			(&None, &None) => true,
+			_ => false
+		} &&
+		match (&self.comment_nl, &other.comment_nl) {
+			(&Some(ref i), &Some(ref j)) if i == j => true,
+			(&None, &None) => true,
+			_ => false
+		} &&
+		match (&self.array_vals, &other.array_vals) {
+			(&Some(ref i), &Some(ref j)) if i == j => true,
+			(&None, &None) => true,
+			_ => false
+		}
 	}
 }
