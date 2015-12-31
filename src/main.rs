@@ -2,7 +2,9 @@
 #![feature(plugin)]
 #![plugin(regex_macros)]
 mod ast;
-use ast::{Comment, WSSep, WSKeySep, TableType, Table, PartialTime};
+use ast::{Comment, WSSep, WSKeySep, TableType, Table, PartialTime,
+          TimeOffsetAmount, TimeOffset, FullTime, PosNeg, FullDate,
+          DateTime};
 #[macro_use]
 extern crate nom;
 extern crate regex;
@@ -154,20 +156,62 @@ named!(partial_time<&str, PartialTime>,
                  }
              )
       );
+named!(time_offset_amount<&str, TimeOffsetAmount>,
+       chain!(
+     pos_neg: alt!(tag_s!("+") => {|_| PosNeg::Pos} | tag_s!("-") => {|_| PosNeg::Neg}) ~
+        hour: re_find_static!("[0-9]{2}") ~
+              tag_s!(":") ~
+      minute: re_find_static!("[0-9]{2}"),
+              || {TimeOffsetAmount{pos_neg: pos_neg, hour: hour, minute: minute}}
+             )
+      );
+named!(time_offset<&str, TimeOffset>,
+       alt!( tag_s!("Z") => {|_| TimeOffset::Z} |
+             time_offset_amount => {|offset| TimeOffset::Time(offset)}
+           )
+      );
+named!(full_time<&str, FullTime>,
+       chain!(
+     partial: partial_time ~
+      offset: time_offset,
+              || {FullTime{partial_time: partial,
+                           time_offset: offset}}
+             )
+      );
+named!(full_date<&str, FullDate>,
+       chain!(
+        year: re_find_static!("[0-9]{4}") ~
+              tag_s!("-") ~
+       month: re_find_static!("[0-9]{2}") ~
+              tag_s!("-") ~
+         day: re_find_static!("[0-9]{2}"),
+              || {FullDate{year: year, month: month, day: day}}
+             )
+      );
+named!(date_time<&str, DateTime>,
+       chain!(
+        date: full_date ~
+        time: full_time,
+              || {DateTime{date: date, time: time}}
+             )
+      );
 
 // For testing as I go
 // TODO: remove when finished
 fn main() {
-    let s = "11:22:33.456";
-    let r = partial_time(s);
+    let s = "11:22:33.456+09:13";
+    let r = full_time(s);
     println!("{:?}", r);
 }
 
 #[cfg(test)]
 mod test {
 	use nom::IResult::{Done};
-	use ::{literal_string, ml_literal_string, boolean, partial_time};
-  use ast::{PartialTime};
+	use ::{literal_string, ml_literal_string, boolean, partial_time,
+         time_offset_amount, time_offset, full_time, full_date,
+         date_time};
+  use ast::{PartialTime, TimeOffsetAmount, TimeOffset, FullTime, PosNeg,
+            FullDate, DateTime};
 
 	#[test]
 	fn test_literal_string() {
@@ -199,5 +243,55 @@ mod test {
                                                                   minute: "05",
                                                                   second: "06",
                                                                   fraction: ""}));
+  }
+
+  #[test]
+  fn test_time_offset_amount() {
+    assert_eq!(time_offset_amount("+12:34"), Done("", TimeOffsetAmount{pos_neg: PosNeg::Pos,
+                                                                       hour: "12",
+                                                                       minute: "34"}));
+  }
+
+  #[test]
+  fn test_time_offset() {
+    assert_eq!(time_offset("+12:34"), Done("",
+                                           TimeOffset::Time(TimeOffsetAmount{pos_neg: PosNeg::Pos,
+                                                                             hour: "12",
+                                                                             minute: "34"})));
+    assert_eq!(time_offset("Z"), Done("", TimeOffset::Z));
+  }
+
+  #[test]
+  fn test_full_time() {
+    assert_eq!(full_time("10:30:55.83+12:54"), Done("",
+                                                    FullTime{partial_time:
+                                                             PartialTime{hour: "10",
+                                                                         minute: "30",
+                                                                         second: "55",
+                                                                         fraction: "83"},
+                                                             time_offset:
+                                                             TimeOffset::Time(TimeOffsetAmount{pos_neg: PosNeg::Pos,
+                                                                                               hour: "12",
+                                                                                               minute: "54"})}));
+  }
+
+  #[test]
+  fn test_full_date() {
+    assert_eq!(full_date("1942-12-07"), Done("", FullDate{year: "1942", month: "12", day: "07"}));
+  }
+
+  #[test]
+  fn test_date_time() {
+    assert_eq!(date_time("1999-03-21T20:15:44.5-07:00"),
+               Done("", DateTime{date: FullDate{year: "1999", month: "03", day: "21"},
+                                 time: FullTime{partial_time:
+                                                 PartialTime{hour: "20",
+                                                             minute: "15",
+                                                             second: "44",
+                                                             fraction: "5"},
+                                                 time_offset:
+                                                 TimeOffset::Time(TimeOffsetAmount{pos_neg: PosNeg::Neg,
+                                                                                   hour: "07",
+                                                                                   minute: "00"})}}));
   }
 }

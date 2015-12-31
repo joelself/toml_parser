@@ -6,4 +6,11 @@ pub use self::structs::WSKeySep;
 pub use self::structs::TableType;
 pub use self::structs::Table;
 pub use self::structs::PartialTime;
+pub use self::structs::TimeOffsetAmount;
+pub use self::structs::TimeOffset;
+pub use self::structs::FullTime;
+pub use self::structs::PosNeg;
+pub use self::structs::FullDate;
+pub use self::structs::DateTime;
+
 

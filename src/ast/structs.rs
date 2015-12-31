@@ -5,6 +5,38 @@ pub enum TableType {
 	Array,
 }
 
+#[derive(Debug, Eq)]
+pub enum TimeOffset<'a> {
+	Z,
+	Time(TimeOffsetAmount<'a>),
+}
+
+impl<'a> PartialEq for TimeOffset<'a> {
+	fn eq(&self, other: &TimeOffset<'a>) -> bool {
+		match (self, other) {
+			(&TimeOffset::Z, &TimeOffset::Z) => true,
+			(&TimeOffset::Time(ref i), &TimeOffset::Time(ref j)) if(i == j) => true,
+			_ => false
+		}
+	}
+}
+
+#[derive(Debug, Eq)]
+pub enum PosNeg {
+	Pos,
+	Neg,
+}
+
+impl PartialEq for PosNeg {
+	fn eq(&self, other: &PosNeg) -> bool {
+		match (self, other) {
+			(&PosNeg::Pos, &PosNeg::Pos) => true,
+			(&PosNeg::Neg, &PosNeg::Neg) => true,
+			_ => false
+		}
+	}
+}
+
 // #<text>
 #[derive(Debug)]
 pub struct Comment<'a> {
@@ -43,13 +75,12 @@ pub struct Table<'a> {
 }
 
 // <hour>:<minute>:<second>(.<fraction>)?
-#[derive(Debug)]
-#[derive(Eq)]
+#[derive(Debug, Eq)]
 pub struct PartialTime<'a> {
     pub hour: &'a str,
 	pub minute: &'a str,
 	pub second: &'a str,
-	pub fraction: &'a str, // should only have one element if it is Some
+	pub fraction: &'a str,
 }
 
 impl<'a> PartialEq for PartialTime<'a> {
@@ -58,5 +89,65 @@ impl<'a> PartialEq for PartialTime<'a> {
 		self.minute == other.minute &&
 		self.second == other.second &&
 		self.fraction == other.fraction
+	}
+}
+
+// (+|-)<hour>:<minute>
+#[derive(Debug, Eq)]
+pub struct TimeOffsetAmount<'a> {
+	pub pos_neg: PosNeg,
+	pub hour: &'a str,
+	pub minute: &'a str,
+}
+
+impl<'a> PartialEq for TimeOffsetAmount<'a> {
+	fn eq(&self, other: &TimeOffsetAmount<'a>) -> bool {
+		self.pos_neg == other.pos_neg &&
+		self.hour == other.hour &&
+		self.minute == other.minute
+	}
+}
+
+// <partial_time><time_offset>
+#[derive(Debug, Eq)]
+pub struct FullTime<'a> {
+    pub partial_time: PartialTime<'a>,
+    pub time_offset: TimeOffset<'a>,
+}
+
+impl<'a> PartialEq for FullTime<'a> {
+	fn eq(&self, other: &FullTime<'a>) -> bool {
+		self.partial_time == other.partial_time &&
+		self.time_offset == other.time_offset
+	}
+}
+
+// <year>-<month>-<day>
+#[derive(Debug, Eq)]
+pub struct FullDate<'a> {
+	pub year: &'a str,
+	pub month: &'a str,
+	pub day: &'a str,
+}
+
+impl<'a> PartialEq for FullDate<'a> {
+	fn eq(&self, other: &FullDate<'a>) -> bool {
+		self.year == other.year &&
+		self.month == other.month &&
+		self.day == other.day
+	}
+}
+
+// <date>T<time>
+#[derive(Debug, Eq)]
+pub struct DateTime<'a> {
+	pub date: FullDate<'a>,
+	pub time: FullTime<'a>,
+}
+
+impl<'a> PartialEq for DateTime<'a> {
+	fn eq(&self, other: &DateTime<'a>) -> bool {
+		self.date == other.date &&
+		self.time == other.time
 	}
 }
