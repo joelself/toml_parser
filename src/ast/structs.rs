@@ -4,9 +4,33 @@ pub enum Val<'a> {
 	Float(&'a str),
 	Boolean(&'a str),
 	DateTime(DateTime<'a>),
-	Array(Box<Array<'a>>),
+	Array(Box<&'a Array<'a>>),
 	/*InlineTable(InlineTable<'a>),*/
 }
+
+impl<'a> Val<'a> {
+	fn len(&self) -> usize {
+		match self {
+			&Val::Integer(i) 	=> i.len(),
+			&Val::Float(i)   	=> i.len(),
+			&Val::Boolean(i) 	=> i.len(),
+			&Val::DateTime(ref i)	=> i.len(),
+			&Val::Array(ref i)	=> i.len(),
+			/*InlineTable(i) => i.len(),*/
+		}
+	}
+}
+
+pub enum Type {
+	Integer,
+	Float,
+	Boolean,
+	DateTime,
+	Array,
+	/*InlineTable,*/
+}
+
+pub struct ValLength(pub Type, pub usize);
 
 impl<'a> PartialEq for Val<'a> {
 	fn eq(&self, other: &Val<'a>) -> bool {
@@ -43,6 +67,15 @@ pub enum TimeOffset<'a> {
 	Time(TimeOffsetAmount<'a>),
 }
 
+impl<'a> TimeOffset<'a> {
+	fn len(&self) -> usize {
+		match self {
+			&TimeOffset::Z 		=> 1,
+			&TimeOffset::Time(ref i) => i.len(),
+		}
+	}
+}
+
 impl<'a> PartialEq for TimeOffset<'a> {
 	fn eq(&self, other: &TimeOffset<'a>) -> bool {
 		match (self, other) {
@@ -75,6 +108,12 @@ pub struct Comment<'a> {
 	pub text: &'a str,
 }
 
+impl<'a> Comment<'a> {
+	fn len(&self) -> usize {
+		self.text.len() + 1 // +1 for the #
+	}
+}
+
 impl<'a> PartialEq for Comment<'a> {
 	fn eq(&self, other: &Comment<'a>) -> bool {
 		self.text == other.text
@@ -85,6 +124,12 @@ impl<'a> PartialEq for Comment<'a> {
 pub struct WSSep<'a> {
 	pub ws1: &'a str,
 	pub ws2: &'a str,
+}
+
+impl<'a> WSSep<'a> {
+	fn len(&self) -> usize {
+		self.ws1.len() + self.ws2.len()
+	}
 }
 
 impl<'a> PartialEq for WSSep<'a> {
@@ -136,6 +181,12 @@ pub struct PartialTime<'a> {
 	pub fraction: &'a str,
 }
 
+impl<'a> PartialTime<'a> {
+	fn len(&self) -> usize {
+		self.hour.len() + self.minute.len() + self.second.len() + self.fraction.len() + 2 // +2 for :'s
+	}
+}
+
 impl<'a> PartialEq for PartialTime<'a> {
 	fn eq(&self, other: &PartialTime<'a>) -> bool {
 		self.hour == other.hour &&
@@ -153,6 +204,12 @@ pub struct TimeOffsetAmount<'a> {
 	pub minute: &'a str,
 }
 
+impl<'a> TimeOffsetAmount<'a> {
+	fn len(&self) -> usize {
+		self.hour.len() + self.minute.len() + 1 // +1 for Pos/Neg
+	}
+}
+
 impl<'a> PartialEq for TimeOffsetAmount<'a> {
 	fn eq(&self, other: &TimeOffsetAmount<'a>) -> bool {
 		self.pos_neg == other.pos_neg &&
@@ -166,6 +223,12 @@ impl<'a> PartialEq for TimeOffsetAmount<'a> {
 pub struct FullTime<'a> {
     pub partial_time: PartialTime<'a>,
     pub time_offset: TimeOffset<'a>,
+}
+
+impl<'a> FullTime<'a> {
+	fn len(&self) -> usize {
+		self.partial_time.len() + self.time_offset.len()
+	}
 }
 
 impl<'a> PartialEq for FullTime<'a> {
@@ -183,6 +246,12 @@ pub struct FullDate<'a> {
 	pub day: &'a str,
 }
 
+impl<'a> FullDate<'a> {
+	fn len(&self) -> usize {
+		self.year.len() + self.month.len() + self.day.len() + 2 // +2 for the :'s
+	}
+}
+
 impl<'a> PartialEq for FullDate<'a> {
 	fn eq(&self, other: &FullDate<'a>) -> bool {
 		self.year == other.year &&
@@ -196,6 +265,12 @@ impl<'a> PartialEq for FullDate<'a> {
 pub struct DateTime<'a> {
 	pub date: FullDate<'a>,
 	pub time: FullTime<'a>,
+}
+
+impl<'a> DateTime<'a> {
+	pub fn len(&self) -> usize {
+		self.date.len() + self.time.len() + 1 // +1 for the T
+	}
 }
 
 impl<'a> PartialEq for DateTime<'a> {
@@ -212,6 +287,12 @@ pub struct CommentNewLines<'a> {
 	pub newlines: Vec<&'a str>,
 }
 
+impl<'a> CommentNewLines<'a> {
+	fn len(&self) -> usize {
+		self.comment.len() + self.newlines.join("").len()
+	}
+}
+
 impl<'a> PartialEq for CommentNewLines<'a> {
 	fn eq(&self, other: &CommentNewLines<'a>) -> bool {
 		self.comment == other.comment &&
@@ -223,6 +304,15 @@ impl<'a> PartialEq for CommentNewLines<'a> {
 pub enum CommentOrNewLines<'a> {
 	Comment(CommentNewLines<'a>),
 	NewLines(Vec<&'a str>),
+}
+
+impl<'a> CommentOrNewLines<'a> {
+	fn len(&self) -> usize {
+		match self {
+			&CommentOrNewLines::Comment(ref i) => i.len(),
+			&CommentOrNewLines::NewLines(ref i) => i.join("").len(),
+		}
+	}
 }
 
 impl<'a> PartialEq for CommentOrNewLines<'a> {
@@ -242,6 +332,24 @@ pub struct ArrayValues<'a> {
 	pub array_sep: Option<WSSep<'a>>,
 	pub comment_nl: Option<CommentOrNewLines<'a>>,
 	pub array_vals: Option<Box<ArrayValues<'a>>>,
+}
+
+impl<'a> ArrayValues<'a> {
+	fn len(&self) -> usize {
+		self.val.len() + 
+		match &self.array_sep {
+			&Some(ref i) => i.len() + 1,
+			&None => 0,
+		} +
+		match &self.comment_nl {
+			&Some(ref i) => i.len(),
+			&None => 0
+		} + 
+		match &self.array_vals {
+			&Some(ref i) => i.len(),
+			&None => 0
+		}
+	}
 }
 
 impl<'a> PartialEq for ArrayValues<'a> {
@@ -269,6 +377,15 @@ impl<'a> PartialEq for ArrayValues<'a> {
 #[derive(Debug, Eq)]
 pub struct Array<'a> {
 	pub values: Option<ArrayValues<'a>>,
+}
+
+impl<'a> Array<'a> {
+	pub fn len(&self) -> usize {
+		match &self.values {
+			&Some(ref i) => i.len() + 2, // +2 for []
+			&None	 => 0,
+		}
+	}
 }
 
 impl<'a> PartialEq for Array<'a> {

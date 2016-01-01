@@ -5,10 +5,12 @@ mod ast;
 use ast::{Val, Comment, WSSep, KeyVal, WSKeySep, TableType, Table,
           PartialTime, TimeOffsetAmount, TimeOffset, FullTime, PosNeg,
           FullDate, DateTime, CommentNewLines, CommentOrNewLines,
-          ArrayValues, Array};
+          ArrayValues, Array, TableKeyVals, ValLength, Type};
 #[macro_use]
 extern crate nom;
 extern crate regex;
+use nom::IResult;
+use nom::IResult::Done;
 // TOML
 // TODO: toml
 // TODO: expression
@@ -60,10 +62,9 @@ fn is_keychar(chr: char) -> bool {
 // named!(escaped<&str, &str>, re_match!("(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(u[0-9A-Z]{4})|(U[0-9A-Z]{8})"));
 // named!(basic_char<&str, &str>, alt!(basic_unescaped | escaped));
 named!(unquoted_key<&str, &str>, take_while1_s!(is_keychar));
+named!(quoted_key<&str, &str>, re_find_static!("\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
-named!(quoted_key<&str, &str>, re_find_static!("\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})){1,}\""));
-
-named!(key<&str, &str>, alt!(unquoted_key | quoted_key));
+named!(key<&str, &str>, alt!(complete!(quoted_key) | complete!(unquoted_key)));
 
 named!(keyval_sep<&str, WSSep>,
   chain!(
@@ -78,12 +79,80 @@ named!(keyval_sep<&str, WSSep>,
   )
 );
 
+fn ParseVal<I, O>(input: &str) -> IResult<&str,Val> {
+  named!(peek_array<&str, Array>, peek!(array));
+  named!(peek_date_time<&str, DateTime>, peek!(date_time));
+  named!(peek_integer<&str, &str>, peek!(integer));
+  named!(peek_float<&str, &str>, peek!(float));
+  named!(peek_boolean<&str, &str>, peek!(boolean));
+  //named!(peek_inline_table<&str, &str>, peek!(inline_table));
+
+  named!(parse_array<&str, Array>, call!(array));
+  named!(parse_date_time<&str, DateTime>, call!(date_time));
+  named!(parse_integer<&str, &str>, call!(integer));
+  named!(parse_float<&str, &str>, call!(float));
+  named!(parse_boolean<&str, &str>, call!(boolean));
+  //named!(parse_inline_table<&str, &str>, call!(inline_table));
+  let v = ValLength(Type::Array, -1);
+  v = match (peek_array(input), v) {
+    (Done(ref i, ref o), ValLength(ref a, ref b)) if o.len() > *b => ValLength(Type::Array, o.len()),
+    _ => v
+  };
+  v = match (peek_date_time(input), v) {
+    (Done(ref i, ref o), ValLength(ref a, ref b)) if o.len() > *b => ValLength(Type::DateTime, o.len()),
+    _ => v
+  };
+  v = match (peek_integer(input), v) {
+    (Done(ref i, ref o), ValLength(ref a, ref b)) if o.len() > *b => ValLength(Type::Integer, o.len()),
+    _ => v
+  };
+  v = match (peek_float(input), v) {
+    (Done(ref i, ref o), ValLength(ref a, ref b)) if o.len() > *b => ValLength(Type::Float, o.len()),
+    _ => v
+  };
+  v = match (peek_boolean(input), v) {
+    (Done(ref i, ref o), ValLength(ref a, ref b)) if o.len() > *b => ValLength(Type::Boolean, o.len()),
+    _ => v
+  };
+  /*v = match (peek_array(input), v) {
+    (Done(i, o), ValLength(a, b)) if o.length() > b => ValLength(Type::InlineTable, o.len()),
+    _ => v
+  };*/
+  match v {
+    ValLength(Type::Array, _)          => return match &parse_array(input) {
+                                                    &IResult::Done(i, ref o) => Done(i, Val::Array(Box::new(o))),
+                                                    &IResult::Error(ref i) => IResult::Error(*i),
+                                                    &IResult::Incomplete(ref i) => IResult::Incomplete(*i),
+                                                 },
+    ValLength(Type::DateTime, _)       => return match &parse_date_time(input) {
+                                                    &IResult::Done(ref i, ref o) => Done(i, Val::DateTime(*o)),
+                                                    &IResult::Error(ref i) => IResult::Error(*i),
+                                                    &IResult::Incomplete(ref i) => IResult::Incomplete(*i),
+                                                 },
+    ValLength(Type::Integer, _)        => return match &parse_integer(input) {
+                                                    &IResult::Done(ref i, ref o) => Done(i, Val::Integer(*o)),
+                                                    &IResult::Error(ref i) => IResult::Error(*i),
+                                                    &IResult::Incomplete(ref i) => IResult::Incomplete(*i),
+                                                 },
+    ValLength(Type::Float, _)          => return match &parse_float(input) {
+                                                    &IResult::Done(ref i, ref o) => Done(i, Val::Float(*o)),
+                                                    &IResult::Error(ref i) => IResult::Error(*i),
+                                                    &IResult::Incomplete(ref i) => IResult::Incomplete(*i),
+                                                 },
+    ValLength(Type::Boolean, _)        => return match &parse_boolean(input) {
+                                                    &IResult::Done(ref i, ref o) => Done(i, Val::Boolean(*o)),
+                                                    &IResult::Error(ref i) => IResult::Error(*i),
+                                                    &IResult::Incomplete(ref i) => IResult::Incomplete(*i),
+                                                 },
+    /*ValLength(Type::InlineTable, _)  => return parse_inline_table(input),*/
+  };
+}
 named!(val<&str, Val>,
   alt!(
-    complete!(array)        => {|arr|   Val::Array(Box::new(arr))}  |
+    complete!(array)        => {|arr|   Val::Array(Box::new(&arr))}  |
     complete!(date_time)    => {|dt|    Val::DateTime(dt)}          |
-    complete!(float)        => {|flt|   Val::Float(flt)}            |
     complete!(integer)      => {|int|   Val::Integer(int) }         |
+    complete!(float)        => {|flt|   Val::Float(flt)}            |
     complete!(boolean)      => {|b|     Val::Boolean(b)}          /*|
     complete!(inline_table) => {|itab|  Val::InlineTable(itab)}*/
                             )
@@ -275,7 +344,7 @@ named!(array_sep<&str, WSSep>,
     ws1: ws         ~
          tag_s!(",")~
     ws2: ws         ,
-    ||{
+    ||{println!("Parse array sep");
       WSSep{ws1: ws1, ws2: ws2
       }
     }
@@ -305,6 +374,21 @@ named!(array_values<&str, ArrayValues>,
   alt!(
     complete!(
       chain!(
+        val: val            ~
+  array_sep: array_sep?     ~
+ comment_nl: comment_or_nl? ,
+        ||{
+          ArrayValues{
+            val: val,
+            array_sep: array_sep,
+            comment_nl: comment_nl,
+            array_vals: None
+          }
+        }
+      )
+    ) |
+    complete!(
+      chain!(
         val: val ~
   array_sep: array_sep ~
  comment_nl: comment_or_nl? ~
@@ -315,21 +399,6 @@ named!(array_values<&str, ArrayValues>,
             array_sep: Some(array_sep),
             comment_nl: comment_nl,
             array_vals: Some(Box::new(array_vals))
-          }
-        }
-      )
-    ) |
-    complete!(
-      chain!(
-        val: val            ~
-  array_sep: array_sep?     ~
- comment_nl: comment_or_nl? ,
-        ||{
-          ArrayValues{
-            val: val,
-            array_sep: array_sep,
-            comment_nl: comment_nl,
-            array_vals: None
           }
         }
       )
@@ -351,42 +420,47 @@ array_vals: array_values? ~
 );
 // Inline Table
 // Note inline-table-sep and array-sep are identical so we'll reuse array-sep
-
-named!(inline_table_keyvals_non_empty<&str, TableKeyVals>,
-  alt!(
-    complete!(
+named!(single_keyval<&str, TableKeyVals>,
       chain!(
-        key: key                            ~
- keyval_sep: keyval_sep                     ~
-        val: val                            ~
-  table_sep: array_sep                      ~
-    keyvals: inline_table_keyvals_non_empty ,
-        ||{
+        key1: key        ~
+ keyval_sep1: keyval_sep ~
+        val1: val        ,
+        ||{println!("Parse table keyvals");
           TableKeyVals{
-            key: key,
-            keyval_sep: keyval_sep,
-            val: val,
-            table_sep: Some(table_sep),
-            keyvals: Some(Box::new(keyvals)),
-          }
-        }
-      )
-    ) |
-    complete!(
-      chain!(
-        key: key        ~
- keyval_sep: keyval_sep ~
-        val: val        ,
-        ||{
-          TableKeyVals{
-            key: key,
-            keyval_sep: keyval_sep,
-            val: val,
+            key: key1,
+            keyval_sep: keyval_sep1,
+            val: val1,
             table_sep: None,
             keyvals: None,
           }
         }
+      ) 
+);
+named!(recursive_keyval<&str, TableKeyVals>,
+      chain!(
+        key2: key                            ~
+ keyval_sep2: keyval_sep                     ~
+        val2: val                            ~
+  table_sep2: array_sep                      ~
+    keyvals2: inline_table_keyvals_non_empty ,
+        ||{println!("Parse recursive table keyvals");
+          TableKeyVals{
+            key: key2,
+            keyval_sep: keyval_sep2,
+            val: val2,
+            table_sep: Some(table_sep2),
+            keyvals: Some(Box::new(keyvals2)),
+          }
+        }
       )
+);
+named!(inline_table_keyvals_non_empty<&str, TableKeyVals>,
+  alt!(
+    complete!(
+      recursive_keyval
+    )|
+    complete!(
+      single_keyval
     )
   )
 );
@@ -395,9 +469,8 @@ named!(inline_table_keyvals_non_empty<&str, TableKeyVals>,
 // TODO: remove when finished
 fn main() {
     //let s = "[2010-10-10T10:10:10.33Z , true, 56, \t 1950-03-30T21:04:14.123+05:00]";
-    let s = "[[3,4], [4,5], [6]]";
-    println!("{}", s);
-    let r = array(s);
+    let s = r#""Key\"Name"=55,Key = 23.45"#;
+    let r = inline_table_keyvals_non_empty(s);
     println!("{:?}", r);
 }
 
