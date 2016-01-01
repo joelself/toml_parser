@@ -5,12 +5,10 @@ mod ast;
 use ast::{Val, Comment, WSSep, KeyVal, WSKeySep, TableType, Table,
           PartialTime, TimeOffsetAmount, TimeOffset, FullTime, PosNeg,
           FullDate, DateTime, CommentNewLines, CommentOrNewLines,
-          ArrayValues, Array, TableKeyVals, ValLength, Type};
+          ArrayValues, Array, TableKeyVals, InlineTable};
 #[macro_use]
 extern crate nom;
 extern crate regex;
-use nom::IResult;
-use nom::IResult::Done;
 // TOML
 // TODO: toml
 // TODO: expression
@@ -62,7 +60,7 @@ fn is_keychar(chr: char) -> bool {
 // named!(escaped<&str, &str>, re_match!("(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(u[0-9A-Z]{4})|(U[0-9A-Z]{8})"));
 // named!(basic_char<&str, &str>, alt!(basic_unescaped | escaped));
 named!(unquoted_key<&str, &str>, take_while1_s!(is_keychar));
-named!(quoted_key<&str, &str>, re_find_static!("\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
+named!(quoted_key<&str, &str>, re_find_static!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
 named!(key<&str, &str>, alt!(complete!(quoted_key) | complete!(unquoted_key)));
 
@@ -79,84 +77,17 @@ named!(keyval_sep<&str, WSSep>,
   )
 );
 
-fn ParseVal<I, O>(input: &str) -> IResult<&str,Val> {
-  named!(peek_array<&str, Array>, peek!(array));
-  named!(peek_date_time<&str, DateTime>, peek!(date_time));
-  named!(peek_integer<&str, &str>, peek!(integer));
-  named!(peek_float<&str, &str>, peek!(float));
-  named!(peek_boolean<&str, &str>, peek!(boolean));
-  //named!(peek_inline_table<&str, &str>, peek!(inline_table));
-
-  named!(parse_array<&str, Array>, call!(array));
-  named!(parse_date_time<&str, DateTime>, call!(date_time));
-  named!(parse_integer<&str, &str>, call!(integer));
-  named!(parse_float<&str, &str>, call!(float));
-  named!(parse_boolean<&str, &str>, call!(boolean));
-  //named!(parse_inline_table<&str, &str>, call!(inline_table));
-  let v = ValLength(Type::Array, -1);
-  v = match (peek_array(input), v) {
-    (Done(ref i, ref o), ValLength(ref a, ref b)) if o.len() > *b => ValLength(Type::Array, o.len()),
-    _ => v
-  };
-  v = match (peek_date_time(input), v) {
-    (Done(ref i, ref o), ValLength(ref a, ref b)) if o.len() > *b => ValLength(Type::DateTime, o.len()),
-    _ => v
-  };
-  v = match (peek_integer(input), v) {
-    (Done(ref i, ref o), ValLength(ref a, ref b)) if o.len() > *b => ValLength(Type::Integer, o.len()),
-    _ => v
-  };
-  v = match (peek_float(input), v) {
-    (Done(ref i, ref o), ValLength(ref a, ref b)) if o.len() > *b => ValLength(Type::Float, o.len()),
-    _ => v
-  };
-  v = match (peek_boolean(input), v) {
-    (Done(ref i, ref o), ValLength(ref a, ref b)) if o.len() > *b => ValLength(Type::Boolean, o.len()),
-    _ => v
-  };
-  /*v = match (peek_array(input), v) {
-    (Done(i, o), ValLength(a, b)) if o.length() > b => ValLength(Type::InlineTable, o.len()),
-    _ => v
-  };*/
-  match v {
-    ValLength(Type::Array, _)          => return match &parse_array(input) {
-                                                    &IResult::Done(i, ref o) => Done(i, Val::Array(Box::new(o))),
-                                                    &IResult::Error(ref i) => IResult::Error(*i),
-                                                    &IResult::Incomplete(ref i) => IResult::Incomplete(*i),
-                                                 },
-    ValLength(Type::DateTime, _)       => return match &parse_date_time(input) {
-                                                    &IResult::Done(ref i, ref o) => Done(i, Val::DateTime(*o)),
-                                                    &IResult::Error(ref i) => IResult::Error(*i),
-                                                    &IResult::Incomplete(ref i) => IResult::Incomplete(*i),
-                                                 },
-    ValLength(Type::Integer, _)        => return match &parse_integer(input) {
-                                                    &IResult::Done(ref i, ref o) => Done(i, Val::Integer(*o)),
-                                                    &IResult::Error(ref i) => IResult::Error(*i),
-                                                    &IResult::Incomplete(ref i) => IResult::Incomplete(*i),
-                                                 },
-    ValLength(Type::Float, _)          => return match &parse_float(input) {
-                                                    &IResult::Done(ref i, ref o) => Done(i, Val::Float(*o)),
-                                                    &IResult::Error(ref i) => IResult::Error(*i),
-                                                    &IResult::Incomplete(ref i) => IResult::Incomplete(*i),
-                                                 },
-    ValLength(Type::Boolean, _)        => return match &parse_boolean(input) {
-                                                    &IResult::Done(ref i, ref o) => Done(i, Val::Boolean(*o)),
-                                                    &IResult::Error(ref i) => IResult::Error(*i),
-                                                    &IResult::Incomplete(ref i) => IResult::Incomplete(*i),
-                                                 },
-    /*ValLength(Type::InlineTable, _)  => return parse_inline_table(input),*/
-  };
-}
 named!(val<&str, Val>,
   alt!(
-    complete!(array)        => {|arr|   Val::Array(Box::new(&arr))}  |
-    complete!(date_time)    => {|dt|    Val::DateTime(dt)}          |
-    complete!(integer)      => {|int|   Val::Integer(int) }         |
-    complete!(float)        => {|flt|   Val::Float(flt)}            |
-    complete!(boolean)      => {|b|     Val::Boolean(b)}          /*|
-    complete!(inline_table) => {|itab|  Val::InlineTable(itab)}*/
-                            )
-      );
+    complete!(array)        => {|arr|   Val::Array(Box::new(arr))}      |
+    complete!(inline_table) => {|it|    Val::InlineTable(Box::new(it))} |
+    complete!(date_time)    => {|dt|    Val::DateTime(dt)}              |
+    complete!(float)        => {|flt|   Val::Float(flt)}                |
+    complete!(integer)      => {|int|   Val::Integer(int)}              |
+    complete!(boolean)      => {|b|     Val::Boolean(b)}                |
+    complete!(string)       => {|s|     Val::String(s)}
+  )
+);
 
 named!(keyval<&str, KeyVal>,
   chain!(
@@ -227,45 +158,54 @@ subkeys: table_sub_keys ~
 );
 
 // Integer
-named!(integer<&str, &str>, re_find_static!("(\\+|-)?([1-9](\\d|(_\\d))+|\\d)"));
+named!(integer<&str, &str>, re_find_static!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
 
 // Float
 named!(float<&str, &str>,
-       re_find_static!("(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
+       re_find_static!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
 
 // String
 // TODO: named!(string<&str, &str>, alt!(basic_string | ml_basic_string | literal_string | ml_literal_string));
 
 // Basic String
 named!(basic_string<&str, &str>,
-       re_find_static!("\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})){0,}\""));
+       re_find_static!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})){0,}\""));
 
 // Multiline Basic String
 named!(ml_basic_string<&str, &str>,
-       re_find_static!("\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*\"\"\""));
+       re_find_static!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*\"\"\""));
 
 // Literal String
 named!(literal_string<&str, &str>,
-       re_find_static!("'(	|[ -&]|[\\(-􏿿])*'"));
+       re_find_static!("^'(	|[ -&]|[\\(-􏿿])*'"));
 
 // Multiline Literal String
 named!(ml_literal_string<&str, &str>, 
-	   re_find_static!("'''(	|[ -􏿿]|\n|(\r\n))*'''"));
+	   re_find_static!("^'''(	|[ -􏿿]|\n|(\r\n))*'''"));
+
+named!(string<&str, &str>,
+  alt!(
+    complete!(ml_literal_string) |
+    complete!(ml_basic_string)   |
+    complete!(basic_string)      |
+    complete!(literal_string)
+  )
+);
 
 // Boolean
 named!(boolean<&str, &str>, alt!(complete!(tag_s!("false")) | complete!(tag_s!("true"))));
 
 
 // Datetime
-named!(fractional<&str, Vec<&str> >, re_capture_static!(r".([0-9]+)"));
+named!(fractional<&str, Vec<&str> >, re_capture_static!("^\\.([0-9]+)"));
 
 named!(partial_time<&str, PartialTime>,
   chain!(
-    hour: re_find_static!("[0-9]{2}") ~
+    hour: re_find_static!("^[0-9]{2}") ~
           tag_s!(":")                 ~
-  minute: re_find_static!("[0-9]{2}") ~
+  minute: re_find_static!("^[0-9]{2}") ~
           tag_s!(":")                 ~
-  second: re_find_static!("[0-9]{2}") ~
+  second: re_find_static!("^[0-9]{2}") ~
  fraction: fractional?                ,
     ||{
       PartialTime{
@@ -281,9 +221,9 @@ named!(partial_time<&str, PartialTime>,
 named!(time_offset_amount<&str, TimeOffsetAmount>,
   chain!(
 pos_neg: alt!(complete!(tag_s!("+")) => {|_| PosNeg::Pos} | complete!(tag_s!("-")) => {|_| PosNeg::Neg})  ~
-   hour: re_find_static!("[0-9]{2}")                                                                      ~
+   hour: re_find_static!("^[0-9]{2}")                                                                      ~
          tag_s!(":")                                                                                      ~
-minute: re_find_static!("[0-9]{2}")                                                                       ,
+minute: re_find_static!("^[0-9]{2}")                                                                       ,
     ||{
       TimeOffsetAmount{
         pos_neg: pos_neg, hour: hour, minute: minute
@@ -313,12 +253,12 @@ partial: partial_time ~
 
 named!(full_date<&str, FullDate>,
   chain!(
-   year: re_find_static!("[0-9]{4}") ~
+   year: re_find_static!("^([0-9]{4})") ~
          tag_s!("-") ~
-  month: re_find_static!("[0-9]{2}") ~
+  month: re_find_static!("^([0-9]{2})") ~
          tag_s!("-") ~
-    day: re_find_static!("[0-9]{2}"),
-    ||{
+    day: re_find_static!("^([0-9]{2})"),
+    ||{println!("parse full date");
       FullDate{
         year: year, month: month, day: day
       }
@@ -328,8 +268,9 @@ named!(full_date<&str, FullDate>,
 
 named!(date_time<&str, DateTime>,
   chain!(
-   date: full_date~
-   time: full_time,
+   date: full_date  ~
+         tag_s!("T") ~
+   time: full_time  ,
     ||{
       DateTime{
         date: date, time: time
@@ -344,7 +285,7 @@ named!(array_sep<&str, WSSep>,
     ws1: ws         ~
          tag_s!(",")~
     ws2: ws         ,
-    ||{println!("Parse array sep");
+    ||{//println!("Parse array sep");
       WSSep{ws1: ws1, ws2: ws2
       }
     }
@@ -374,10 +315,26 @@ named!(array_values<&str, ArrayValues>,
   alt!(
     complete!(
       chain!(
-        val: val            ~
-  array_sep: array_sep?     ~
- comment_nl: comment_or_nl? ,
+        val: val ~
+  array_sep: array_sep ~
+  comment_nl: comment_or_nl? ~
+  array_vals: array_values,
         ||{
+          ArrayValues{
+            val: val,
+            array_sep: Some(array_sep),
+            comment_nl: comment_nl,
+            array_vals: Some(Box::new(array_vals))
+          }
+        }
+      )
+    )|
+    complete!(
+      chain!(
+        val: val              ~
+  array_sep: array_sep?       ~
+  comment_nl: comment_or_nl?  ,
+        move ||{
           ArrayValues{
             val: val,
             array_sep: array_sep,
@@ -386,19 +343,17 @@ named!(array_values<&str, ArrayValues>,
           }
         }
       )
-    ) |
+    )
+    |
     complete!(
       chain!(
-        val: val ~
-  array_sep: array_sep ~
- comment_nl: comment_or_nl? ~
- array_vals: array_values,
-        ||{
+        val: val                       ,
+        move ||{
           ArrayValues{
             val: val,
-            array_sep: Some(array_sep),
-            comment_nl: comment_nl,
-            array_vals: Some(Box::new(array_vals))
+            array_sep: None,
+            comment_nl: None,
+            array_vals: None
           }
         }
       )
@@ -409,11 +364,14 @@ named!(array_values<&str, ArrayValues>,
 named!(array<&str, Array>,
   chain!(
             tag_s!("[")   ~
+       ws1: ws            ~
 array_vals: array_values? ~
+       ws2: ws            ~
             tag_s!("]")   ,
     ||{
       Array{
-        values: array_vals
+        values: array_vals,
+        ws: WSSep{ws1: ws1, ws2: ws2},
       }
     }
   )
@@ -425,7 +383,7 @@ named!(single_keyval<&str, TableKeyVals>,
         key1: key        ~
  keyval_sep1: keyval_sep ~
         val1: val        ,
-        ||{println!("Parse table keyvals");
+        ||{//println!("Parse table keyvals");
           TableKeyVals{
             key: key1,
             keyval_sep: keyval_sep1,
@@ -436,6 +394,7 @@ named!(single_keyval<&str, TableKeyVals>,
         }
       ) 
 );
+
 named!(recursive_keyval<&str, TableKeyVals>,
       chain!(
         key2: key                            ~
@@ -443,7 +402,7 @@ named!(recursive_keyval<&str, TableKeyVals>,
         val2: val                            ~
   table_sep2: array_sep                      ~
     keyvals2: inline_table_keyvals_non_empty ,
-        ||{println!("Parse recursive table keyvals");
+        ||{//println!("Parse recursive table keyvals");
           TableKeyVals{
             key: key2,
             keyval_sep: keyval_sep2,
@@ -454,6 +413,7 @@ named!(recursive_keyval<&str, TableKeyVals>,
         }
       )
 );
+
 named!(inline_table_keyvals_non_empty<&str, TableKeyVals>,
   alt!(
     complete!(
@@ -465,12 +425,29 @@ named!(inline_table_keyvals_non_empty<&str, TableKeyVals>,
   )
 );
 
+named!(inline_table<&str, InlineTable>,
+  chain!(
+        tag_s!("{")                     ~
+   ws1: ws                              ~
+keyvals:inline_table_keyvals_non_empty  ~
+   ws2: ws                              ~
+        tag_s!("}")                     ,
+        ||{
+          InlineTable{
+            keyvals: keyvals,
+            ws: WSSep{ws1: ws1, ws2: ws2},
+          }
+        }
+  )
+);
+
 // For testing as I go
 // TODO: remove when finished
 fn main() {
     //let s = "[2010-10-10T10:10:10.33Z , true, 56, \t 1950-03-30T21:04:14.123+05:00]";
-    let s = r#""Key\"Name"=55,Key = 23.45"#;
-    let r = inline_table_keyvals_non_empty(s);
+    //let s = "[[3, 4], [4]]";
+    let r = array("[[3,4], [4,5], [6]]");
+    //let r = string("'''New\nLine'''");
     println!("{:?}", r);
 }
 
@@ -479,9 +456,9 @@ mod test {
 	use nom::IResult::{Done};
 	use ::{literal_string, ml_literal_string, boolean, partial_time,
          time_offset_amount, time_offset, full_time, full_date,
-         date_time, array};
+         date_time, array, inline_table_keyvals_non_empty, inline_table};
   use ast::{Val, PartialTime, TimeOffsetAmount, TimeOffset, FullTime, PosNeg, WSSep,
-            FullDate, DateTime, ArrayValues, Array};
+            FullDate, DateTime, ArrayValues, Array, TableKeyVals, InlineTable};
 
 	#[test]
 	fn test_literal_string() {
@@ -615,71 +592,129 @@ mod test {
               time_offset: TimeOffset::Z
             }
           }),
-          array_sep: Some(WSSep {
+          array_sep: Some(WSSep{
             ws1: "", ws2: " "
           }),
-          comment_nl: None, array_vals: Some(Box::new(ArrayValues {
-            val: Val::DateTime(DateTime {
+          comment_nl: None, array_vals: Some(Box::new(ArrayValues{
+            val: Val::DateTime(DateTime{
               date: FullDate {
                 year: "1950", month: "03", day: "30"
               },
-              time: FullTime {
-                partial_time: PartialTime {
+              time: FullTime{
+                partial_time: PartialTime{
                   hour: "21", minute: "04", second: "14", fraction: "123"
                 },
-                time_offset: TimeOffset::Time(TimeOffsetAmount {
+                time_offset: TimeOffset::Time(TimeOffsetAmount{
                   pos_neg: PosNeg::Pos, hour: "05", minute: "00"
                 })
               }
             }),
             array_sep: None, comment_nl: None, array_vals: None
           }))
-        })
+        }),
+        ws: WSSep{
+          ws1: "", ws2: ""
+        }
       }));
   }
 
   #[test]
   fn test_nested_array() {
     assert_eq!(array("[[3,4], [4,5], [6]]"),
-      Done("", Array {
-        values: Some(ArrayValues{
-          val: Val::Array(Box::new(Array{
-            values: Some(ArrayValues {
-              val: Val::Integer("3"), array_sep: Some(WSSep{
-                ws1: "", ws2: ""
-              }),
-              comment_nl: None, array_vals: Some(Box::new(ArrayValues{
-                val: Val::Integer("4"), array_sep: None, comment_nl: None, array_vals: None
-              }))
-            })
-          })),
-          array_sep: Some(WSSep{
+      Done("", Array{
+        values: Some(ArrayValues {
+          val: Val::Array(Box::new(Array { values: Some(ArrayValues {
+            val: Val::Integer("3"), array_sep: Some(WSSep {
+              ws1: "", ws2: ""
+            }), comment_nl: None, array_vals: Some(Box::new(ArrayValues {
+              val: Val::Integer("4"), array_sep: None, comment_nl: None, array_vals: None
+            }))
+          }),
+          ws: WSSep {
+            ws1: "", ws2: ""
+          }
+        })),
+          array_sep: Some(WSSep {
             ws1: "", ws2: " "
           }),
-          comment_nl: None, array_vals: Some(Box::new(ArrayValues{
-            val: Val::Array(Box::new(Array{
-              values: Some(ArrayValues{
-                val: Val::Integer("4"), array_sep: Some(WSSep{
+          comment_nl: None, array_vals: Some(Box::new(ArrayValues {
+            val: Val::Array(Box::new(Array {
+              values: Some(ArrayValues {
+                val: Val::Integer("4"), array_sep: Some(WSSep {
                   ws1: "", ws2: ""
                 }),
-                comment_nl: None, array_vals: Some(Box::new(ArrayValues{
+                comment_nl: None, array_vals: Some(Box::new(ArrayValues {
                   val: Val::Integer("5"), array_sep: None, comment_nl: None, array_vals: None
                 }))
-              })
+              }),
+              ws: WSSep {
+                ws1: "", ws2: ""
+              }
             })),
-            array_sep: Some(WSSep{
+            array_sep: Some(WSSep {
               ws1: "", ws2: " "
-            }), 
-            comment_nl: None, array_vals: Some(Box::new(ArrayValues{
-              val: Val::Array(Box::new(Array{
-                values: Some(ArrayValues{
+            }),
+            comment_nl: None, array_vals: Some(Box::new(ArrayValues {
+              val: Val::Array(Box::new(Array {
+                values: Some(ArrayValues {
                   val: Val::Integer("6"), array_sep: None, comment_nl: None, array_vals: None
-                })
+                }),
+                ws: WSSep {
+                  ws1: "", ws2: ""
+                }
               })),
               array_sep: None, comment_nl: None, array_vals: None
             }))
           }))
-        })
+        }),
+        ws: WSSep {
+          ws1: "", ws2: ""
+        }
+      })
+    );
+  }
+
+  #[test]
+  fn test_inline_table_keyvals_non_empty() {
+    assert_eq!(inline_table_keyvals_non_empty("Key = 54 , \"Key2\" = '34.99'"),
+      Done("", TableKeyVals{
+        key: "Key", keyval_sep: WSSep{
+          ws1: " ", ws2: " "
+        },
+        val: Val::Integer("54"), table_sep: Some(WSSep{
+          ws1: " ", ws2: " "
+        }),
+        keyvals: Some(Box::new(TableKeyVals{
+          key: "\"Key2\"", keyval_sep: WSSep{
+            ws1: " ", ws2: " "
+          },
+          val: Val::String("'34.99'"), table_sep: None, keyvals: None
+        }))
+      })
+    );
+  }
+
+  #[test]
+  fn test_inline_table() {
+    assert_eq!(inline_table("{\tKey = 3.14E+5 , \"Key2\" = '''New\nLine'''\t}"),
+      Done("", InlineTable{
+        keyvals: TableKeyVals{
+          key: "Key", keyval_sep: WSSep{
+            ws1: " ", ws2: " "
+          },
+          val: Val::Float("3.14E+5"), table_sep: Some(WSSep{
+            ws1: " ", ws2: " "
+          }),
+          keyvals: Some(Box::new(TableKeyVals{
+            key: "\"Key2\"", keyval_sep: WSSep{
+              ws1: " ", ws2: " "
+            },
+            val: Val::String("\'\'\'New\nLine\'\'\'"), table_sep: None, keyvals: None
+          }))
+        },
+        ws: WSSep{
+          ws1: "\t", ws2: "\t"
+        }
       })
     );
   }

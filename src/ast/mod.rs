@@ -18,7 +18,6 @@ pub use self::structs::CommentOrNewLines;
 pub use self::structs::ArrayValues;
 pub use self::structs::Array;
 pub use self::structs::TableKeyVals;
-pub use self::structs::ValLength;
-pub use self::structs::Type;
+pub use self::structs::InlineTable;
 
 
