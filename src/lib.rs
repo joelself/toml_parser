@@ -3,5 +3,5 @@
 #[macro_use]
 extern crate nom;
 extern crate regex;
-mod ast;
+pub mod ast;
 pub mod parser;

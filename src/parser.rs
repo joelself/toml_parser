@@ -2,11 +2,76 @@
 pub use ast::{Val, Comment, WSSep, KeyVal, WSKeySep, TableType, Table,
           PartialTime, TimeOffsetAmount, TimeOffset, FullTime, PosNeg,
           FullDate, DateTime, CommentNewLines, CommentOrNewLines,
-          ArrayValues, Array, TableKeyVals, InlineTable};
+          ArrayValues, Array, TableKeyVals, InlineTable, Expression};
 #[macro_use]
 // TOML
 // TODO: toml
-// TODO: expression
+named!(expression<&str, Expression>,
+  alt!(
+    complete!(table_comment)  |
+    complete!(keyval_comment) |
+    complete!(ws_comment)     |
+    complete!(ws) => {|space| Expression{
+      ws: WSSep{
+        ws1: space,
+        ws2: "",
+      },
+      keyval: None, table: None, comment: None,
+    }}
+  )
+);
+
+named!(table_comment<&str, Expression>,
+  chain!(
+    ws1: ws       ~
+  table: table    ~
+    ws2: ws       ~
+comment: comment? ,
+    ||{
+      Expression{
+        ws: WSSep{
+          ws1: ws1,
+          ws2: ws2,
+        },
+        keyval: None, table: Some(table), comment: comment,
+      }
+    }
+  )
+);
+
+named!(keyval_comment<&str, Expression>,
+  chain!(
+    ws1: ws       ~
+ keyval: keyval   ~
+    ws2: ws       ~
+comment: comment? ,
+    ||{
+      Expression{
+        ws: WSSep{
+          ws1: ws1,
+          ws2: ws2,
+        },
+        keyval: Some(keyval), table: None, comment: comment,
+      }
+    }
+  )
+);
+
+named!(ws_comment<&str, Expression>,
+  chain!(
+     ws: ws     ~
+comment: comment,
+    ||{
+      Expression{
+        ws: WSSep{
+          ws1: ws,
+          ws2: "",
+        },
+        keyval: None, table: None, comment: Some(comment),
+      }
+    }
+  )
+);
 
 // Newline
 named!(newline<&str, &str>,
@@ -32,8 +97,8 @@ fn not_eol(chr: char) -> bool {
 
 named!(comment<&str, Comment>,
   chain!(
-             tag_s!("#") ~
-comment_txt: take_while_s!(not_eol),
+             tag_s!("#")            ~
+comment_txt: take_while_s!(not_eol) ,
     ||{
       Comment{
         text: comment_txt
@@ -94,7 +159,17 @@ named!(keyval<&str, KeyVal>,
   )
 );
 
-// Standard Table
+
+// Table
+named!(table<&str, TableType>,
+  alt!(
+    complete!(array_table) |
+    complete!(std_table)
+  )
+);
+
+named!(table_sub_keys<&str, Vec<WSKeySep> >, many0!(table_sub_key));
+
 named!(table_sub_key<&str, WSKeySep>,
   chain!(
     ws1: ws         ~
@@ -112,9 +187,8 @@ named!(table_sub_key<&str, WSKeySep>,
   )
 );
 
-named!(table_sub_keys<&str, Vec<WSKeySep> >, many0!(table_sub_key));
-
-named!(std_table<&str, Table>,
+// Standard Table
+named!(std_table<&str, TableType>,
   chain!(
          tag_s!("[")    ~
     ws1: ws             ~
@@ -123,16 +197,18 @@ subkeys: table_sub_keys ~
     ws2: ws             ~
          tag_s!("]")    ,
     ||{
-      Table{
-        ttype: TableType::Standard, ws: WSSep{
-          ws1: ws1, ws2: ws2}, key: key, subkeys: subkeys
-      }
+      TableType::Standard(Table{
+        ws: WSSep{
+          ws1: ws1, ws2: ws2
+        },
+        key: key, subkeys: subkeys
+      })
     }
   )
 );
 
 // Array Table
-named!(array_table<&str, Table>,
+named!(array_table<&str, TableType>,
   chain!(
          tag_s!("[[")   ~
     ws1: ws             ~
@@ -141,10 +217,12 @@ subkeys: table_sub_keys ~
     ws2: ws             ~
          tag_s!("]]")   ,
     ||{
-      Table{
-        ttype: TableType::Array, ws: WSSep{
-          ws1: ws1, ws2: ws2},key: key, subkeys: subkeys
-      }
+      TableType::Array(Table{
+        ws: WSSep{
+          ws1: ws1, ws2: ws2
+        },
+        key: key, subkeys: subkeys
+      })
     }
   )
 );

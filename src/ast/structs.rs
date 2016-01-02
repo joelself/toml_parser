@@ -1,3 +1,40 @@
+/// Compares two Options that contain comparable structs
+///
+/// # Examples
+///
+/// ```
+/// let (a, b) = (Option("value"), Option("value"));
+/// assert!(comp_opt(&a, &b));
+/// ```
+pub fn comp_opt<T: Eq>(left: &Option<T>, right: &Option<T>) -> bool {
+	match (left, right) {
+		(&Some(ref i), &Some(ref j)) if i == j => true,
+		(&None, &None) => true,
+		_ => false
+	}
+}
+
+// <ws.ws1>
+// <ws.ws1><comment>
+// <ws.ws1><keyval><ws.ws2><comment?>
+// <ws.ws1><table><ws.ws2><comment?>
+#[derive(Debug, Eq)]
+pub struct Expression<'a> {
+	pub ws: WSSep<'a>,
+	pub keyval: Option<KeyVal<'a>>,
+	pub table: Option<TableType<'a>>,
+	pub comment: Option<Comment<'a>>,
+}
+
+impl<'a> PartialEq for Expression<'a> {
+	fn eq(&self, other: &Expression<'a>) -> bool {
+		self.ws == other.ws &&
+		comp_opt(&self.keyval, &other.keyval) &&
+		comp_opt(&self.table, &other.table) &&
+		comp_opt(&self.comment, &other.comment)
+	}
+}
+
 #[derive(Debug, Eq)]
 pub enum Val<'a> {
 	Integer(&'a str),
@@ -18,22 +55,23 @@ impl<'a> PartialEq for Val<'a> {
 			(&Val::DateTime(ref i), &Val::DateTime(ref j)) if i == j => true,
 			(&Val::Array(ref i), &Val::Array(ref j)) if i == j => true,
 			(&Val::String(ref i), &Val::String(ref j)) if i == j => true,
-			/*(&Val::InlineTable(ref i), &Val::InlineTable(ref j)) if i == j => true,*/
+			(&Val::InlineTable(ref i), &Val::InlineTable(ref j)) if i == j => true,
 			_ => false
 		}
 	}
 }
+
 #[derive(Debug, Eq)]
-pub enum TableType {
-	Standard,
-	Array,
+pub enum TableType<'a>{
+	Standard(Table<'a>),
+	Array(Table<'a>),
 }
 
-impl PartialEq for TableType {
-	fn eq(&self, other: &TableType) -> bool {
+impl<'a> PartialEq for TableType<'a> {
+	fn eq(&self, other: &TableType<'a>) -> bool {
 		match (self, other) {
-			(&TableType::Standard, &TableType::Standard) => true,
-			(&TableType::Array, &TableType::Array) => true,
+			(&TableType::Standard(ref i), &TableType::Standard(ref j)) if i == j => true,
+			(&TableType::Array(ref i), &TableType::Array(ref j)) if i == j => true,
 			_ => false
 		}
 	}
@@ -113,20 +151,34 @@ impl<'a> PartialEq for KeyVal<'a> {
 }
 
 // <ws.ws1>.<ws.ws2><key>
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub struct WSKeySep<'a> {
 	pub ws: WSSep<'a>,
 	pub key: &'a str,
 }
 
+impl<'a> PartialEq for WSKeySep<'a> {
+	fn eq(&self, other: &WSKeySep<'a>) -> bool {
+		self.ws == other.ws &&
+		self.key == other.key
+	}
+}
+
 // Standard: [<ws.ws1><key><subkeys*><ws.ws2>]
 // Array: [[<ws.ws1><key><subkeys*><ws.ws2>]]
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub struct Table<'a> {
-    pub ttype: TableType,
 	pub ws: WSSep<'a>, // opening whitespace and closing whitespace
 	pub key: &'a str,
 	pub subkeys: Vec<WSKeySep<'a>>,
+}
+
+impl<'a> PartialEq for Table<'a> {
+	fn eq(&self, other: &Table<'a>) -> bool {
+		self.ws == other.ws &&
+		self.key == other.key &&
+		self.subkeys == other.subkeys
+	}
 }
 
 // <hour>:<minute>:<second>(.<fraction>)?
@@ -249,21 +301,9 @@ pub struct ArrayValues<'a> {
 impl<'a> PartialEq for ArrayValues<'a> {
 	fn eq(&self, other: &ArrayValues<'a>) -> bool {
 		self.val == other.val &&
-		match (&self.array_sep, &other.array_sep) {
-			(&Some(ref i), &Some(ref j)) if i == j => true,
-			(&None, &None) => true,
-			_ => false
-		} &&
-		match (&self.comment_nl, &other.comment_nl) {
-			(&Some(ref i), &Some(ref j)) if i == j => true,
-			(&None, &None) => true,
-			_ => false
-		} &&
-		match (&self.array_vals, &other.array_vals) {
-			(&Some(ref i), &Some(ref j)) if i == j => true,
-			(&None, &None) => true,
-			_ => false
-		}
+		comp_opt(&self.array_sep, &other.array_sep) &&
+		comp_opt(&self.comment_nl, &other.comment_nl) &&
+		comp_opt(&self.array_vals, &other.array_vals)
 	}
 }
 
@@ -296,16 +336,8 @@ impl<'a> PartialEq for TableKeyVals<'a> {
 		self.key == other.key &&
 		self.keyval_sep == other.keyval_sep &&
 		self.val == other.val &&
-		match (&self.table_sep, &other.table_sep) {
-			(&Some(ref i), &Some(ref j)) if i == j => true,
-			(&None, &None) => true,
-			_ => false
-		} &&
-		match (&self.keyvals, &other.keyvals) {
-			(&Some(ref i), &Some(ref j)) if i == j => true,
-			(&None, &None) => true,
-			_ => false
-		}
+		comp_opt(&self.table_sep, &other.table_sep) && 
+		comp_opt(&self.keyvals, &other.keyvals)
 	}
 }
 
