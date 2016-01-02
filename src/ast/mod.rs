@@ -26,5 +26,8 @@ pub use self::structs::Array;
 pub use self::structs::TableKeyVals;
 pub use self::structs::InlineTable;
 pub use self::structs::Expression;
+pub use self::structs::NLExpression;
+pub use self::structs::Toml;
+pub use self::structs::MyResult;
 
 

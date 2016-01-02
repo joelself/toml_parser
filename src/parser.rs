@@ -2,31 +2,68 @@
 pub use ast::{Val, Comment, WSSep, KeyVal, WSKeySep, TableType, Table,
           PartialTime, TimeOffsetAmount, TimeOffset, FullTime, PosNeg,
           FullDate, DateTime, CommentNewLines, CommentOrNewLines,
-          ArrayValues, Array, TableKeyVals, InlineTable, Expression};
+          ArrayValues, Array, TableKeyVals, InlineTable, Expression,
+          NLExpression, Toml};
 #[macro_use]
 // TOML
 // TODO: toml
-named!(expression<&str, Expression>,
+
+named!(pub toml<&str, Toml>,
+  chain!(
+    expr: expression    ~
+nl_exprs: nl_expressions,
+    ||{
+      Toml{
+        expr: expr, nl_exprs: nl_exprs,
+      }
+    }
+  )
+);
+
+named!(nl_expressions<&str, Vec<NLExpression> >, many0!(nl_expression));
+
+named!(nl_expression<&str, NLExpression>,
+  chain!(
+     nl: newline    ~
+   expr: expression ,
+    ||{
+      NLExpression{
+        nl: nl, expr: expr,
+      }
+    }
+  )
+);
+
+// Expression
+named!(pub expression<&str, Expression>,
   alt!(
     complete!(table_comment)  |
     complete!(keyval_comment) |
     complete!(ws_comment)     |
-    complete!(ws) => {|space| Expression{
-      ws: WSSep{
-        ws1: space,
-        ws2: "",
-      },
-      keyval: None, table: None, comment: None,
-    }}
+    complete!(ws_expr)
   )
 );
 
-named!(table_comment<&str, Expression>,
+named!(ws_expr<&str, Expression>,
+  chain!(
+    ws: ws,
+    ||{
+      Expression{
+        ws: WSSep{
+          ws1: ws,
+          ws2: "",
+        },
+        keyval: None, table: None, comment: None,
+      }
+    }
+  ));
+
+named!(pub table_comment<&str, Expression>,
   chain!(
     ws1: ws       ~
   table: table    ~
     ws2: ws       ~
-comment: comment? ,
+comment: comment ? ,
     ||{
       Expression{
         ws: WSSep{
@@ -39,7 +76,7 @@ comment: comment? ,
   )
 );
 
-named!(keyval_comment<&str, Expression>,
+named!(pub keyval_comment<&str, Expression>,
   chain!(
     ws1: ws       ~
  keyval: keyval   ~
@@ -84,20 +121,16 @@ named!(newline<&str, &str>,
 named!(newlines<&str, Vec<&str> >, many1!(newline));
 
 // Whitespace
-fn is_space(chr: char) -> bool {
-    chr as u32 == 0x20 || chr as u32 == 0x09
-}
-
-named!(ws<&str, &str>, take_while_s!(is_space));
+named!(ws<&str, &str>, re_find_static!("^( |\t)*"));
 
 // Comment
 fn not_eol(chr: char) -> bool {
-  chr as u32 == 0x09 || (chr as u32 >= 0x20 && chr as u32 <=0x10FFF)
+  chr as u32 == 0x09 || (chr as u32 >= 0x20 && chr as u32 <= 0x10FFF)
 }
 
-named!(comment<&str, Comment>,
+named!(pub comment<&str, Comment>,
   chain!(
-             tag_s!("#")            ~
+             re_find_static!("^#")            ~
 comment_txt: take_while_s!(not_eol) ,
     ||{
       Comment{
@@ -146,7 +179,7 @@ named!(val<&str, Val>,
   )
 );
 
-named!(keyval<&str, KeyVal>,
+named!(pub keyval<&str, KeyVal>,
   chain!(
     key: key        ~
      ws: keyval_sep ~
@@ -161,7 +194,7 @@ named!(keyval<&str, KeyVal>,
 
 
 // Table
-named!(table<&str, TableType>,
+named!(pub table<&str, TableType>,
   alt!(
     complete!(array_table) |
     complete!(std_table)
@@ -201,7 +234,7 @@ subkeys: table_sub_keys ~
         ws: WSSep{
           ws1: ws1, ws2: ws2
         },
-        key: key, subkeys: subkeys
+        key: key, subkeys: subkeys,
       })
     }
   )
@@ -221,7 +254,7 @@ subkeys: table_sub_keys ~
         ws: WSSep{
           ws1: ws1, ws2: ws2
         },
-        key: key, subkeys: subkeys
+        key: key, subkeys: subkeys,
       })
     }
   )
@@ -328,7 +361,7 @@ named!(full_date<&str, FullDate>,
   month: re_find_static!("^([0-9]{2})") ~
          tag_s!("-") ~
     day: re_find_static!("^([0-9]{2})"),
-    ||{println!("parse full date");
+    ||{
       FullDate{
         year: year, month: month, day: day
       }
@@ -355,20 +388,25 @@ named!(array_sep<&str, WSSep>,
     ws1: ws         ~
          tag_s!(",")~
     ws2: ws         ,
-    ||{//println!("Parse array sep");
+    ||{
       WSSep{ws1: ws1, ws2: ws2
       }
     }
   )
 );
 
+named!(ws_newline<&str, &str>, re_find_static!("^( | \t|\n|(\r\n))*"));
+
+named!(ws_newlines<&str, &str>, re_find_static!("^(\n|(\r\n))( | \t|\n|(\r\n))*"));
+
 named!(comment_nl<&str, CommentNewLines>,
   chain!(
- comment: comment ~
-newlines: newlines,
+ prewsnl: ws_newline  ~
+ comment: comment     ~
+newlines: ws_newlines ,
     ||{
       CommentNewLines{
-        comment: comment, newlines: newlines
+        pre_ws_nl: prewsnl, comment: comment, newlines: newlines
       }
     }
   )
@@ -376,8 +414,8 @@ newlines: newlines,
 
 named!(comment_or_nl<&str, CommentOrNewLines>,
   alt!(
-    complete!(comment_nl) => {|com| CommentOrNewLines::Comment(com)} |
-    complete!(newlines)   => {|nl|  CommentOrNewLines::NewLines(nl)}
+    complete!(comment_nl)   => {|com| CommentOrNewLines::Comment(com)} |
+    complete!(ws_newlines)  => {|nl|  CommentOrNewLines::NewLines(nl)}
   )
 );
 
@@ -431,10 +469,10 @@ named!(array_values<&str, ArrayValues>,
   )
 );
 
-named!(array<&str, Array>,
+named!(pub array<&str, Array>,
   chain!(
             tag_s!("[")   ~
-       ws1: ws            ~
+       ws1: ws_newline    ~
 array_vals: array_values? ~
        ws2: ws            ~
             tag_s!("]")   ,
@@ -446,6 +484,7 @@ array_vals: array_values? ~
     }
   )
 );
+
 // Inline Table
 // Note inline-table-sep and array-sep are identical so we'll reuse array-sep
 named!(single_keyval<&str, TableKeyVals>,
@@ -453,7 +492,7 @@ named!(single_keyval<&str, TableKeyVals>,
         key1: key        ~
  keyval_sep1: keyval_sep ~
         val1: val        ,
-        ||{//println!("Parse table keyvals");
+        ||{
           TableKeyVals{
             key: key1,
             keyval_sep: keyval_sep1,
@@ -472,7 +511,7 @@ named!(recursive_keyval<&str, TableKeyVals>,
         val2: val                            ~
   table_sep2: array_sep                      ~
     keyvals2: inline_table_keyvals_non_empty ,
-        ||{//println!("Parse recursive table keyvals");
+        ||{
           TableKeyVals{
             key: key2,
             keyval_sep: keyval_sep2,
