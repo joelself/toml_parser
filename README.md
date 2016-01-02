@@ -4,12 +4,26 @@
 
 [![ghit.me](https://ghit.me/badge.svg?repo=joelself/toml_parser)](https://ghit.me/repo/joelself/toml_parser)
 
-Based on the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54). Currently a work in progress as it can only parse Newlines, Whitespace, Comments, Key-Value Pairs, Standard Tables, Array Tables, Integers, Floats, Basic Strings, Multiline Basic Strings, Literal Strings, Booleans, Datetimes, and Arrays. Still needs Inline tables, Expressions, allow Inline tables to be vals and the top-level TOML.
+Based on the [my version](https://github.com/joelself/toml/blob/abnf/toml.abnf) of the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54) (at least until they merge my changes). Currently can parse entire TOML files and reconstruct them into a perfect copy, preserving order and all whitespace. Tested with perfect output on the toml README example, and the regular and hard example in the toml test directory.
 
-All high level structs representing the ABNF are implemented except for (partially) Val, Expression, Inline table and TOML.
+Next steps are for unit tests for all parsers that don't have them yet. A test method that will iterate through each toml file in the assets directory, parse the file, then reconstruct it and compare it to the original.
+
+After testing shows the parser to be working I'll add functionality found in other toml packages such as
+* Value look-up/modification
+* Adding and removing elements
+* Type conversion
+
+The difference will be that I'll preserve the exact formatting at all times unless told not to.
+
+Some other things I might add:
+* Strip extraneous spaces and newlines
+* Reorder elements
+* For Cargo.toml files, updating dependency versions to the latest on crates.io
+* For Cargo.toml files, change ranges on dependency versions
+* Conversion to JSON and YAML
 
 To get the source simply ```git clone https://github.com/joelself/toml_parser.git```.
-I took a dependencies on `regex_macros` which requires you be on the nightly version of Rust. Fortunately [multirust](https://github.com/brson/multirust) makes this dead simple without forcing all of your Rust evironment to be on Nightly.
+I took a dependency on `regex_macros` which requires you be on the nightly version of Rust. Fortunately [multirust](https://github.com/brson/multirust) makes this dead simple without forcing all of your Rust evironment to be on Nightly.
 
 Install multirust (you'll have to [uninstall currently installed versions of Rust](https://doc.rust-lang.org/book/installing-rust.html#uninstalling) first:
 
