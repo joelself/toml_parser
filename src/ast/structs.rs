@@ -1,14 +1,17 @@
+use std::fmt;
+use std::fmt::Display;
+use std::option::Option;
+use nom::IResult;
+
 /// Compares two Options that contain comparable structs
 ///
 /// # Examples
 ///
 /// ```
-/// let (a, b) = (Option("value"), Option("value"));
+/// # use tomllib::ast::structs::comp_opt;
+/// let (a, b) = (Some("value"), Some("value"));
 /// assert!(comp_opt(&a, &b));
 /// ```
-use std::fmt;
-use std::fmt::{Display};
-use nom::IResult;
 pub fn comp_opt<T: Eq>(left: &Option<T>, right: &Option<T>) -> bool {
 	match (left, right) {
 		(&Some(ref i), &Some(ref j)) if i == j => true,

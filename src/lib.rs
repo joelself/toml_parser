@@ -4,4 +4,11 @@
 extern crate nom;
 extern crate regex;
 pub mod ast;
-pub mod parser;
+mod toml;
+mod util;
+mod objects;
+mod primitives;
+#[test]
+fn it_works() {
+	println!("{}", ast::structs::PartialTime{hour: "09", minute: "30", second: "22", fraction: "733"});
+}

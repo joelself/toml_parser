@@ -1,26 +1,11 @@
 [package]
-name = "toml_parser"
+name = "tomllib"
 version = "0.1.0"
 authors = ["Joel Self <joel@dislocal.com>"]
-include = [
-  "LICENSE",
-  ".gitignore",
-  "Cargo.toml",
-  "src/*.rs",
-  "tests/*.rs"
-]
+
 [dependencies.nom]
 git = "https://github.com/Geal/nom.git"
 
 features = ["regexp_macros"]
 [dependencies.regex]
 [dependencies.regex_macros]
-
-[lib]
-name = "tomlmodlib"
-path = "src/lib.rs"
-
-[[bin]]
-name = "tomlmod"
-path = "src/bin.rs"
-
