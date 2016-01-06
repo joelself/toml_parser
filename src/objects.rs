@@ -1,10 +1,10 @@
 use std::fmt;
 use std::fmt::{Display};
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
-                   CommentOrNewLines, ArrayValue, Array, TableKeyVals,
-                   InlineTable, WSSep};
+                   CommentOrNewLines, ArrayValue, Array,
+                   InlineTable, WSSep, TableKeyVal};
 use util::{ws, comment};
-use primitives::{key, val, keyval_sep};
+use primitives::{key, val, keyval, keyval_sep};
 // Table
 named!(pub table<&str, TableType>,
   alt!(
@@ -184,64 +184,45 @@ array_vals: array_values ~
 
 // Inline Table
 // Note inline-table-sep and array-sep are identical so we'll reuse array-sep
-named!(single_keyval<&str, TableKeyVals>,
+/*named!(single_keyval<&str, TableKeyVal>,
       chain!(
-        key1: key        ~
- keyval_sep1: keyval_sep ~
-        val1: val        ,
+     keyval: keyval        ,
         ||{
-          TableKeyVals{
-            key: key1,
-            keyval_sep: keyval_sep1,
-            val: val1,
-            table_sep: None,
-            keyvals: None,
+          TableKeyVal{
+            keyval: keyval,
+            kv_sep: None,
           }
         }
       ) 
-);
+);*/
 
-named!(recursive_keyval<&str, TableKeyVals>,
+named!(table_keyval<&str, TableKeyVal>,
       chain!(
-        key2: key                            ~
- keyval_sep2: keyval_sep                     ~
-        val2: val                            ~
-  table_sep2: array_sep                      ~
-    keyvals2: inline_table_keyvals_non_empty ,
+        ws1: ws     ~
+     keyval: keyval ~
+        ws2: ws     ,
         ||{
-          TableKeyVals{
-            key: key2,
-            keyval_sep: keyval_sep2,
-            val: val2,
-            table_sep: Some(table_sep2),
-            keyvals: Some(Box::new(keyvals2)),
+          TableKeyVal{
+            keyval: keyval,
+            kv_sep: WSSep{ws1: ws1, ws2: ws2}
           }
         }
       )
 );
 
-named!(inline_table_keyvals_non_empty<&str, TableKeyVals>,
-  alt!(
-    complete!(
-      recursive_keyval
-    )|
-    complete!(
-      single_keyval
-    )
-  )
-);
+named!(inline_table_keyvals_non_empty<&str, Vec<TableKeyVal> >, separated_list!(tag_s!(","), table_keyval));
 
 named!(pub inline_table<&str, InlineTable>,
   chain!(
-        tag_s!("{")                     ~
-   ws1: ws                              ~
-keyvals:inline_table_keyvals_non_empty  ~
-   ws2: ws                              ~
-        tag_s!("}")                     ,
+         tag_s!("{")                     ~
+    ws1: ws                              ~
+keyvals: inline_table_keyvals_non_empty? ~
+    ws2: ws                              ~
+         tag_s!("}")                     ,
         ||{
           InlineTable{
             keyvals: keyvals,
-            ws: WSSep{ws1: ws1, ws2: ws2},
+            ws: WSSep{ws1: ws1, ws2: ws2}
           }
         }
   )
@@ -250,8 +231,9 @@ keyvals:inline_table_keyvals_non_empty  ~
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use super::{array, inline_table_keyvals_non_empty, inline_table};
-  use ast::structs::{FullDate, Array, ArrayValue, WSSep, TableKeyVals, InlineTable};
+  use super::{array, inline_table_keyvals_non_empty, inline_table, table_keyval};
+  use ast::structs::{FullDate, Array, ArrayValue, WSSep, TableKeyVal, InlineTable,
+                     KeyVal};
   use ::types::{DateTime, TimeOffset, TimeOffsetAmount, Value};
   #[test]
   fn test_non_nested_array() {
@@ -341,23 +323,62 @@ mod test {
     );
   }
 
+  /*#[test]
+  fn test_single_keyval() {
+    assert_eq!(single_keyval("AKEy = 485_7"), Done("", TableKeyVal {
+      keyval: KeyVal {
+        key: "AKEy",
+        val: Value::Integer("485_7"),
+        keyval_sep: WSSep {
+          ws1: " ",
+          ws2: " "
+        }
+      },
+      table_sep: None,
+    }));
+  }*/
+
+  #[test]
+  fn test_table_keyval() {
+    assert_eq!(table_keyval("\"Ì WúƲ Húϱƨ!\"\t=\t'Mè ƭôô!' "), Done("", TableKeyVal{
+      keyval: KeyVal{
+        key: "\"Ì WúƲ Húϱƨ!\"", val: Value::String("'Mè ƭôô!'"), keyval_sep: WSSep{
+          ws1: "\t", ws2: "\t"
+        }
+      },
+      kv_sep: WSSep{
+        ws1: "", ws2: " "
+      },
+    }));
+  }
+
   #[test]
   fn test_inline_table_keyvals_non_empty() {
-    assert_eq!(inline_table_keyvals_non_empty("Key = 54 , \"Key2\" = '34.99'"),
-      Done("", TableKeyVals{
-        key: "Key", keyval_sep: WSSep{
-          ws1: " ", ws2: " "
-        },
-        val: Value::Integer("54"), table_sep: Some(WSSep{
-          ws1: " ", ws2: " "
-        }),
-        keyvals: Some(Box::new(TableKeyVals{
-          key: "\"Key2\"", keyval_sep: WSSep{
-            ws1: " ", ws2: " "
+    assert_eq!(inline_table_keyvals_non_empty(" Key =\t54,\"Key2\" = '34.99'\t"),
+      Done("", vec![
+        TableKeyVal{
+          keyval: KeyVal{
+            key: "Key", keyval_sep: WSSep{
+              ws1: " ", ws2: "\t"
+            },
+            val: Value::Integer("54")
           },
-          val: Value::String("'34.99'"), table_sep: None, keyvals: None
-        }))
-      })
+          kv_sep: WSSep{
+            ws1: " ", ws2: ""
+          }
+        },
+        TableKeyVal{
+          keyval: KeyVal{
+            key: "\"Key2\"", keyval_sep: WSSep{
+              ws1: " ", ws2: " "
+            },
+            val: Value::String("'34.99'")
+          },
+          kv_sep: WSSep{
+            ws1: "", ws2: "\t"
+          }
+        }
+      ])
     );
   }
 
@@ -365,23 +386,31 @@ mod test {
   fn test_inline_table() {
     assert_eq!(inline_table("{\tKey = 3.14E+5 , \"Key2\" = '''New\nLine'''\t}"),
       Done("", InlineTable{
-        keyvals: TableKeyVals{
-          key: "Key", keyval_sep: WSSep{
-            ws1: " ", ws2: " "
-          },
-          val: Value::Float("3.14E+5"), table_sep: Some(WSSep{
-            ws1: " ", ws2: " "
-          }),
-          keyvals: Some(Box::new(TableKeyVals{
-            key: "\"Key2\"", keyval_sep: WSSep{
-              ws1: " ", ws2: " "
+        keyvals: Some(vec![
+          TableKeyVal{
+            keyval: KeyVal{
+              key: "Key", keyval_sep: WSSep{
+                ws1: " ", ws2: " "
+              },
+              val: Value::Float("3.14E+5")
             },
-            val: Value::String("\'\'\'New\nLine\'\'\'"), table_sep: None, keyvals: None
-          }))
-        },
-        ws: WSSep{
-          ws1: "\t", ws2: "\t"
-        }
+            kv_sep: WSSep{
+              ws1: "", ws2: " "
+            }
+          },
+          TableKeyVal{
+            keyval: KeyVal{
+              key: "\"Key2\"", keyval_sep: WSSep{
+                ws1: " ", ws2: " "
+              },
+              val: Value::String("'''New\nLine'''")
+            },
+            kv_sep: WSSep{
+              ws1: " ", ws2: "\t"
+            }
+          }
+        ]),
+        ws: WSSep{ws1: "\t", ws2: ""}
       })
     );
   }

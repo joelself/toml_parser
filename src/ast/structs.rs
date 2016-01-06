@@ -311,14 +311,6 @@ impl<'a> Display for Time<'a> {
     }
 }
 
-/*// (+|-)<hour>:<minute>
-#[derive(Debug, Eq)]
-pub struct TimeOffsetAmount<'a> {
-	pub pos_neg: PosNeg,
-	pub hour: &'a str,
-	pub minute: &'a str,
-}*/
-
 impl<'a> PartialEq for TimeOffsetAmount<'a> {
 	fn eq(&self, other: &TimeOffsetAmount<'a>) -> bool {
 		self.pos_neg == other.pos_neg &&
@@ -477,57 +469,72 @@ impl<'a> Display for Array<'a> {
 
 // <key><keyval_sep.ws1>=<keyval_sep.ws2><val><<table_sep.ws1>,<table_sep.ws2>?><keyvals?>
 #[derive(Debug, Eq)]
+pub struct TableKeyVal<'a> {
+	pub keyval: KeyVal<'a>,
+	pub kv_sep: WSSep<'a>,
+}
+
+impl<'a> PartialEq for TableKeyVal<'a> {
+	fn eq(&self, other: &TableKeyVal<'a>) -> bool {
+		self.keyval == other.keyval &&
+		self.kv_sep == other.kv_sep
+	}
+}
+
+impl<'a> Display for TableKeyVal<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    	write!(f, "{}{}{}", self.keyval, self.kv_sep.ws1, self.kv_sep.ws2)
+    }
+}
+
+/*#[derive(Debug, Eq)]
 pub struct TableKeyVals<'a> {
-	pub key: &'a str,
-	pub keyval_sep: WSSep<'a>,
-	pub val: Value<'a>,
-	pub table_sep: Option<WSSep<'a>>,
-	pub keyvals: Option<Box<TableKeyVals<'a>>>,
+	pub keyvals: Vec<TableKeyVal<'a>>
 }
 
 impl<'a> PartialEq for TableKeyVals<'a> {
 	fn eq(&self, other: &TableKeyVals<'a>) -> bool {
-		self.key == other.key &&
-		self.keyval_sep == other.keyval_sep &&
-		self.val == other.val &&
-		comp_opt(&self.table_sep, &other.table_sep) && 
-		comp_opt(&self.keyvals, &other.keyvals)
+		self.keyvals == other.keyvals
 	}
 }
 
 impl<'a> Display for TableKeyVals<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	match (&self.table_sep, &self.keyvals) {
-    		(&Some(ref t), &Some(ref k)) => write!(f, "{}{}={}{}{},{}{}",
-    			self.key, self.keyval_sep.ws1, self.keyval_sep.ws2, self.val,
-    			t.ws1, t.ws2, k),
-    		(&None, &None) => write!(f, "{}{}={}{}",
-    			self.key, self.keyval_sep.ws1, self.keyval_sep.ws2, self.val),
-    		_ => panic!("Invalid TableKeyVals: key: {}, keyval_sep.ws1: {},
-    			keyval_sep.ws2: {}, val: {}, table_sep: {:?}, keyvals: {:?}",
-    			self.key, self.keyval_sep.ws1, self.keyval_sep.ws2, self.val,
-    			self.table_sep, self.keyvals),
+    	for i in 0..self.keyvals.len() - 1 {
+    		try!(write!(f, "{}", self.keyvals[i]))
     	}
+    	write!(f, "{}", self.keyvals[self.keyvals.len() - 1])
     }
-}
+}*/
 
 // {<ws.ws1><keyvals><ws.ws2>}
 #[derive(Debug, Eq)]
 pub struct InlineTable<'a> {
-	pub keyvals: TableKeyVals<'a>,
+	pub keyvals: Option<Vec<TableKeyVal<'a>>>,
 	pub ws: WSSep<'a>,
 }
 
 impl<'a> PartialEq for InlineTable<'a> {
 	fn eq(&self, other: &InlineTable<'a>) -> bool {
-		self.keyvals == other.keyvals &&
+		comp_opt(&self.keyvals, &other.keyvals) &&
 		self.ws == other.ws
 	}
 }
 
+fn write_table_vector<'a>(kvs: &Vec<TableKeyVal<'a>>, ws: &WSSep<'a>, f: &mut fmt::Formatter) -> fmt::Result {
+	try!(write!(f, "{{{}", ws.ws1));
+	for i in 0..kvs.len() - 1 {
+		try!(write!(f, "{},", kvs[i]));
+	}
+	write!(f, "{}{}}}", kvs[kvs.len() - 1], ws.ws2)
+}
+
 impl<'a> Display for InlineTable<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	write!(f, "{}{}{}", self.ws.ws1, self.keyvals, self.ws.ws2)
+    	match &self.keyvals {
+    		&Some(ref k)	=> write_table_vector(k, &self.ws, f),
+    		&None			=> write!(f, "{{{}{}}}", self.ws.ws1, self.ws.ws2),
+    	}
     }
 }
 

@@ -174,7 +174,8 @@ named!(pub keyval<&str, KeyVal>,
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal};
+  use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal,
+                     InlineTable, TableKeyVal};
   use ::types::{DateTime, TimeOffsetAmount, TimeOffset, Value};
   use super::{boolean, time, time_offset_amount, time_offset,
               full_date, date_time, literal_string,
@@ -339,7 +340,23 @@ mod test {
       }
     ))));
 
-    //assert_eq!("", Done("", )); inline table
+    assert_eq!(val("{\"§ô₥è Þïϱ\"='Táƨƭ¥ Þôřƙ'}"), Done("",
+      Value::InlineTable(Box::new(InlineTable{
+        keyvals: Some(vec![
+          TableKeyVal{
+            keyval: KeyVal{
+              key: "\"§ô₥è Þïϱ\"", keyval_sep: WSSep{
+                ws1: "", ws2: ""
+              },
+              val: Value::String("'Táƨƭ¥ Þôřƙ'")
+            },
+            kv_sep: WSSep{ws1: "", ws2: ""}
+          }
+        ]),
+        ws: WSSep{
+          ws1: "", ws2: ""
+        }
+    }))));
 
     assert_eq!(val("2112-09-30T12:33:01.345-11:30"), Done("", Value::DateTime(DateTime{
                               year: "2112", month: "09", day: "30",
