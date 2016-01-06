@@ -8,7 +8,7 @@
 
 ####What does it mean that it doesn't judge me?###
 
-Toml lib respects your crazy indentation and whitespace scheme. It respects the order you place things. It doesn't try to reformat the file based on *somebody else's* views on file format purity. It only makes changes that you tell it to make and leaves the rest alone. Want 20 tabs between every key and `=` in a key value pair? Have at it! Want to put a comment and 5 newlines after every array value? We won't try to change your mind! Randomly placed tables and nested tables? It's your file! Do whatever you want and as long as it is within spec; we won't try to change it.
+`tomlib` respects your crazy indentation and whitespace scheme. It respects the order you place things. It doesn't try to reformat the file based on *somebody else's* views on file format purity. It only makes changes that you tell it to make and leaves the rest alone. Want 20 tabs between every key and `=` in a key value pair? Have at it! Want to put a comment and 5 newlines after every array value? We won't try to change your mind! Randomly placed tables and nested tables? It's your file! Do whatever you want and as long as it is within spec; we won't try to change it.
 
 ###Tomllib###
 
