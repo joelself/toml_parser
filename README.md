@@ -1,8 +1,8 @@
 ## *TOML_PARSER is now TOMLLIB and TOMLKIT!*
 
-## Tomllib is a parser, modifier, and generator for TOML files ***that doesn't judge you***! 
+## `tomllib` is a parser, modifier, and generator for TOML files ***that doesn't judge you***! 
 
-######It is written in Rust using [nom](https://github.com/Geal/nom). Tomlkit is the command line tool that has the same functionality as the library  (but doesn't actually exist yet, but then again neither does the library).
+######It is written in Rust using [nom](https://github.com/Geal/nom). `tomlkit` is the command line tool that has the same functionality as the library  (but doesn't actually exist yet, but then again neither does the library).
 
 [![ghit.me](https://ghit.me/badge.svg?repo=joelself/toml_parser)](https://ghit.me/repo/joelself/toml_parser)
 
@@ -12,21 +12,21 @@ Toml lib respects your crazy indentation and whitespace scheme. It respects the 
 
 ###Tomllib###
 
-Based on [my version](https://github.com/joelself/toml/blob/abnf/toml.abnf) of the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54) (at least until they merge my changes). Currently can parse entire Unicode TOML files and reconstruct them into a perfect copy, preserving order and all whitespace. Tested with perfect output on the toml README example, the regular and hard example in the toml test directory and [my own Unicode version of the hard example](https://github.com/joelself/toml/blob/master/tests/hard_example_unicode.toml).
+Based on [my version](https://github.com/joelself/toml/blob/abnf/toml.abnf) of the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54) (at least until they merge my changes). Currently can parse entire Unicode TOML files and reconstruct them into a perfect copy, preserving order and all whitespace. Tested with perfect output on the toml README example, the regular, hard, and unicode hard examples in the [toml test directory](https://github.com/toml-lang/toml/tree/master/tests).
 
 Next steps for the first release are:
 * Might back off to use beta Rust or, less likely, stable Rust
 * Unit tests for all parsers that don't have them yet
-* A test method that will iterate through each toml file in the assets directory, parse the file, then reconstruct it and compare it to the original.
-* Content validation (currently the parser doesn't complain about heterogeneous arrays or duplicate keys, because it wants to give you a chance to correct them rather than immediately fail and force you to fix it by hand.)
+* An integration test method that will iterate through each toml file in the assets directory (which includes the [toml-test valid tests](https://github.com/BurntSushi/toml-test/tree/master/tests/valid) and the toml examples mentioned earlier), parse the file, then reconstruct it and compare it to the original.
+* Content validation, and non-failure error reporting (currently the parser doesn't complain about heterogeneous arrays or duplicate keys, because it wants to give you a chance to correct them rather than immediately fail and force you to fix it by hand.)
 * Value look-up/modification
 * Key modification
-* Element addition and deletion
-* Type conversion
 
 The difference between this toml library and others is that I'll preserve the exact formatting at all times unless told not to.
 
-Some other things I might add:
+Some other things I will probably add for future realeses:
+* Element addition and deletion
+* Type conversion
 * Strip extraneous spaces and newlines
 * User defined re-indentation
 * Element re-ordering
