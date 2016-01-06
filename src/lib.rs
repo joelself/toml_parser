@@ -8,7 +8,10 @@ mod toml;
 mod util;
 mod objects;
 mod primitives;
+mod types;
+pub mod parser;
+use toml::expression;
 #[test]
 fn it_works() {
-	println!("{}", ast::structs::PartialTime{hour: "09", minute: "30", second: "22", fraction: "733"});
+	println!("{:?}", expression("test = \"string\""));
 }

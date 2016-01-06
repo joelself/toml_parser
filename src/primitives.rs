@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fmt::Display;
-use ast::structs::{PartialTime, TimeOffsetAmount, TimeOffset, PosNeg,
-                   FullTime, FullDate, DateTime, Val, KeyVal, WSSep};
+use ast::structs::{Time, FullDate, KeyVal, WSSep};
+use ::types::{DateTime, TimeOffset, TimeOffsetAmount, Value};
 use util::{ws};
 use objects::{array, inline_table};
 // Integer
@@ -48,7 +48,7 @@ named!(boolean<&str, &str>, alt!(complete!(tag_s!("false")) | complete!(tag_s!("
 // in the 0th position and the first capture group in the 1st position
 named!(fractional<&str, Vec<&str> >, re_capture_static!("^\\.([0-9]+)"));
 
-named!(partial_time<&str, PartialTime>,
+named!(time<&str, Time>,
   chain!(
     hour: re_find_static!("^[0-9]{2}") ~
           tag_s!(":")                 ~
@@ -57,7 +57,7 @@ named!(partial_time<&str, PartialTime>,
   second: re_find_static!("^[0-9]{2}") ~
  fraction: fractional?                ,
     ||{
-      PartialTime{
+      Time{
         hour: hour, minute: minute, second: second, fraction: match fraction {
           Some(ref x) => x[1],
           None        => "",
@@ -69,7 +69,7 @@ named!(partial_time<&str, PartialTime>,
 
 named!(time_offset_amount<&str, TimeOffsetAmount>,
   chain!(
-pos_neg: alt!(complete!(tag_s!("+")) => {|_| PosNeg::Pos} | complete!(tag_s!("-")) => {|_| PosNeg::Neg})  ~
+pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
    hour: re_find_static!("^[0-9]{2}")                                                                      ~
          tag_s!(":")                                                                                      ~
 minute: re_find_static!("^[0-9]{2}")                                                                       ,
@@ -85,18 +85,6 @@ named!(time_offset<&str, TimeOffset>,
   alt!(
     complete!(tag_s!("Z"))        => {|_|       TimeOffset::Z} |
     complete!(time_offset_amount) => {|offset|  TimeOffset::Time(offset)}
-  )
-);
-
-named!(full_time<&str, FullTime>,
-  chain!(
-partial: partial_time ~
- offset: time_offset,
-    ||{
-      FullTime{
-        partial_time: partial, time_offset: offset
-      }
-    }
   )
 );
 
@@ -118,11 +106,14 @@ named!(full_date<&str, FullDate>,
 named!(date_time<&str, DateTime>,
   chain!(
    date: full_date  ~
-         tag_s!("T") ~
-   time: full_time  ,
-    ||{
+         tag_s!("T")~
+   time: time       ~
+ offset: time_offset,
+      ||{
       DateTime{
-        date: date, time: time
+        year: date.year, month: date.month, day: date.day,
+        hour: time.hour, minute: time.minute, second: time.second,
+        fraction: time.fraction, offset: offset
       }
     }
   )
@@ -155,15 +146,15 @@ named!(pub keyval_sep<&str, WSSep>,
   )
 );
 
-named!(pub val<&str, Val>,
+named!(pub val<&str, Value>,
   alt!(
-    complete!(array)        => {|arr|   Val::Array(Box::new(arr))}      |
-    complete!(inline_table) => {|it|    Val::InlineTable(Box::new(it))} |
-    complete!(date_time)    => {|dt|    Val::DateTime(dt)}              |
-    complete!(float)        => {|flt|   Val::Float(flt)}                |
-    complete!(integer)      => {|int|   Val::Integer(int)}              |
-    complete!(boolean)      => {|b|     Val::Boolean(b)}                |
-    complete!(string)       => {|s|     Val::String(s)}
+    complete!(array)        => {|arr|   Value::Array(Box::new(arr))}      |
+    complete!(inline_table) => {|it|    Value::InlineTable(Box::new(it))} |
+    complete!(date_time)    => {|dt|    Value::DateTime(dt)}              |
+    complete!(float)        => {|flt|   Value::Float(flt)}                |
+    complete!(integer)      => {|int|   Value::Integer(int)}              |
+    complete!(boolean)      => {|b|     Value::Boolean(b)}                |
+    complete!(string)       => {|s|     Value::String(s)}
   )
 );
 
@@ -183,12 +174,13 @@ named!(pub keyval<&str, KeyVal>,
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use ast::structs::{PartialTime, TimeOffsetAmount, PosNeg, TimeOffset,
-                     FullTime, FullDate, DateTime, WSSep};
-  use super::{boolean, partial_time, time_offset_amount, time_offset,
-              full_time, full_date, date_time, literal_string,
+  use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal};
+  use ::types::{DateTime, TimeOffsetAmount, TimeOffset, Value};
+  use super::{boolean, time, time_offset_amount, time_offset,
+              full_date, date_time, literal_string,
               ml_literal_string, integer, fractional, float, basic_string,
-              ml_basic_string, unquoted_key, quoted_key, key, keyval_sep};
+              ml_basic_string, unquoted_key, quoted_key, key, keyval_sep,
+              val, keyval};
 
   #[test]
   fn test_integer() {
@@ -240,17 +232,17 @@ mod test {
   }
 
   #[test]
-  fn test_partial_time() {
-    assert_eq!(partial_time("11:22:33.456"),
-      Done("", PartialTime{
+  fn test_time() {
+    assert_eq!(time("11:22:33.456"),
+      Done("", Time{
         hour: "11",
         minute: "22",
         second: "33",
         fraction: "456"
       })
     );
-    assert_eq!(partial_time("04:05:06"),
-      Done("", PartialTime{
+    assert_eq!(time("04:05:06"),
+      Done("", Time{
         hour: "04",
         minute: "05",
         second: "06",
@@ -263,7 +255,7 @@ mod test {
   fn test_time_offset_amount() {
     assert_eq!(time_offset_amount("+12:34"),
       Done("", TimeOffsetAmount{
-        pos_neg: PosNeg::Pos,
+        pos_neg: "+",
         hour: "12",
         minute: "34"
       })
@@ -274,31 +266,12 @@ mod test {
   fn test_time_offset() {
     assert_eq!(time_offset("+12:34"),
       Done("", TimeOffset::Time(TimeOffsetAmount{
-        pos_neg: PosNeg::Pos,
+        pos_neg: "+",
         hour: "12",
         minute: "34"
       }))
     );
     assert_eq!(time_offset("Z"), Done("", TimeOffset::Z));
-  }
-
-  #[test]
-  fn test_full_time() {
-    assert_eq!(full_time("10:30:55.83+12:54"),
-      Done("", FullTime{
-        partial_time: PartialTime{
-          hour: "10",
-          minute: "30",
-          second: "55",
-          fraction: "83"
-        },
-        time_offset: TimeOffset::Time(TimeOffsetAmount{
-          pos_neg: PosNeg::Pos,
-          hour: "12",
-          minute: "54"
-        })
-      })
-    );
   }
 
   #[test]
@@ -314,22 +287,13 @@ mod test {
   fn test_date_time() {
     assert_eq!(date_time("1999-03-21T20:15:44.5-07:00"),
       Done("", DateTime{
-        date: FullDate{
-          year: "1999", month: "03", day: "21"
-        },
-        time: FullTime{
-          partial_time: PartialTime{
-            hour: "20",
-            minute: "15",
-            second: "44",
-            fraction: "5"
-          },
-          time_offset: TimeOffset::Time(TimeOffsetAmount{
-            pos_neg: PosNeg::Neg,
-            hour: "07",
-            minute: "00"
-          })
-        }
+        year: "1999", month: "03", day: "21",
+        hour: "20", minute: "15", second: "44", fraction: "5",
+        offset: TimeOffset::Time(TimeOffsetAmount{
+          pos_neg: "-",
+          hour: "07",
+          minute: "00"
+        })
       })
     );
   }
@@ -354,28 +318,50 @@ mod test {
   fn test_keyval_sep() {
     assert_eq!(keyval_sep("\t \t= \t"), Done("", WSSep{ws1: "\t \t", ws2: " \t"}));
   }
-/*
-    complete!(array)        => {|arr|   Val::Array(Box::new(arr))}      |
-    complete!(inline_table) => {|it|    Val::InlineTable(Box::new(it))} |
-    complete!(date_time)    => {|dt|    Val::DateTime(dt)}              |
-    complete!(float)        => {|flt|   Val::Float(flt)}                |
-    complete!(integer)      => {|int|   Val::Integer(int)}              |
-    complete!(boolean)      => {|b|     Val::Boolean(b)}                |
-    complete!(string)       => {|s|     Val::String(s)}
-
 
   #[test]
-  fn test_() {
-    assert_eq!("", Done("", ));
+  fn test_val() {
+    assert_eq!(val("[4,9]"), Done("",
+      Value::Array(Box::new(Array{
+        values: vec![
+          ArrayValue{
+            val: Value::Integer("4"), array_sep: Some(WSSep{
+              ws1: "", ws2: ""
+            }),
+            comment_nl: None
+          },
+          ArrayValue{
+            val: Value::Integer("9"), array_sep: None,
+            comment_nl: None
+          },
+        ],
+        ws: WSSep{ws1: "", ws2: ""}
+      }
+    ))));
+
+    //assert_eq!("", Done("", )); inline table
+
+    assert_eq!(val("2112-09-30T12:33:01.345-11:30"), Done("", Value::DateTime(DateTime{
+                              year: "2112", month: "09", day: "30",
+                              hour: "12", minute: "33", second: "01", fraction: "345",
+                              offset: TimeOffset::Time(TimeOffsetAmount{
+                                pos_neg: "-", hour: "11", minute: "30"
+                              })
+                            })));
+    assert_eq!(val("3487.3289E+22"), Done("", Value::Float("3487.3289E+22")));
+    assert_eq!(val("8932838"), Done("", Value::Integer("8932838")));
+    assert_eq!(val("false"), Done("", Value::Boolean("false")));
+    assert_eq!(val("true"), Done("", Value::Boolean("true")));
+    assert_eq!(val("'§ô₥è §ƭřïñϱ'"), Done("", Value::String("'§ô₥è §ƭřïñϱ'")));
   }
 
   #[test]
-  fn test_() {
-    assert_eq!("", Done("", ));
+  fn test_keyval() {
+    assert_eq!(keyval("Boolean = 84.67"), Done("", KeyVal{
+      key: "Boolean", keyval_sep: WSSep{
+        ws1: " ", ws2: " "
+      },
+      val: Value::Float("84.67")
+    }));
   }
-
-  #[test]
-  fn test_() {
-    assert_eq!("", Done("", ));
-  }*/
 }

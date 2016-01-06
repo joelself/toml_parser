@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fmt::{Display};
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
-                   CommentOrNewLines, ArrayValues, Array, TableKeyVals,
+                   CommentOrNewLines, ArrayValue, Array, TableKeyVals,
                    InlineTable, WSSep};
 use util::{ws, comment};
 use primitives::{key, val, keyval_sep};
@@ -13,7 +13,7 @@ named!(pub table<&str, TableType>,
   )
 );
 
-named!(table_sub_keys<&str, Vec<WSKeySep> >, many0!(table_sub_key));
+named!(table_subkeys<&str, Vec<WSKeySep> >, many0!(table_sub_key));
 
 named!(table_sub_key<&str, WSKeySep>,
   chain!(
@@ -31,14 +31,13 @@ named!(table_sub_key<&str, WSKeySep>,
     } 
   )
 );
-
 // Standard Table
 named!(std_table<&str, TableType>,
   chain!(
          tag_s!("[")    ~
     ws1: ws             ~
     key: key            ~
-subkeys: table_sub_keys ~
+subkeys: table_subkeys ~
     ws2: ws             ~
          tag_s!("]")    ,
     ||{
@@ -58,7 +57,7 @@ named!(array_table<&str, TableType>,
          tag_s!("[[")   ~
     ws1: ws             ~
     key: key            ~
-subkeys: table_sub_keys ~
+subkeys: table_subkeys ~
     ws2: ws             ~
          tag_s!("]]")   ,
     ||{
@@ -109,49 +108,49 @@ named!(comment_or_nl<&str, CommentOrNewLines>,
   )
 );
 
-named!(array_values<&str, ArrayValues>,
-  alt!(
+named!(array_value<&str, ArrayValue>,
     complete!(
       chain!(
-        val: val ~
-  array_sep: array_sep ~
-  comment_nl: comment_or_nl? ~
-  array_vals: array_values,
+        val: val              ~
+  array_sep: array_sep        ~
+  comment_nl: comment_or_nl?  ,
         ||{
-          ArrayValues{
+          ArrayValue{
             val: val,
             array_sep: Some(array_sep),
             comment_nl: comment_nl,
-            array_vals: Some(Box::new(array_vals))
           }
         }
       )
-    )|
+    )
+);
+
+// I theory the first alt case should handle all possible values, but in practice it fails to
+// to parse some optional combinations, hence the second alt case.
+named!(array_value_end<&str, ArrayValue>,
+  alt!(    
     complete!(
       chain!(
         val: val              ~
   array_sep: array_sep?       ~
   comment_nl: comment_or_nl?  ,
-        move ||{
-          ArrayValues{
+        ||{
+          ArrayValue{
             val: val,
             array_sep: array_sep,
             comment_nl: comment_nl,
-            array_vals: None
           }
         }
       )
-    )
-    |
+    ) |
     complete!(
       chain!(
-        val: val                       ,
-        move ||{
-          ArrayValues{
+        val: val             ,
+        ||{
+          ArrayValue{
             val: val,
             array_sep: None,
             comment_nl: None,
-            array_vals: None
           }
         }
       )
@@ -159,11 +158,19 @@ named!(array_values<&str, ArrayValues>,
   )
 );
 
+named!(array_values<&str, Vec<ArrayValue> >,
+  chain!(
+   vals: many0!(array_value) ~
+   last: array_value_end      ,
+   ||{let mut tmp = vec![]; tmp.extend(vals); tmp.push(last); tmp}
+  )
+);
+
 named!(pub array<&str, Array>,
   chain!(
             tag_s!("[")   ~
        ws1: ws_newline    ~
-array_vals: array_values? ~
+array_vals: array_values ~
        ws2: ws            ~
             tag_s!("]")   ,
     ||{
@@ -244,100 +251,89 @@ keyvals:inline_table_keyvals_non_empty  ~
 mod test {
   use nom::IResult::Done;
   use super::{array, inline_table_keyvals_non_empty, inline_table};
-  use ast::structs::{DateTime, FullDate, FullTime, PartialTime, TimeOffset,
-                     Val, Array, ArrayValues, TimeOffsetAmount, PosNeg,
-                     WSSep, TableKeyVals, InlineTable, };
+  use ast::structs::{FullDate, Array, ArrayValue, WSSep, TableKeyVals, InlineTable};
+  use ::types::{DateTime, TimeOffset, TimeOffsetAmount, Value};
   #[test]
   fn test_non_nested_array() {
     assert_eq!(array("[2010-10-10T10:10:10.33Z, 1950-03-30T21:04:14.123+05:00]"),
       Done("", Array {
-        values: Some(ArrayValues {
-          val: Val::DateTime(DateTime {
-            date: FullDate {
-              year: "2010", month: "10", day: "10"
-            },
-            time: FullTime {
-              partial_time: PartialTime {
-                hour: "10", minute: "10", second: "10", fraction: "33"
-              },
-              time_offset: TimeOffset::Z
-            }
+        values: vec![ArrayValue {
+          val: Value::DateTime(DateTime {
+            year: "2010", month: "10", day: "10",
+            hour: "10", minute: "10", second: "10", fraction: "33",
+            offset: TimeOffset::Z
           }),
           array_sep: Some(WSSep{
             ws1: "", ws2: " "
           }),
-          comment_nl: None, array_vals: Some(Box::new(ArrayValues{
-            val: Val::DateTime(DateTime{
-              date: FullDate {
-                year: "1950", month: "03", day: "30"
-              },
-              time: FullTime{
-                partial_time: PartialTime{
-                  hour: "21", minute: "04", second: "14", fraction: "123"
-                },
-                time_offset: TimeOffset::Time(TimeOffsetAmount{
-                  pos_neg: PosNeg::Pos, hour: "05", minute: "00"
-                })
-              }
-            }),
-            array_sep: None, comment_nl: None, array_vals: None
-          }))
-        }),
+          comment_nl: None
+        },
+        ArrayValue {
+          val: Value::DateTime(DateTime{
+            year: "1950", month: "03", day: "30",
+            hour: "21", minute: "04", second: "14", fraction: "123",
+            offset: TimeOffset::Time(TimeOffsetAmount{
+              pos_neg: "+", hour: "05", minute: "00"
+            })
+          }),
+          array_sep: None, comment_nl: None
+        }],
         ws: WSSep{
           ws1: "", ws2: ""
         }
-      }));
+      })
+    );
   }
 
   #[test]
   fn test_nested_array() {
     assert_eq!(array("[[3,4], [4,5], [6]]"),
       Done("", Array{
-        values: Some(ArrayValues {
-          val: Val::Array(Box::new(Array { values: Some(ArrayValues {
-            val: Val::Integer("3"), array_sep: Some(WSSep {
-              ws1: "", ws2: ""
-            }), comment_nl: None, array_vals: Some(Box::new(ArrayValues {
-              val: Val::Integer("4"), array_sep: None, comment_nl: None, array_vals: None
-            }))
-          }),
-          ws: WSSep {
-            ws1: "", ws2: ""
-          }
-        })),
-          array_sep: Some(WSSep {
-            ws1: "", ws2: " "
-          }),
-          comment_nl: None, array_vals: Some(Box::new(ArrayValues {
-            val: Val::Array(Box::new(Array {
-              values: Some(ArrayValues {
-                val: Val::Integer("4"), array_sep: Some(WSSep {
-                  ws1: "", ws2: ""
-                }),
-                comment_nl: None, array_vals: Some(Box::new(ArrayValues {
-                  val: Val::Integer("5"), array_sep: None, comment_nl: None, array_vals: None
-                }))
-              }),
-              ws: WSSep {
-                ws1: "", ws2: ""
-              }
-            })),
-            array_sep: Some(WSSep {
-              ws1: "", ws2: " "
-            }),
-            comment_nl: None, array_vals: Some(Box::new(ArrayValues {
-              val: Val::Array(Box::new(Array {
-                values: Some(ArrayValues {
-                  val: Val::Integer("6"), array_sep: None, comment_nl: None, array_vals: None
-                }),
-                ws: WSSep {
-                  ws1: "", ws2: ""
+        values: vec![
+          ArrayValue {
+            val: Value::Array(Box::new(Array {
+              values: vec![
+                ArrayValue {
+                  val: Value::Integer("3"), array_sep: Some(WSSep { ws1: "", ws2: "" }),
+                  comment_nl: None
+                },
+                ArrayValue {
+                  val: Value::Integer("4"), array_sep: None, comment_nl: None
                 }
-              })),
-              array_sep: None, comment_nl: None, array_vals: None
-            }))
-          }))
-        }),
+              ],
+              ws: WSSep { ws1 : "", ws2: "" }
+            })),
+            array_sep: Some(WSSep { ws1: "", ws2: " " }),
+            comment_nl: None
+          },
+          ArrayValue {
+            val: Value::Array(Box::new(Array {
+              values: vec![
+                ArrayValue {
+                  val: Value::Integer("4"), array_sep: Some(WSSep { ws1: "", ws2: ""}),
+                  comment_nl: None
+                },
+                ArrayValue {
+                    val: Value::Integer("5"), array_sep: None, comment_nl: None
+                }
+              ],
+              ws: WSSep { ws1: "", ws2: ""}
+            })),
+            array_sep: Some(WSSep { ws1: "", ws2: " "}),
+            comment_nl: None
+          },
+          ArrayValue {
+            val: Value::Array(Box::new(Array {
+              values: vec![
+                ArrayValue {
+                  val: Value::Integer("6"), array_sep: None, comment_nl: None
+                }
+              ],
+              ws: WSSep { ws1: "", ws2: ""}
+            })),
+            array_sep: None, comment_nl: None
+          }
+        ],
         ws: WSSep {
           ws1: "", ws2: ""
         }
@@ -352,14 +348,14 @@ mod test {
         key: "Key", keyval_sep: WSSep{
           ws1: " ", ws2: " "
         },
-        val: Val::Integer("54"), table_sep: Some(WSSep{
+        val: Value::Integer("54"), table_sep: Some(WSSep{
           ws1: " ", ws2: " "
         }),
         keyvals: Some(Box::new(TableKeyVals{
           key: "\"Key2\"", keyval_sep: WSSep{
             ws1: " ", ws2: " "
           },
-          val: Val::String("'34.99'"), table_sep: None, keyvals: None
+          val: Value::String("'34.99'"), table_sep: None, keyvals: None
         }))
       })
     );
@@ -373,14 +369,14 @@ mod test {
           key: "Key", keyval_sep: WSSep{
             ws1: " ", ws2: " "
           },
-          val: Val::Float("3.14E+5"), table_sep: Some(WSSep{
+          val: Value::Float("3.14E+5"), table_sep: Some(WSSep{
             ws1: " ", ws2: " "
           }),
           keyvals: Some(Box::new(TableKeyVals{
             key: "\"Key2\"", keyval_sep: WSSep{
               ws1: " ", ws2: " "
             },
-            val: Val::String("\'\'\'New\nLine\'\'\'"), table_sep: None, keyvals: None
+            val: Value::String("\'\'\'New\nLine\'\'\'"), table_sep: None, keyvals: None
           }))
         },
         ws: WSSep{

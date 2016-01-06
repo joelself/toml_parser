@@ -5,14 +5,20 @@ use util::{newline, ws, comment};
 use objects::{table};
 use primitives::{keyval};
 
+/*fn ParseTOML<'a>(input: &str) -> Option<Toml> {
+  let parse_result = toml(input);
+  match parse_result {
+    Done(ref i, ref o) => Some
+  }
+}*/
+
 named!(pub toml<&str, Toml>,
   chain!(
     expr: expression    ~
 nl_exprs: nl_expressions,
     ||{
-      Toml{
-        expr: expr, nl_exprs: nl_exprs,
-      }
+      let mut tmp = vec![NLExpression{ nl: "", expr: expr}];
+      tmp.extend(nl_exprs); Toml{ exprs: tmp}
     }
   )
 );
@@ -32,7 +38,7 @@ named!(nl_expression<&str, NLExpression>,
 );
 
 // Expression
-named!(pub expression<&str, Expression>,
+named!(pub expression<&str,  Expression>,
   alt!(
     complete!(table_comment)  |
     complete!(keyval_comment) |
@@ -60,7 +66,7 @@ named!(pub table_comment<&str, Expression>,
     ws1: ws       ~
   table: table    ~
     ws2: ws       ~
-comment: comment ? ,
+comment: comment  ? ,
     ||{
       Expression{
         ws: WSSep{

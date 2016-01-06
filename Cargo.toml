@@ -9,3 +9,6 @@ git = "https://github.com/Geal/nom.git"
 features = ["regexp_macros"]
 [dependencies.regex]
 [dependencies.regex_macros]
+
+[[bin]]
+name = "tomlkit"
