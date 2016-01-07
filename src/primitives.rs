@@ -1,34 +1,32 @@
-use std::fmt;
-use std::fmt::Display;
 use ast::structs::{Time, FullDate, KeyVal, WSSep};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount, Value};
 use util::{ws};
 use objects::{array, inline_table};
 // Integer
-named!(integer<&str, &str>, re_find_static!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
+named!(integer<&str, &str>, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
 
 // Float
 named!(float<&str, &str>,
-       re_find_static!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
+       re_find!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
 
 // String
 // TODO: named!(string<&str, &str>, alt!(basic_string | ml_basic_string | literal_string | ml_literal_string));
 
 // Basic String
 named!(basic_string<&str, &str>,
-       re_find_static!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})){0,}\""));
+       re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})){0,}\""));
 
 // Multiline Basic String
 named!(ml_basic_string<&str, &str>,
-       re_find_static!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*\"\"\""));
+       re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*\"\"\""));
 
 // Literal String
 named!(literal_string<&str, &str>,
-       re_find_static!("^'(	|[ -&]|[\\(-􏿿])*'"));
+       re_find!("^'(	|[ -&]|[\\(-􏿿])*'"));
 
 // Multiline Literal String
 named!(ml_literal_string<&str, &str>, 
-	   re_find_static!("^'''(	|[ -􏿿]|\n|(\r\n))*'''"));
+	   re_find!("^'''(	|[ -􏿿]|\n|(\r\n))*'''"));
 
 named!(string<&str, &str>,
   alt!(
@@ -46,15 +44,15 @@ named!(boolean<&str, &str>, alt!(complete!(tag_s!("false")) | complete!(tag_s!("
 // Datetime
 // I use re_capture here because I only want the number without the dot. It captures the entire match
 // in the 0th position and the first capture group in the 1st position
-named!(fractional<&str, Vec<&str> >, re_capture_static!("^\\.([0-9]+)"));
+named!(fractional<&str, Vec<&str> >, re_capture!("^\\.([0-9]+)"));
 
 named!(time<&str, Time>,
   chain!(
-    hour: re_find_static!("^[0-9]{2}") ~
+    hour: re_find!("^[0-9]{2}") ~
           tag_s!(":")                 ~
-  minute: re_find_static!("^[0-9]{2}") ~
+  minute: re_find!("^[0-9]{2}") ~
           tag_s!(":")                 ~
-  second: re_find_static!("^[0-9]{2}") ~
+  second: re_find!("^[0-9]{2}") ~
  fraction: fractional?                ,
     ||{
       Time{
@@ -70,9 +68,9 @@ named!(time<&str, Time>,
 named!(time_offset_amount<&str, TimeOffsetAmount>,
   chain!(
 pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
-   hour: re_find_static!("^[0-9]{2}")                                                                      ~
+   hour: re_find!("^[0-9]{2}")                                                                      ~
          tag_s!(":")                                                                                      ~
-minute: re_find_static!("^[0-9]{2}")                                                                       ,
+minute: re_find!("^[0-9]{2}")                                                                       ,
     ||{
       TimeOffsetAmount{
         pos_neg: pos_neg, hour: hour, minute: minute
@@ -90,11 +88,11 @@ named!(time_offset<&str, TimeOffset>,
 
 named!(full_date<&str, FullDate>,
   chain!(
-   year: re_find_static!("^([0-9]{4})") ~
+   year: re_find!("^([0-9]{4})") ~
          tag_s!("-") ~
-  month: re_find_static!("^([0-9]{2})") ~
+  month: re_find!("^([0-9]{2})") ~
          tag_s!("-") ~
-    day: re_find_static!("^([0-9]{2})"),
+    day: re_find!("^([0-9]{2})"),
     ||{
       FullDate{
         year: year, month: month, day: day
@@ -129,7 +127,7 @@ fn is_keychar(chr: char) -> bool {
 }
 
 named!(unquoted_key<&str, &str>, take_while1_s!(is_keychar));
-named!(quoted_key<&str, &str>, re_find_static!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
+named!(quoted_key<&str, &str>, re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
 named!(pub key<&str, &str>, alt!(complete!(quoted_key) | complete!(unquoted_key)));
 
@@ -223,11 +221,34 @@ mod test {
   }
 
   #[test]
+  fn test_string() {
+    assert_eq!(basic_string("\"βáƨïç_ƨƭřïñϱ\""), Done("", "\"βáƨïç_ƨƭřïñϱ\""));
+    assert_eq!(ml_basic_string(r#""""₥ℓ_βáƨïç_ƨƭřïñϱ
+ñú₥βèř_ƭωô
+NÛMßÉR-THRÉÉ
+""""#), Done("", r#""""₥ℓ_βáƨïç_ƨƭřïñϱ
+ñú₥βèř_ƭωô
+NÛMßÉR-THRÉÉ
+""""# ));
+    assert_eq!(literal_string("'£ÌTÉRÂ£§TRïNG'"), Done("", "'£ÌTÉRÂ£§TRïNG'")); 
+    assert_eq!(ml_literal_string(r#"'''§ƥřïƭè
+Çôƙè
+Þèƥƨï
+'''"#),
+      Done("", r#"'''§ƥřïƭè
+Çôƙè
+Þèƥƨï
+'''"#));
+
+  }
+
+  #[test]
   fn test_boolean() {
     assert_eq!(boolean("true"), Done("", "true"));
     assert_eq!(boolean("false"), Done("", "false"));
   }
 
+  #[test]
   fn test_fractional() {
     assert_eq!(fractional(".03856"), Done("", vec![".03856", "03856"]));
   }

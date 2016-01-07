@@ -1,5 +1,5 @@
 #![feature(plugin)]
-#![plugin(regex_macros)]
+#![plugin(regex)]
 #[macro_use]
 extern crate nom;
 extern crate regex;
@@ -10,8 +10,3 @@ mod objects;
 mod primitives;
 mod types;
 pub mod parser;
-use toml::expression;
-#[test]
-fn it_works() {
-	println!("{:?}", expression("test = \"string\""));
-}

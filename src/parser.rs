@@ -17,7 +17,7 @@ impl<'a> Parser<'a> {
 		let r = toml(input);
 		println!("{:?}", r);
 		match r {
-			IResult::Done(i, o) => self.root = o,
+			IResult::Done(_, o) => self.root = o,
 			_ => (),
 		};
 	}

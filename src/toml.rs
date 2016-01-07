@@ -1,16 +1,7 @@
-use std::fmt;
-use std::fmt::{Display};
 use ast::structs::{Toml, NLExpression, Expression, WSSep};
 use util::{newline, ws, comment};
 use objects::{table};
 use primitives::{keyval};
-
-/*fn ParseTOML<'a>(input: &str) -> Option<Toml> {
-  let parse_result = toml(input);
-  match parse_result {
-    Done(ref i, ref o) => Some
-  }
-}*/
 
 named!(pub toml<&str, Toml>,
   chain!(
@@ -112,3 +103,30 @@ comment: comment,
     }
   )
 );
+
+#[cfg(test)]
+mod test {
+  use nom::IResult::Done;
+  use super::{ws_comment};
+  use ast::structs::{Expression, Comment, WSSep};
+// named!(pub toml<&str, Toml>,
+// named!(nl_expressions<&str, Vec<NLExpression> >,
+
+// named!(nl_expression<&str, NLExpression>,
+// // Expression
+// named!(pub expression<&str,  Expression>,
+// named!(ws_expr<&str, Expression>,
+// named!(pub table_comment<&str, Expression>,
+// named!(pub keyval_comment<&str, Expression>,
+// named!(ws_comment<&str, Expression>,
+  fn test_ws_comment() {
+    assert_eq!(ws_comment(" \t #This is RÂNÐÓM §TRÌNG\n"), Done("",
+      Expression{
+        ws: WSSep{ws1: " \t ", ws2: ""},
+        keyval: None,
+        table: None,
+        comment: Some(Comment{text: "This is RÂNÐÓM §TRÌNG"})
+      }
+    ));
+  }
+}

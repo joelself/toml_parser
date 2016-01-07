@@ -184,20 +184,18 @@ impl<'a> Display for TimeOffset<'a> {
 // #<text>
 #[derive(Debug, Eq)]
 pub struct Comment<'a> {
-	pub text: &'a str,
-	pub nl: &'a str,
+	pub text: &'a str
 }
 
 impl<'a> PartialEq for Comment<'a> {
 	fn eq(&self, other: &Comment<'a>) -> bool {
-		self.text == other.text &&
-		self.nl == other.nl
+		self.text == other.text
 	}
 }
 
 impl<'a> Display for Comment<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	write!(f, "#{}{}", self.text, self.nl)
+    	write!(f, "#{}", self.text)
     }
 }
 
