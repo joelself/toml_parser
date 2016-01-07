@@ -211,14 +211,14 @@ mod test {
 
   #[test]
   fn test_table() {
-    assert_eq!(std_table("[ _underscore_ . \"-δáƨλèƨ-\" ]"), Done("",
+    assert_eq!(table("[ _underscore_ . \"-δáƨλèƨ-\" ]"), Done("",
       TableType::Standard(Table{
         ws: WSSep{ws1: " ", ws2: " "}, key: "_underscore_", subkeys: vec![
           WSKeySep{ws: WSSep{ws1: " ", ws2: " "}, key: "\"-δáƨλèƨ-\""}
         ]
       })
     ));
-    assert_eq!(array_table("[[\t NumberOne\t.\tnUMBERtWO \t]]"), Done("",
+    assert_eq!(table("[[\t NumberOne\t.\tnUMBERtWO \t]]"), Done("",
       TableType::Array(Table{
         ws: WSSep{ws1: "\t ", ws2: " \t"}, key: "NumberOne", subkeys: vec![
           WSKeySep{ws: WSSep{ws1: "\t", ws2: "\t"}, key: "nUMBERtWO"}
