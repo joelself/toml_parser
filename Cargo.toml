@@ -8,7 +8,10 @@ git = "https://github.com/Geal/nom.git"
 
 features = ["regexp"]
 [dependencies.regex]
+# Uncomment these, and comment out the regexp feature to turn on statically compiled regexes
+#features = ["regexp_macros"]
 #[dependencies.regex_macros]
 
 [[bin]]
 name = "tomlkit"
+
