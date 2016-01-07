@@ -42,7 +42,7 @@ Install multirust (you'll have to [uninstall currently installed versions of Rus
 ```shell
 curl -sf https://raw.githubusercontent.com/brson/multirust/master/blastoff.sh | sh
 ```
-Change into the toml_parser directory and set that directory (and that directory only) to use Nightly Rust:
+Change into the toml_parser directory and set that directory (and that directory only) to use Beta Rust:
 
 ```shell
 cd toml_parser
