@@ -10,13 +10,13 @@
 
 `tomlib` respects your crazy indentation and whitespace scheme. It respects the order you place things. It doesn't try to reformat the file based on *somebody else's* views on file format purity. It only makes changes that you tell it to make and leaves the rest alone. Want 20 tabs between every key and `=` in a key value pair? Have at it! Want to put a comment and 5 newlines after every array value? We won't try to change your mind! Randomly placed tables and nested tables? It's your file! Do whatever you want and as long as it is within spec; we won't try to change it.
 
-###Tomllib###
+###`tomllib`###
 
 Based on [my version](https://github.com/joelself/toml/blob/abnf/toml.abnf) of the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54) (at least until they merge my changes). Currently can parse entire Unicode TOML files and reconstruct them into a perfect copy, preserving order and all whitespace. Tested with perfect output on the toml README example, the regular, hard, and unicode hard examples in the [toml test directory](https://github.com/toml-lang/toml/tree/master/tests).
 
 Next steps for the first release are:
 - [x] Might back off to use beta Rust or, less likely, stable Rust
-- [ ] Unit tests for all parsers that don't have them yet
+- [ ] Unit tests for all parsers that don't have them yet (almost there!)
 - [ ] An integration test method that will iterate through each toml file in the assets directory (which includes the [toml-test valid tests](https://github.com/BurntSushi/toml-test/tree/master/tests/valid) and the toml examples mentioned earlier), parse the file, then reconstruct it and compare it to the original.
 - [ ] Value look-up/modification
 - [ ] Key modification
@@ -46,7 +46,7 @@ Change into the toml_parser directory and set that directory (and that directory
 
 ```shell
 cd toml_parser
-multirust override nightly
+multirust override beta
 ```
 
 You can always go back to stable or beta with ```multirust override (beta|stable)```.
