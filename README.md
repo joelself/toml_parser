@@ -35,7 +35,7 @@ Some other things I will probably add for future realeses:
 * Conversion to JSON and YAML
 
 To get the source simply ```git clone https://github.com/joelself/toml_parser.git```.
-I took a dependency on `regex_macros` which requires you be on the nightly version of Rust. Fortunately [multirust](https://github.com/brson/multirust) makes this dead simple without forcing all of your Rust evironment to be on Nightly.
+I took a dependency on `regex_macros` which requires you be on the beta version of Rust. Fortunately [multirust](https://github.com/brson/multirust) makes this dead simple without forcing all of your Rust evironment to be on Beta.
 
 Install multirust (you'll have to [uninstall currently installed versions of Rust](https://doc.rust-lang.org/book/installing-rust.html#uninstalling)) first:
 
