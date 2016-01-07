@@ -15,12 +15,12 @@
 Based on [my version](https://github.com/joelself/toml/blob/abnf/toml.abnf) of the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54) (at least until they merge my changes). Currently can parse entire Unicode TOML files and reconstruct them into a perfect copy, preserving order and all whitespace. Tested with perfect output on the toml README example, the regular, hard, and unicode hard examples in the [toml test directory](https://github.com/toml-lang/toml/tree/master/tests).
 
 Next steps for the first release are:
-* Might back off to use beta Rust or, less likely, stable Rust
-* Unit tests for all parsers that don't have them yet
-* An integration test method that will iterate through each toml file in the assets directory (which includes the [toml-test valid tests](https://github.com/BurntSushi/toml-test/tree/master/tests/valid) and the toml examples mentioned earlier), parse the file, then reconstruct it and compare it to the original.
-* Content validation, and non-failure error reporting (currently the parser doesn't complain about heterogeneous arrays or duplicate keys, because it wants to give you a chance to correct them rather than immediately fail and force you to fix it by hand.)
-* Value look-up/modification
-* Key modification
+- [x] Might back off to use beta Rust or, less likely, stable Rust
+- [ ] Unit tests for all parsers that don't have them yet
+- [ ] An integration test method that will iterate through each toml file in the assets directory (which includes the [toml-test valid tests](https://github.com/BurntSushi/toml-test/tree/master/tests/valid) and the toml examples mentioned earlier), parse the file, then reconstruct it and compare it to the original.
+- [ ] Value look-up/modification
+- [ ] Key modification
+- [ ] Content validation, and non-failure error reporting (currently the parser doesn't complain about heterogeneous arrays or duplicate keys, because it wants to give you a chance to correct them rather than immediately fail and force you to fix it by hand.)
 
 The difference between this toml library and others is that I'll preserve the exact formatting at all times unless told not to.
 
