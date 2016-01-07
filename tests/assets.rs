@@ -2,7 +2,7 @@ extern crate tomllib;
 use std::fs;
 use std::fs::DirEntry;
 
-fn process_toml_file(file: &DirEntry) -> Option<&str> {
+fn process_toml_file<'a>(file: DirEntry) -> Option<&'a str> {
 	// TODO: Read file => parse file => write file => compare file to original
 	return Option::None;
 }
@@ -18,7 +18,7 @@ fn test_all_assets() {
     		let path = &*file.path();
     		match path.extension() {
     			Some(ext) if ext.to_str() == Some("toml") => {
-    				match process_toml_file(&file) {
+    				match process_toml_file(file) {
     					Some(ref name) 	=> failed.push(name),
     					_	 			=> {}
     				};

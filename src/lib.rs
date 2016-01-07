@@ -1,5 +1,3 @@
-#![feature(plugin)]
-#![plugin(regex)]
 #[macro_use]
 extern crate nom;
 extern crate regex;
