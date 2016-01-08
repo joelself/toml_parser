@@ -2,4 +2,6 @@ language: rust
 rust:
   - beta
   - nightly
-
+  
+after_success:
+  - travis-cargo coveralls --no-sudo
