@@ -109,8 +109,7 @@ mod test {
   use nom::IResult::Done;
   use super::{ws_comment, keyval_comment, table_comment};
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
-                     TableType};
-  use types::Value;
+                     TableType, Value};
 // named!(pub toml<&str, Toml>,
 // named!(nl_expressions<&str, Vec<NLExpression> >,
 

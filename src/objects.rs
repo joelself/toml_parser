@@ -206,8 +206,8 @@ mod test {
               table_subkey, table};
   use ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
                      KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table,
-                     TableType};
-  use ::types::{DateTime, TimeOffset, TimeOffsetAmount, Value};
+                     TableType, Value, StrType};
+  use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
 
   #[test]
   fn test_table() {
@@ -321,7 +321,7 @@ mod test {
     );
     assert_eq!(array_value("\"ƨƥáϱλèƭƭï\""),
       Done("",ArrayValue{
-        val: Value::String("\"ƨƥáϱλèƭƭï\""), array_sep: None, comment_nl: None
+        val: Value::String("ƨƥáϱλèƭƭï", StrType::Basic), array_sep: None, comment_nl: None
       })
     );
     assert_eq!(array_value("44_9 , "),
@@ -447,7 +447,7 @@ mod test {
   fn test_table_keyval() {
     assert_eq!(table_keyval("\"Ì WúƲ Húϱƨ!\"\t=\t'Mè ƭôô!' "), Done("", TableKeyVal{
       keyval: KeyVal{
-        key: "\"Ì WúƲ Húϱƨ!\"", val: Value::String("'Mè ƭôô!'"), keyval_sep: WSSep{
+        key: "\"Ì WúƲ Húϱƨ!\"", val: Value::String("Mè ƭôô!", StrType::Literal), keyval_sep: WSSep{
           ws1: "\t", ws2: "\t"
         }
       },
@@ -477,7 +477,7 @@ mod test {
             key: "\"Key2\"", keyval_sep: WSSep{
               ws1: " ", ws2: " "
             },
-            val: Value::String("'34.99'")
+            val: Value::String("34.99", StrType::Literal)
           },
           kv_sep: WSSep{
             ws1: "", ws2: "\t"
@@ -508,7 +508,7 @@ mod test {
               key: "\"Key2\"", keyval_sep: WSSep{
                 ws1: " ", ws2: " "
               },
-              val: Value::String("'''New\nLine'''")
+              val: Value::String("New\nLine", StrType::MLLiteral)
             },
             kv_sep: WSSep{
               ws1: " ", ws2: "\t"

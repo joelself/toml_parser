@@ -7,18 +7,6 @@ pub enum ParseResult<'a> {
 }
 
 #[derive(Debug, Eq)]
-pub enum Value<'a> {
-	Integer(&'a str),
-	Float(&'a str),
-	Boolean(&'a str),
-	DateTime(DateTime<'a>),
-	Array(Box<Array<'a>>),
-	String(&'a str),
-	InlineTable(Box<InlineTable<'a>>),
-}
-
-
-#[derive(Debug, Eq)]
 pub enum TimeOffset<'a> {
 	Z,
 	Time(TimeOffsetAmount<'a>),

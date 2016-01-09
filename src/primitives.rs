@@ -1,7 +1,9 @@
-use ast::structs::{Time, FullDate, KeyVal, WSSep};
-use ::types::{DateTime, TimeOffset, TimeOffsetAmount, Value};
+use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode};
+use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
 use util::{ws};
 use objects::{array, inline_table};
+use nom;
+use nom::{IResult};
 // Integer
 named!(integer<&str, &str>, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
 
@@ -13,27 +15,60 @@ named!(float<&str, &str>,
 // TODO: named!(string<&str, &str>, alt!(basic_string | ml_basic_string | literal_string | ml_literal_string));
 
 // Basic String
-named!(basic_string<&str, &str>,
-       re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})){0,}\""));
-
+named!(raw_basic_string<&str, &str>,
+  re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*\""));
 // Multiline Basic String
-named!(ml_basic_string<&str, &str>,
-       re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*\"\"\""));
-
+named!(raw_ml_basic_string<&str, &str>,
+  re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*\"\"\"")
+);
 // Literal String
-named!(literal_string<&str, &str>,
-       re_find!("^'(	|[ -&]|[\\(-􏿿])*'"));
-
+named!(raw_literal_string<&str, &str>,re_find!("^'(	|[ -&]|[\\(-􏿿])*'"));
 // Multiline Literal String
-named!(ml_literal_string<&str, &str>, 
-	   re_find!("^'''(	|[ -􏿿]|\n|(\r\n))*'''"));
+named!(raw_ml_literal_string<&str, &str>, re_find!("^'''(	|[ -􏿿]|\n|(?:\r\n))*'''"));
 
-named!(string<&str, &str>,
+
+fn ml_basic_string(input: &str) -> nom::IResult<&str, &str> {
+  let raw = raw_ml_basic_string(input);
+  match &raw {
+    &IResult::Done(i, o) => IResult::Done(i, &o["\"\"\"".len()..o.len()-"\"\"\"".len()]),
+    &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+    &IResult::Incomplete(i) => IResult::Incomplete(i),
+  }
+}
+
+fn basic_string(input: &str) -> nom::IResult<&str, &str> {
+  let raw = raw_basic_string(input);
+  match &raw {
+    &IResult::Done(i, o) => IResult::Done(i, &o["\"".len()..o.len()-"\"".len()]),
+    &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+    &IResult::Incomplete(i) => IResult::Incomplete(i),
+  }
+}
+
+fn ml_literal_string(input: &str) -> nom::IResult<&str, &str> {
+  let raw = raw_ml_literal_string(input);
+  match &raw {
+    &IResult::Done(i, o) => IResult::Done(i, &o["'''".len()..o.len()-"'''".len()]),
+    &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+    &IResult::Incomplete(i) => IResult::Incomplete(i),
+  }
+}
+
+fn literal_string(input: &str) -> nom::IResult<&str, &str> {
+  let raw = raw_literal_string(input);
+  match &raw {
+    &IResult::Done(i, o) => IResult::Done(i, &o["'".len()..o.len()-"'".len()]),
+    &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+    &IResult::Incomplete(i) => IResult::Incomplete(i),
+  }
+}
+
+named!(string<&str, Value>,
   alt!(
-    complete!(ml_literal_string) |
-    complete!(ml_basic_string)   |
-    complete!(basic_string)      |
-    complete!(literal_string)
+    complete!(ml_literal_string)  => {|ml| Value::String(ml, StrType::MLLiteral)}  |
+    complete!(ml_basic_string)    => {|mb| Value::String(mb, StrType::MLBasic)}  |
+    complete!(basic_string)       => {|b| Value::String(b, StrType::Basic)}    |
+    complete!(literal_string)     => {|l| Value::String(l, StrType::Literal)}
   )
 );
 
@@ -152,7 +187,7 @@ named!(pub val<&str, Value>,
     complete!(float)        => {|flt|   Value::Float(flt)}                |
     complete!(integer)      => {|int|   Value::Integer(int)}              |
     complete!(boolean)      => {|b|     Value::Boolean(b)}                |
-    complete!(string)       => {|s|     Value::String(s)}
+    complete!(string)       => {|s|     s}
   )
 );
 
@@ -173,13 +208,13 @@ named!(pub keyval<&str, KeyVal>,
 mod test {
   use nom::IResult::Done;
   use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal,
-                     InlineTable, TableKeyVal};
-  use ::types::{DateTime, TimeOffsetAmount, TimeOffset, Value};
+                     InlineTable, TableKeyVal, Value, StrType};
+  use ::types::{DateTime, TimeOffsetAmount, TimeOffset};
   use super::{boolean, time, time_offset_amount, time_offset,
               full_date, date_time, literal_string,
               ml_literal_string, integer, fractional, float, basic_string,
               ml_basic_string, unquoted_key, quoted_key, key, keyval_sep,
-              val, keyval};
+              val, keyval, string};
 
   #[test]
   fn test_integer() {
@@ -193,21 +228,21 @@ mod test {
 
   #[test]
   fn test_basic_string() {
-    assert_eq!(basic_string("\"Tλïƨ ïƨ á βáƨïç ƨƭřïñϱ.\""), Done("", "\"Tλïƨ ïƨ á βáƨïç ƨƭřïñϱ.\""));
+    assert_eq!(basic_string("\"Tλïƨ ïƨ á βáƨïç ƨƭřïñϱ.\""), Done("", "Tλïƨ ïƨ á βáƨïç ƨƭřïñϱ."));
   }
 
   #[test]
   fn test_ml_basic_string() {
-    assert_eq!(ml_basic_string(r#""""£ïñè Óñè
+    assert_eq!(ml_basic_string("\"\"\"£ïñè Óñè
 £ïñè Tωô
-£ïñè Tλřèè""""#), Done("", r#""""£ïñè Óñè
+£ïñè Tλřèè\"\"\""), Done("", r#"£ïñè Óñè
 £ïñè Tωô
-£ïñè Tλřèè""""# ));
+£ïñè Tλřèè"# ));
   }
 
   #[test]
   fn test_literal_string() {
-    assert_eq!(literal_string("'Abc џ'"), Done("", "'Abc џ'")); 
+    assert_eq!(literal_string("'Abc џ'"), Done("", "Abc џ")); 
   }
 
   #[test]
@@ -215,30 +250,35 @@ mod test {
     assert_eq!(ml_literal_string(r#"'''
                                     Abc џ
                                     '''"#),
-      Done("", r#"'''
+      Done("", r#"
                                     Abc џ
-                                    '''"#));
+                                    "#));
+  }
+
+  #[test]
+  fn test_foo() {
+    assert!(true);
   }
 
   #[test]
   fn test_string() {
-    assert_eq!(basic_string("\"βáƨïç_ƨƭřïñϱ\""), Done("", "\"βáƨïç_ƨƭřïñϱ\""));
-    assert_eq!(ml_basic_string(r#""""₥ℓ_βáƨïç_ƨƭřïñϱ
+    assert_eq!(string("\"βáƨïç_ƨƭřïñϱ\""), Done("", Value::String("βáƨïç_ƨƭřïñϱ", StrType::Basic)));
+assert_eq!(string(r#""""₥ℓ_βáƨïç_ƨƭřïñϱ
 ñú₥βèř_ƭωô
 NÛMßÉR-THRÉÉ
-""""#), Done("", r#""""₥ℓ_βáƨïç_ƨƭřïñϱ
+""""#), Done("", Value::String(r#"₥ℓ_βáƨïç_ƨƭřïñϱ
 ñú₥βèř_ƭωô
 NÛMßÉR-THRÉÉ
-""""# ));
-    assert_eq!(literal_string("'£ÌTÉRÂ£§TRïNG'"), Done("", "'£ÌTÉRÂ£§TRïNG'")); 
-    assert_eq!(ml_literal_string(r#"'''§ƥřïƭè
+"#, StrType::MLBasic)));
+    assert_eq!(string("'£ÌTÉRÂ£§TRïNG'"), Done("", Value::String("£ÌTÉRÂ£§TRïNG", StrType::Literal)));
+    assert_eq!(string(r#"'''§ƥřïƭè
 Çôƙè
 Þèƥƨï
 '''"#),
-      Done("", r#"'''§ƥřïƭè
+      Done("", Value::String(r#"§ƥřïƭè
 Çôƙè
 Þèƥƨï
-'''"#));
+"#, StrType::MLLiteral)));
 
   }
 
@@ -369,7 +409,7 @@ NÛMßÉR-THRÉÉ
               key: "\"§ô₥è Þïϱ\"", keyval_sep: WSSep{
                 ws1: "", ws2: ""
               },
-              val: Value::String("'Táƨƭ¥ Þôřƙ'")
+              val: Value::String("Táƨƭ¥ Þôřƙ", StrType::Literal)
             },
             kv_sep: WSSep{ws1: "", ws2: ""}
           }
@@ -390,7 +430,7 @@ NÛMßÉR-THRÉÉ
     assert_eq!(val("8932838"), Done("", Value::Integer("8932838")));
     assert_eq!(val("false"), Done("", Value::Boolean("false")));
     assert_eq!(val("true"), Done("", Value::Boolean("true")));
-    assert_eq!(val("'§ô₥è §ƭřïñϱ'"), Done("", Value::String("'§ô₥è §ƭřïñϱ'")));
+    assert_eq!(val("'§ô₥è §ƭřïñϱ'"), Done("", Value::String("§ô₥è §ƭřïñϱ", StrType::Literal)));
   }
 
   #[test]

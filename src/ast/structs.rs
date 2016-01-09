@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::option::Option;
 use nom::IResult;
-use ::types::{DateTime, TimeOffset, TimeOffsetAmount, Value};
+use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
 
 /// Compares two Options that contain comparable structs
 ///
@@ -19,6 +19,13 @@ pub fn comp_opt<T: Eq>(left: &Option<T>, right: &Option<T>) -> bool {
 		(&None, &None) => true,
 		_ => false
 	}
+}
+
+pub enum ErrorCode {
+	BasicString = 0,
+	MLBasicString = 1,
+	LiteralString = 2,
+	MLLiteralString = 3,
 }
 
 pub struct MyResult<'a>(pub IResult<&'a str, Toml<'a>>);
@@ -108,6 +115,26 @@ impl<'a> Display for Expression<'a> {
     }
 }
 
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum StrType {
+	Basic,
+	MLBasic,
+	Literal,
+	MLLiteral,
+}
+
+#[derive(Debug, Eq)]
+pub enum Value<'a> {
+	Integer(&'a str),
+	Float(&'a str),
+	Boolean(&'a str),
+	DateTime(DateTime<'a>),
+	Array(Box<Array<'a>>),
+	String(&'a str, StrType),
+	InlineTable(Box<InlineTable<'a>>),
+}
+
 impl<'a> PartialEq for Value<'a> {
 	fn eq(&self, other: &Value<'a>) -> bool {
 		match (self, other) {
@@ -116,7 +143,7 @@ impl<'a> PartialEq for Value<'a> {
 			(&Value::Boolean(ref i), &Value::Boolean(ref j)) if i == j => true,
 			(&Value::DateTime(ref i), &Value::DateTime(ref j)) if i == j => true,
 			(&Value::Array(ref i), &Value::Array(ref j)) if i == j => true,
-			(&Value::String(ref i), &Value::String(ref j)) if i == j => true,
+			(&Value::String(ref i, ref t), &Value::String(ref j, ref s)) if i == j => true,
 			(&Value::InlineTable(ref i), &Value::InlineTable(ref j)) if i == j => true,
 			_ => false
 		}
@@ -131,7 +158,14 @@ impl<'a> Display for Value<'a> {
 			&Value::Boolean(ref i) => write!(f, "{}", i),
 			&Value::DateTime(ref i) => write!(f, "{}", i),
 			&Value::Array(ref i) => write!(f, "{}", i),
-			&Value::String(ref i) => write!(f, "{}", i),
+			&Value::String(ref i, ref t) =>  {
+				match t {
+					&StrType::Basic => write!(f, "\"{}\"", i),
+					&StrType::MLBasic => write!(f, "\"\"\"{}\"\"\"", i),
+					&StrType::Literal => write!(f, "'{}'", i),
+					&StrType::MLLiteral => write!(f, "'''{}'''", i),
+				}
+			},
 			&Value::InlineTable(ref i) => write!(f, "{}", i),
 		}
     }
