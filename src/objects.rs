@@ -107,13 +107,14 @@ named!(comment_or_nl<&str, CommentOrNewLines>,
   )
 );
 
+// TODO: Redo this with array_sep wrapped in a complete!() ?
 named!(array_value<&str, ArrayValue>,
   alt!(
     complete!(
       chain!(
-        val: val              ~
-  array_sep: array_sep        ~
-  comment_nl: comment_or_nl?  ,
+        val: val                        ~
+  array_sep: array_sep                  ~
+  comment_nl: complete!(comment_or_nl)? ,
         ||{
           ArrayValue{
             val: val,
@@ -125,8 +126,8 @@ named!(array_value<&str, ArrayValue>,
     ) |
     complete!(
       chain!(
-        val: val              ~
-  comment_nl: comment_or_nl?  ,
+        val: val                        ~
+  comment_nl: complete!(comment_or_nl)? ,
         ||{
           ArrayValue{
             val: val,
@@ -183,11 +184,11 @@ named!(inline_table_keyvals_non_empty<&str, Vec<TableKeyVal> >, separated_list!(
 
 named!(pub inline_table<&str, InlineTable>,
   chain!(
-         tag_s!("{")                     ~
-    ws1: ws                              ~
-keyvals: inline_table_keyvals_non_empty? ~
-    ws2: ws                              ~
-         tag_s!("}")                     ,
+         tag_s!("{")                                ~
+    ws1: ws                                         ~
+keyvals: complete!(inline_table_keyvals_non_empty)? ~
+    ws2: ws                                         ~
+         tag_s!("}")                                ,
         ||{
           InlineTable{
             keyvals: keyvals,

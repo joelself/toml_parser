@@ -2,6 +2,7 @@ use ast::structs::{Toml, NLExpression, Expression, WSSep};
 use util::{newline, ws, comment};
 use objects::{table};
 use primitives::{keyval};
+use nom::eof;
 
 named!(pub toml<&str, Toml>,
   chain!(
@@ -54,10 +55,10 @@ named!(ws_expr<&str, Expression>,
 
 named!(pub table_comment<&str, Expression>,
   chain!(
-    ws1: ws       ~
-  table: table    ~
-    ws2: ws       ~
-comment: comment  ? ,
+    ws1: ws                 ~
+  table: table              ~
+    ws2: ws                 ~
+comment: complete!(comment)?,
     ||{
       Expression{
         ws: WSSep{
@@ -75,7 +76,7 @@ named!(pub keyval_comment<&str, Expression>,
     ws1: ws       ~
  keyval: keyval   ~
     ws2: ws       ~
-comment: comment? ,
+comment: complete!(comment) ? ,
     ||{
       Expression{
         ws: WSSep{
@@ -107,17 +108,161 @@ comment: comment,
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use super::{ws_comment, keyval_comment, table_comment};
+  use super::{ws_comment, keyval_comment, table_comment, expression, ws_expr,
+              nl_expression, nl_expressions};
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
-                     TableType, Value};
+                     TableType, Value, NLExpression, StrType};
 // named!(pub toml<&str, Toml>,
-// named!(nl_expressions<&str, Vec<NLExpression> >,
-
+  #[test]
+  fn test_nl_expressions() {
+    // allow for zero expressions
+    assert_eq!(nl_expressions("aoeunth £ôřè₥ ïƥƨú₥ doℓôř ƨïƭ amet, çônƨèçƭeƭuř áδïƥïscïñϱ èℓïƭ"),
+      Done(
+        "aoeunth £ôřè₥ ïƥƨú₥ doℓôř ƨïƭ amet, çônƨèçƭeƭuř áδïƥïscïñϱ èℓïƭ", vec![]
+      )
+    );
+    assert_eq!(nl_expressions("\n[\"δřá\"]#Mèƨsaϱè\r\nkey=\"value\"#wλïƭeƨƥáçè\n"),
+      Done(
+        "", vec![
+          NLExpression{
+            nl: "\n", expr: Expression{
+              ws: WSSep{ws1: "", ws2: ""},
+              keyval: None,
+              table: Some(TableType::Standard(Table{
+                ws: WSSep{ws1: "", ws2: ""}, key: "\"δřá\"", subkeys: vec![]
+              })),
+              comment: Some(Comment{text: "Mèƨsaϱè"})
+            }
+          },
+          NLExpression{
+            nl: "\r\n", expr: Expression{
+              ws: WSSep{ws1: "", ws2: ""},
+              table: None,
+              keyval: Some(KeyVal{
+                key: "key", keyval_sep: WSSep{
+                  ws1: "", ws2: ""
+                },
+                val: Value::String("value", StrType::Basic)
+              }),
+              comment: Some(Comment{text: "wλïƭeƨƥáçè"})
+            }
+          },
+          // A whitespace expression only requires a newline, and a newline is required to terminate the comment
+          // of the previous expression so expressions ending in comments always end up with an extra whitespace
+          // expression at the end of the list
+          // The exceptions are for characters that end comments, but are not "newlines". It's something that
+          // needs to be fixed in the ABNF
+          NLExpression { 
+            nl: "\n", expr: Expression { 
+              ws: WSSep { 
+                ws1: "", ws2: ""
+              },
+              keyval: None, table: None, comment: None
+            }
+          }
+        ]
+      )
+    );
+    assert_eq!(nl_expressions("\n[[NODOTNET.\"NÓJÂVÂ\"]]"),
+      Done(
+        "", vec![
+          NLExpression{
+            nl: "\n", expr: Expression{
+              ws: WSSep{ws1: "", ws2: ""},
+              keyval: None,
+              table: Some(TableType::Array(Table{
+                ws: WSSep{ws1: "", ws2: ""}, key: "NODOTNET", subkeys: vec![
+                  WSKeySep{ws: WSSep{ws1: "", ws2: ""}, key: "\"NÓJÂVÂ\""}
+                ]
+              })),
+              comment: None
+            }
+          }
+        ]
+      )
+    );
+  }
 // named!(nl_expression<&str, NLExpression>,
-// // Expression
-// named!(pub expression<&str,  Expression>,
-// named!(ws_expr<&str, Expression>,
-// named!(pub table_comment<&str, Expression>,
+  #[test]
+  fn test_nl_expression() {
+    assert_eq!(nl_expression("\r\n   SimpleKey = 1_2_3_4_5     #  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£\r\n"),
+      Done("\r\n", NLExpression{
+        nl: "\r\n", expr: Expression{
+          ws: WSSep{ws1: "   ", ws2: "     "},
+          table: None,
+          keyval: Some(KeyVal{
+            key: "SimpleKey", keyval_sep: WSSep{
+              ws1: " ", ws2: " "
+            },
+            val: Value::Integer("1_2_3_4_5")
+          }),
+          comment: Some(Comment{text: "  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£"})
+        } 
+      })
+    );
+  }
+
+  #[test]
+  fn test_expression() {
+    assert_eq!(expression(" \t[\"δřáƒƭ\".THISKEY  . \tkeythethird] \t#Mèƨƨáϱè Rèƥℓïèδ\n"),
+      Done("\n",
+        Expression{
+          ws: WSSep{ws1: " \t", ws2: " \t"},
+          keyval: None,
+          table: Some(TableType::Standard(Table{
+            ws: WSSep{ws1: "", ws2: ""}, key: "\"δřáƒƭ\"", subkeys: vec![
+              WSKeySep{ws: WSSep{ws1: "", ws2: ""}, key: "THISKEY"},
+              WSKeySep{ws: WSSep{ws1: "  ", ws2: " \t"}, key: "keythethird"}
+            ]
+          })),
+          comment: Some(Comment{text: "Mèƨƨáϱè Rèƥℓïèδ"})
+        }
+    ));
+    assert_eq!(expression("\t\t\t\"řúññïñϱôúƭôƒωôřδƨ\" = 0.1  #Â₥èřïçáñ Éжƥřèƨƨ\n"),
+      Done("\n",
+        Expression{
+          ws: WSSep{ws1: "\t\t\t", ws2: "  "},
+          table: None,
+          keyval: Some(KeyVal{
+            key: "\"řúññïñϱôúƭôƒωôřδƨ\"", keyval_sep: WSSep{
+              ws1: " ", ws2: " "
+            },
+            val: Value::Float("0.1")
+          }),
+          comment: Some(Comment{text: "Â₥èřïçáñ Éжƥřèƨƨ"})
+        }
+      ));
+    assert_eq!(expression("\t \t #Þℓèáƨè Ʋèřïƒ¥ Your áççôúñƭ\n"), Done("\n",
+      Expression{
+        ws: WSSep{ws1: "\t \t ", ws2: ""},
+        keyval: None,
+        table: None,
+        comment: Some(Comment{text: "Þℓèáƨè Ʋèřïƒ¥ Your áççôúñƭ"})
+      }
+    ));
+    assert_eq!(expression("\t  \t  \t\n"), Done("\n",
+      Expression{
+        ws: WSSep{
+          ws1: "\t  \t  \t",
+          ws2: "",
+        },
+        keyval: None, table: None, comment: None,
+      }));
+  }
+
+  #[test]
+  fn test_ws_expr() {
+    assert_eq!(ws_expr("  \t \t \n"), Done("\n", 
+      Expression{
+        ws: WSSep{
+          ws1: "  \t \t ",
+          ws2: "",
+        },
+        keyval: None, table: None, comment: None,
+      }
+    ));
+  }
+
   #[test]
   fn test_table_comment() {
     assert_eq!(table_comment(" [table.\"ƭáβℓè\"] #úñïçôřñřôβôƭ\n"),

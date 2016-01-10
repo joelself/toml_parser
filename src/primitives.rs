@@ -83,12 +83,12 @@ named!(fractional<&str, Vec<&str> >, re_capture!("^\\.([0-9]+)"));
 
 named!(time<&str, Time>,
   chain!(
-    hour: re_find!("^[0-9]{2}") ~
-          tag_s!(":")                 ~
-  minute: re_find!("^[0-9]{2}") ~
-          tag_s!(":")                 ~
-  second: re_find!("^[0-9]{2}") ~
- fraction: fractional?                ,
+    hour: re_find!("^[0-9]{2}")   ~
+          tag_s!(":")             ~
+  minute: re_find!("^[0-9]{2}")   ~
+          tag_s!(":")             ~
+  second: re_find!("^[0-9]{2}")   ~
+ fraction: complete!(fractional)? ,
     ||{
       Time{
         hour: hour, minute: minute, second: second, fraction: match fraction {
