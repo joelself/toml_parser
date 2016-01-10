@@ -2,9 +2,9 @@
 extern crate nom;
 extern crate regex;
 pub mod ast;
-mod toml;
+pub mod toml;
 mod util;
 mod objects;
-pub mod primitives;
+mod  primitives;
 mod types;
 pub mod parser;

@@ -109,10 +109,143 @@ comment: comment,
 mod test {
   use nom::IResult::Done;
   use super::{ws_comment, keyval_comment, table_comment, expression, ws_expr,
-              nl_expression, nl_expressions};
+              nl_expression, nl_expressions, toml};
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
-                     TableType, Value, NLExpression, StrType};
-// named!(pub toml<&str, Toml>,
+                     TableType, Value, NLExpression, StrType, ArrayValue, Toml,
+                     Time, Array};
+  use types::{TimeOffsetAmount, DateTime, TimeOffset};
+  
+  #[test]
+  fn test_toml() {
+    assert_eq!(toml(
+r#"# Tλïƨ ïƨ á TÓM£ δôçú₥èñƭ.
+
+title = "TÓM£ Éжá₥ƥℓè"
+
+[owner]
+name = "Tô₥ Þřèƨƭôñ-Wèřñèř"
+dob = 1979-05-27T07:32:00-08:00 # Fïřƨƭ çℓáƨƨ δáƭèƨ
+
+[database]
+server = "192.168.1.1"
+ports = [ 8001, 8001, 8002 ]
+connection_max = 5000
+enabled = true"#), Done("",
+      Toml { exprs: vec![
+        NLExpression {
+          nl: "", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: None, comment: Some(Comment {
+              text: " Tλïƨ ïƨ á TÓM£ δôçú₥èñƭ."
+            })
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: None, comment: None
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
+              key: "title", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Value::String("TÓM£ Éжá₥ƥℓè", StrType::Basic)
+            }),
+            table: None, comment: None
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: None, comment: None
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: Some(TableType::Standard(Table {
+              ws: WSSep { ws1: "", ws2: "" }, key: "owner", subkeys: vec![]
+            })), comment: None
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
+              key: "name", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Value::String("Tô₥ Þřèƨƭôñ-Wèřñèř", StrType::Basic)
+            }), table: None, comment: None
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: " " }, keyval: Some(KeyVal {
+              key: "dob", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Value::DateTime(DateTime {
+                year: "1979", month: "05", day: "27", hour: "07", minute: "32", second: "00", fraction: "", offset: TimeOffset::Time(TimeOffsetAmount {
+                  pos_neg: "-", hour: "08", minute: "00"
+                })
+              })
+            }),
+            table: None, comment: Some(Comment {
+              text: " Fïřƨƭ çℓáƨƨ δáƭèƨ"
+            })
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: None, comment: None
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: Some(TableType::Standard(Table {
+              ws: WSSep { ws1: "", ws2: "" }, key: "database", subkeys: vec![]
+            })), comment: None
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
+              key: "server", keyval_sep: WSSep { ws1: " ", ws2: " "}, val: Value::String("192.168.1.1", StrType::Basic)
+            }),
+            table: None, comment: None
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
+              key: "ports", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Value::Array(Box::new(Array {
+                values: vec![
+                  ArrayValue {
+                    val: Value::Integer("8001"), array_sep: Some(WSSep { ws1: "", ws2: " " }), comment_nl: None
+                  },
+                  ArrayValue {
+                    val: Value::Integer("8001"), array_sep: Some(WSSep { ws1: "", ws2: " " }), comment_nl: None
+                  },
+                  ArrayValue {
+                    val: Value::Integer("8002"), array_sep: None, comment_nl: None
+                  }
+                ],
+                ws: WSSep { ws1: " ", ws2: " " }
+              }))
+            }),
+            table: None, comment: None
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
+              key: "connection_max", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Value::Integer("5000")
+            }),
+            table: None, comment: None
+          }
+        },
+        NLExpression {
+          nl: "\n", expr: Expression {
+            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
+              key: "enabled", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Value::Boolean("true")
+            }),
+            table: None, comment: None
+          }
+        }
+      ]} 
+    ));
+  }
+
   #[test]
   fn test_nl_expressions() {
     // allow for zero expressions
