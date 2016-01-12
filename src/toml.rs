@@ -30,7 +30,7 @@ named!(nl_expression<&str, NLExpression>,
 );
 
 // Expression
-named!(pub expression<&str,  Expression>,
+named!(expression<&str,  Expression>,
   alt!(
     complete!(table_comment)  |
     complete!(keyval_comment) |
@@ -53,7 +53,7 @@ named!(ws_expr<&str, Expression>,
     }
   ));
 
-named!(pub table_comment<&str, Expression>,
+named!(table_comment<&str, Expression>,
   chain!(
     ws1: ws                 ~
   table: table              ~
@@ -71,7 +71,7 @@ comment: complete!(comment)?,
   )
 );
 
-named!(pub keyval_comment<&str, Expression>,
+named!(keyval_comment<&str, Expression>,
   chain!(
     ws1: ws       ~
  keyval: keyval   ~

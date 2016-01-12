@@ -1,10 +1,13 @@
 use ast::structs::Comment;
-
+use parser::LINE_COUNT;
 // Newline
 named!(pub newline<&str, &str>,
-  alt!(
-    complete!(tag_s!("\r\n")) |
-    complete!(tag_s!("\n"))
+  chain!(
+ string: alt!(
+      complete!(tag_s!("\r\n")) |
+      complete!(tag_s!("\n"))
+    ),
+    ||{LINE_COUNT.with(|f| *f.borrow_mut() = *f.borrow() + 1); string}
   )
 );
 

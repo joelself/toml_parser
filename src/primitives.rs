@@ -2,6 +2,7 @@ use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
 use util::{ws};
 use objects::{array, inline_table};
+use parser::{LINE_COUNT, count_lines};
 use nom;
 use nom::{IResult};
 // Integer
@@ -16,15 +17,23 @@ named!(float<&str, &str>,
 
 // Basic String
 named!(raw_basic_string<&str, &str>,
-  re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*\""));
+  re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*?\""));
 // Multiline Basic String
 named!(raw_ml_basic_string<&str, &str>,
-  re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*\"\"\"")
+  chain!(
+ string: re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*?\"\"\""),
+    ||{LINE_COUNT.with(|f| *f.borrow_mut() = *f.borrow() + count_lines(string)); string}
+  )
 );
 // Literal String
-named!(raw_literal_string<&str, &str>,re_find!("^'(	|[ -&]|[\\(-􏿿])*'"));
+named!(raw_literal_string<&str, &str>,re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
 // Multiline Literal String
-named!(raw_ml_literal_string<&str, &str>, re_find!("^'''(	|[ -􏿿]|\n|(?:\r\n))*'''"));
+named!(raw_ml_literal_string<&str, &str>,
+  chain!(
+ string: re_find!("^'''(	|[ -􏿿]|\n|(\r\n))*?'''"),
+    ||{LINE_COUNT.with(|f| *f.borrow_mut() = *f.borrow() + count_lines(string)); string}
+  )
+);
 
 
 fn ml_basic_string(input: &str) -> nom::IResult<&str, &str> {
@@ -166,7 +175,7 @@ named!(quoted_key<&str, &str>, re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\
 
 named!(pub key<&str, &str>, alt!(complete!(quoted_key) | complete!(unquoted_key)));
 
-named!(pub keyval_sep<&str, WSSep>,
+named!(keyval_sep<&str, WSSep>,
   chain!(
     ws1: ws         ~
          tag_s!("=")~

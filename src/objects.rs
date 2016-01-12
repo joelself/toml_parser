@@ -1,8 +1,10 @@
+std::slice::SliceConcatExt;
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    CommentOrNewLines, ArrayValue, Array,
                    InlineTable, WSSep, TableKeyVal};
 use util::{ws, comment};
 use primitives::{key, val, keyval};
+use parser::{LINE_COUNT, count_lines};
 
 // Table
 named!(pub table<&str, TableType>,
@@ -60,6 +62,7 @@ subkeys: table_subkeys  ~
     ws2: ws             ~
          tag_s!("]]")   ,
     ||{
+      LAST_TABLE.with(|t| *t.borrow_mut() = key.to_string());
       TableType::Array(Table{
         ws: WSSep{
           ws1: ws1, ws2: ws2
@@ -83,9 +86,19 @@ named!(array_sep<&str, WSSep>,
   )
 );
 
-named!(ws_newline<&str, &str>, re_find!("^( |\t|\n|(\r\n))*"));
+named!(ws_newline<&str, &str>,
+  chain!(
+ string: re_find!("^( |\t|\n|(\r\n))*"),
+    ||{LINE_COUNT.with(|f| *f.borrow_mut() = *f.borrow() + count_lines(string)); string}
+  )
+ );
 
-named!(ws_newlines<&str, &str>, re_find!("^(\n|(\r\n))( |\t|\n|(\r\n))*"));
+named!(ws_newlines<&str, &str>,
+  chain!(
+ string: re_find!("^(\n|(\r\n))( |\t|\n|(\r\n))*"),
+    ||{LINE_COUNT.with(|f| *f.borrow_mut() = *f.borrow() + count_lines(string)); string}
+  )
+);
 
 named!(comment_nl<&str, CommentNewLines>,
   chain!(

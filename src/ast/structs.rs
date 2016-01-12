@@ -168,7 +168,7 @@ impl<'a> Display for Value<'a> {
 			},
 			&Value::InlineTable(ref i) => write!(f, "{}", i),
 		}
-    }
+   }
 }
 
 #[derive(Debug, Eq)]
