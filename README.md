@@ -16,7 +16,7 @@ Based on [my version](https://github.com/joelself/toml/blob/abnf/toml.abnf) of t
 
 Next steps for the first release are:
 - [x] Might back off to use beta Rust or, less likely, stable Rust
-- [ ] Unit tests for all parsers that don't have them yet (almost there!)
+- [x] Unit tests for all parsers that don't have them yet
 - [ ] An integration test method that will iterate through each toml file in the assets directory (which includes the [toml-test valid tests](https://github.com/BurntSushi/toml-test/tree/master/tests/valid) and the toml examples mentioned earlier), parse the file, then reconstruct it and compare it to the original.
 - [ ] Value look-up/modification
 - [ ] Key modification

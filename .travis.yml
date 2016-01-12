@@ -1,25 +1,27 @@
+sudo: false
 language: rust
-
-addons:
-  apt:
-    packages:
-      - libcurl4-openssl-dev
-      - libelf-dev
-      - libdw-dev
-
 rust:
   - beta
   - nightly
+before_script: |
+  PKGNAME="tomllib" # must match with cargo.toml
+  LOCAL="~/.local" # install here to avoid `sudo`
+  export PATH=$LOCAL/bin:$PATH
+addons:
+  apt:
+    packages:
+    - libcurl4-openssl-dev
+    - libelf-dev
+    - libdw-dev
+    - libbfd-dev # required for `--verify`
+after_success: |
+  wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
+  tar xzf master.tar.gz && mkdir kcov-master/build && cd kcov-master/build &&
+  cmake -DCMAKE_INSTALL_PREFIX:PATH=$LOCAL .. && make &&
+  make install && cd ../.. &&
 
-before_script:
-  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
+  kcov --verify \
+       --coveralls-id=$TRAVIS_JOB_ID \
+       --exclude-pattern=/.cargo \
+       target/kcov target/debug/$PKGNAME-*
 
-script:
-  - |
-      travis-cargo build &&
-      travis-cargo test &&
-      travis-cargo bench
-      travis-cargo --only stable doc
-
-after_success:
-  - travis-cargo coveralls --no-sudo
