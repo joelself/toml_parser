@@ -1,4 +1,4 @@
-## *TOML_PARSER is now TOMLLIB and TOMLKIT!*
+![tomllib logo](https://dislocal.com/wp-content/uploads/2016/01/tomllib_logo1.svg)   ![tomlkit logo](https://dislocal.com/wp-content/uploads/2016/01/tomlkit_logo1.svg?number=1)
 
 ## `tomllib` is a parser, modifier, and generator for TOML files ***that doesn't judge you***! 
 
