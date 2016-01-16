@@ -2,17 +2,14 @@ use std::fs;
 use std::fs::{DirEntry,File};
 extern crate tomllib;
 use tomllib::parser::Parser;
-use std::io::Read;
+use std::io::{Read, Result};
 
-fn process_toml_file<'a>(entry: DirEntry) -> Option<&'a str> {
+fn process_toml_file<'a>(entry: DirEntry) -> Result<File> {
 	// TODO: Read file => parse file => write file => compare file to original
     let path = entry.path();
-    let path_str_opt = path.to_str();
-    let path_str = path_str_opt.expect("Unable to convert file PathBuffer to string.");
-    let file_res: Result<File, _> = File::open(path_str);
-    let file_ok : Option<File> = file_res.ok();
-    let mut f: File = file_ok.expect("Was not able to get file from path");
-	let mut file: File = try!(Ok(f));
+    let mut f: File = try!(File::open(path.to_str()
+                        .expect("Unable to convert file PathBuffer to string.")))
+                        .expect("Unable to open file path.");
     let mut contents = String::new();
     try!(file.read_to_string(&mut contents));
     let parser = Parser::new();

@@ -1,10 +1,10 @@
-std::slice::SliceConcatExt;
+use std::slice::SliceConcatExt;
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    CommentOrNewLines, ArrayValue, Array,
                    InlineTable, WSSep, TableKeyVal};
 use util::{ws, comment};
 use primitives::{key, val, keyval};
-use parser::{LINE_COUNT, count_lines};
+use parser::{LINE_COUNT, LAST_TABLE, count_lines};
 
 // Table
 named!(pub table<&str, TableType>,
@@ -62,7 +62,7 @@ subkeys: table_subkeys  ~
     ws2: ws             ~
          tag_s!("]]")   ,
     ||{
-      LAST_TABLE.with(|t| *t.borrow_mut() = key.to_string());
+      LAST_TABLE.with(|t| *t.borrow_mut() = key);
       TableType::Array(Table{
         ws: WSSep{
           ws1: ws1, ws2: ws2

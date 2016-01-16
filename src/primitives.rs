@@ -1,168 +1,11 @@
 use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
-use util::{ws};
 use objects::{array, inline_table};
-use parser::{LINE_COUNT, count_lines};
+use parser::{Parser, count_lines};
 use nom;
-use nom::{IResult};
-// Integer
-named!(integer<&str, &str>, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
+use nom::IResult;
 
-// Float
-named!(float<&str, &str>,
-       re_find!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
-
-// String
-// TODO: named!(string<&str, &str>, alt!(basic_string | ml_basic_string | literal_string | ml_literal_string));
-
-// Basic String
-named!(raw_basic_string<&str, &str>,
-  re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*?\""));
-// Multiline Basic String
-named!(raw_ml_basic_string<&str, &str>,
-  chain!(
- string: re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*?\"\"\""),
-    ||{LINE_COUNT.with(|f| *f.borrow_mut() = *f.borrow() + count_lines(string)); string}
-  )
-);
-// Literal String
-named!(raw_literal_string<&str, &str>,re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
-// Multiline Literal String
-named!(raw_ml_literal_string<&str, &str>,
-  chain!(
- string: re_find!("^'''(	|[ -􏿿]|\n|(\r\n))*?'''"),
-    ||{LINE_COUNT.with(|f| *f.borrow_mut() = *f.borrow() + count_lines(string)); string}
-  )
-);
-
-
-fn ml_basic_string(input: &str) -> nom::IResult<&str, &str> {
-  let raw = raw_ml_basic_string(input);
-  match &raw {
-    &IResult::Done(i, o) => IResult::Done(i, &o["\"\"\"".len()..o.len()-"\"\"\"".len()]),
-    &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
-    &IResult::Incomplete(i) => IResult::Incomplete(i),
-  }
-}
-
-fn basic_string(input: &str) -> nom::IResult<&str, &str> {
-  let raw = raw_basic_string(input);
-  match &raw {
-    &IResult::Done(i, o) => IResult::Done(i, &o["\"".len()..o.len()-"\"".len()]),
-    &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
-    &IResult::Incomplete(i) => IResult::Incomplete(i),
-  }
-}
-
-fn ml_literal_string(input: &str) -> nom::IResult<&str, &str> {
-  let raw = raw_ml_literal_string(input);
-  match &raw {
-    &IResult::Done(i, o) => IResult::Done(i, &o["'''".len()..o.len()-"'''".len()]),
-    &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
-    &IResult::Incomplete(i) => IResult::Incomplete(i),
-  }
-}
-
-fn literal_string(input: &str) -> nom::IResult<&str, &str> {
-  let raw = raw_literal_string(input);
-  match &raw {
-    &IResult::Done(i, o) => IResult::Done(i, &o["'".len()..o.len()-"'".len()]),
-    &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
-    &IResult::Incomplete(i) => IResult::Incomplete(i),
-  }
-}
-
-named!(string<&str, Value>,
-  alt!(
-    complete!(ml_literal_string)  => {|ml| Value::String(ml, StrType::MLLiteral)}  |
-    complete!(ml_basic_string)    => {|mb| Value::String(mb, StrType::MLBasic)}  |
-    complete!(basic_string)       => {|b| Value::String(b, StrType::Basic)}    |
-    complete!(literal_string)     => {|l| Value::String(l, StrType::Literal)}
-  )
-);
-
-// Boolean
-named!(boolean<&str, &str>, alt!(complete!(tag_s!("false")) | complete!(tag_s!("true"))));
-
-
-// Datetime
-// I use re_capture here because I only want the number without the dot. It captures the entire match
-// in the 0th position and the first capture group in the 1st position
-named!(fractional<&str, Vec<&str> >, re_capture!("^\\.([0-9]+)"));
-
-named!(time<&str, Time>,
-  chain!(
-    hour: re_find!("^[0-9]{2}")   ~
-          tag_s!(":")             ~
-  minute: re_find!("^[0-9]{2}")   ~
-          tag_s!(":")             ~
-  second: re_find!("^[0-9]{2}")   ~
- fraction: complete!(fractional)? ,
-    ||{
-      Time{
-        hour: hour, minute: minute, second: second, fraction: match fraction {
-          Some(ref x) => x[1],
-          None        => "",
-        }
-      }
-    }
-  )
-);
-
-named!(time_offset_amount<&str, TimeOffsetAmount>,
-  chain!(
-pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
-   hour: re_find!("^[0-9]{2}")                                                                      ~
-         tag_s!(":")                                                                                      ~
-minute: re_find!("^[0-9]{2}")                                                                       ,
-    ||{
-      TimeOffsetAmount{
-        pos_neg: pos_neg, hour: hour, minute: minute
-      }
-    }
-  )
-);
-
-named!(time_offset<&str, TimeOffset>,
-  alt!(
-    complete!(tag_s!("Z"))        => {|_|       TimeOffset::Z} |
-    complete!(time_offset_amount) => {|offset|  TimeOffset::Time(offset)}
-  )
-);
-
-named!(full_date<&str, FullDate>,
-  chain!(
-   year: re_find!("^([0-9]{4})") ~
-         tag_s!("-") ~
-  month: re_find!("^([0-9]{2})") ~
-         tag_s!("-") ~
-    day: re_find!("^([0-9]{2})"),
-    ||{
-      FullDate{
-        year: year, month: month, day: day
-      }
-    }
-  )
-);
-
-named!(date_time<&str, DateTime>,
-  chain!(
-   date: full_date  ~
-         tag_s!("T")~
-   time: time       ~
- offset: time_offset,
-      ||{
-      DateTime{
-        year: date.year, month: date.month, day: date.day,
-        hour: time.hour, minute: time.minute, second: time.second,
-        fraction: time.fraction, offset: offset
-      }
-    }
-  )
-);
-
-// Key-Value pairs
-fn is_keychar(chr: char) -> bool {
+fn is_keychar(&self, chr: char) -> bool {
   let uchr = chr as u32;
   uchr >= 0x41 && uchr <= 0x5A || // A-Z
   uchr >= 0x61 && uchr <= 0x7A || // a-z
@@ -170,48 +13,207 @@ fn is_keychar(chr: char) -> bool {
   uchr == 0x2D || uchr == 0x5f    // "-", "_"
 }
 
-named!(unquoted_key<&str, &str>, take_while1_s!(is_keychar));
-named!(quoted_key<&str, &str>, re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
+impl<'a> Parser<'a> {
+  // Integer
+  method!(integer<&mut Parser<'a>,&str, &str>, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
 
-named!(pub key<&str, &str>, alt!(complete!(quoted_key) | complete!(unquoted_key)));
+  // Float
+  method!(float<&mut Parser<'a>,&str, &str>,
+         re_find!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
 
-named!(keyval_sep<&str, WSSep>,
-  chain!(
-    ws1: ws         ~
-         tag_s!("=")~
-    ws2: ws         ,
-    ||{
-      WSSep{
-        ws1: ws1, ws2: ws2
-      }
-    }     
-  )
-);
+  // String
+  // TODO: method!(string<&str, &str>, alt!(basic_string | ml_basic_string | literal_string | ml_literal_string));
 
-named!(pub val<&str, Value>,
-  alt!(
-    complete!(array)        => {|arr|   Value::Array(Box::new(arr))}      |
-    complete!(inline_table) => {|it|    Value::InlineTable(Box::new(it))} |
-    complete!(date_time)    => {|dt|    Value::DateTime(dt)}              |
-    complete!(float)        => {|flt|   Value::Float(flt)}                |
-    complete!(integer)      => {|int|   Value::Integer(int)}              |
-    complete!(boolean)      => {|b|     Value::Boolean(b)}                |
-    complete!(string)       => {|s|     s}
-  )
-);
+  // Basic String
+  method!(raw_basic_string<&mut Parser<'a>,&str, &str>,
+    re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*?\""));
+  // Multiline Basic String
+  method!(raw_ml_basic_string<&mut Parser<'a>,&str, &str>,
+    chain!(
+   string: re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*?\"\"\""),
+      ||{self.line_count += count_lines(string)); string}
+    )
+  );
+  // Literal String
+  method!(raw_literal_string<&mut Parser<'a>,&str, &str>,re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
+  // Multiline Literal String
+  method!(raw_ml_literal_string<&mut Parser<'a>,&str, &str>,
+    chain!(
+   string: re_find!("^'''(	|[ -􏿿]|\n|(\r\n))*?'''"),
+      ||{LINE_COUNT.with(|f| *f.borrow_mut() = *f.borrow() + count_lines(string)); string}
+    )
+  );
 
-named!(pub keyval<&str, KeyVal>,
-  chain!(
-    key: key        ~
-     ws: keyval_sep ~
-    val: val        ,
-    || {
-      KeyVal{
-        key: key, keyval_sep: ws, val: val
-      }
+
+  fn ml_basic_string(&self, input: &str) -> nom::IResult<&str, &str> {
+    let raw = self.raw_ml_basic_string(input);
+    match &raw {
+      &IResult::Done(i, o) => IResult::Done(i, &o["\"\"\"".len()..o.len()-"\"\"\"".len()]),
+      &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+      &IResult::Incomplete(i) => IResult::Incomplete(i),
     }
-  )
-);
+  }
+
+  fn basic_string(&self, input: &str) -> nom::IResult<&str, &str> {
+    let raw = self.raw_basic_string(input);
+    match &raw {
+      &IResult::Done(i, o) => IResult::Done(i, &o["\"".len()..o.len()-"\"".len()]),
+      &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+      &IResult::Incomplete(i) => IResult::Incomplete(i),
+    }
+  }
+
+  fn ml_literal_string(&self, input: &str) -> nom::IResult<&str, &str> {
+    let raw = self.raw_ml_literal_string(input);
+    match &raw {
+      &IResult::Done(i, o) => IResult::Done(i, &o["'''".len()..o.len()-"'''".len()]),
+      &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+      &IResult::Incomplete(i) => IResult::Incomplete(i),
+    }
+  }
+
+  fn literal_string(&self, input: &str) -> nom::IResult<&str, &str> {
+    let raw = self.raw_literal_string(input);
+    match &raw {
+      &IResult::Done(i, o) => IResult::Done(i, &o["'".len()..o.len()-"'".len()]),
+      &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+      &IResult::Incomplete(i) => IResult::Incomplete(i),
+    }
+  }
+
+  method!(string<&mut Parser<'a>,&str, Value>,
+    alt!(
+      complete_m!(self.ml_literal_string)  => {|ml| Value::String(ml, StrType::MLLiteral)}  |
+      complete_m!(self.ml_basic_string)    => {|mb| Value::String(mb, StrType::MLBasic)}  |
+      complete_m!(self.basic_string)       => {|b| Value::String(b, StrType::Basic)}    |
+      complete_m!(self.literal_string)     => {|l| Value::String(l, StrType::Literal)}
+    )
+  );
+
+  // Boolean
+  method!(boolean<&mut Parser<'a>,&str, &str>, alt!(complete!(tag_s!("false")) | complete!(tag_s!("true"))));
+
+
+  // Datetime
+  // I use re_capture here because I only want the number without the dot. It captures the entire match
+  // in the 0th position and the first capture group in the 1st position
+  method!(fractional<&mut Parser<'a>,&str, Vec<&str> >, re_capture!("^\\.([0-9]+)"));
+
+  method!(time<&&mut Parser<'a>,str, Time>,
+    chain!(
+      hour: re_find!("^[0-9]{2}")   ~
+            tag_s!(":")             ~
+    minute: re_find!("^[0-9]{2}")   ~
+            tag_s!(":")             ~
+    second: re_find!("^[0-9]{2}")   ~
+   fraction: complete_m!(self.fractional)? ,
+      ||{
+        Time{
+          hour: hour, minute: minute, second: second, fraction: match fraction {
+            Some(ref x) => x[1],
+            None        => "",
+          }
+        }
+      }
+    )
+  );
+
+  method!(time_offset_amount<&mut Parser<'a>,&str, TimeOffsetAmount>,
+    chain!(
+  pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
+     hour: re_find!("^[0-9]{2}")                                                                      ~
+           tag_s!(":")                                                                                      ~
+  minute: re_find!("^[0-9]{2}")                                                                       ,
+      ||{
+        TimeOffsetAmount{
+          pos_neg: pos_neg, hour: hour, minute: minute
+        }
+      }
+    )
+  );
+
+  method!(time_offset<&mut Parser<'a>,&str, TimeOffset>,
+    alt!(
+      complete!(tag_s!("Z"))                => {|_|       TimeOffset::Z} |
+      complete_m!(self.time_offset_amount)  => {|offset|  TimeOffset::Time(offset)}
+    )
+  );
+
+  method!(full_date<&mut Parser<'a>,&str, FullDate>,
+    chain!(
+     year: re_find!("^([0-9]{4})") ~
+           tag_s!("-") ~
+    month: re_find!("^([0-9]{2})") ~
+           tag_s!("-") ~
+      day: re_find!("^([0-9]{2})"),
+      ||{
+        FullDate{
+          year: year, month: month, day: day
+        }
+      }
+    )
+  );
+
+  method!(date_time<&mut Parser<'a>,&str, DateTime>,
+    chain_m!(
+     date: self.full_date  ~
+           tag_s!("T")~
+     time: self.time       ~
+   offset: self.time_offset,
+        ||{
+        DateTime{
+          year: date.year, month: date.month, day: date.day,
+          hour: time.hour, minute: time.minute, second: time.second,
+          fraction: time.fraction, offset: offset
+        }
+      }
+    )
+  );
+
+  // Key-Value pairs
+  method!(unquoted_key<&mut Parser<'a>,&str, &str>, take_while1_s!(is_keychar));
+  method!(quoted_key<&mut Parser<'a>,&str, &str>, re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
+
+  method!(pub key<&mut Parser<'a>,&str, &str>, alt!(complete_m!(self.quoted_key) | complete_m!(self.unquoted_key)));
+
+  method!(keyval_sep<&mut Parser<'a>,&str, WSSep>,
+    chain_m!(
+      ws1: self.ws         ~
+           tag_s!("=")~
+      ws2: self.ws         ,
+      ||{
+        WSSep{
+          ws1: ws1, ws2: ws2
+        }
+      }     
+    )
+  );
+
+  method!(pub val<&mut Parser<'a>,&str, Value>,
+    alt!(
+      complete_m!(array)        => {|arr|   Value::Array(Box::new(arr))}      |
+      complete_m!(inline_table) => {|it|    Value::InlineTable(Box::new(it))} |
+      complete_m!(date_time)    => {|dt|    Value::DateTime(dt)}              |
+      complete_m!(float)        => {|flt|   Value::Float(flt)}                |
+      complete_m!(integer)      => {|int|   Value::Integer(int)}              |
+      complete_m!(boolean)      => {|b|     Value::Boolean(b)}                |
+      complete_m!(string)       => {|s|     s}
+    )
+  );
+
+  method!(pub keyval<&mut Parser<'a>,&str, KeyVal>,
+    chain_m!(
+      key: self.key        ~
+       ws: self.keyval_sep ~
+      val: self.val        ,
+      || {
+        KeyVal{
+          key: key, keyval_sep: ws, val: val
+        }
+      }
+    )
+  );
+}
 
 #[cfg(test)]
 mod test {
@@ -219,11 +221,7 @@ mod test {
   use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal,
                      InlineTable, TableKeyVal, Value, StrType};
   use ::types::{DateTime, TimeOffsetAmount, TimeOffset};
-  use super::{boolean, time, time_offset_amount, time_offset,
-              full_date, date_time, literal_string,
-              ml_literal_string, integer, fractional, float, basic_string,
-              ml_basic_string, unquoted_key, quoted_key, key, keyval_sep,
-              val, keyval, string};
+  use parser::Parser;
 
   #[test]
   fn test_integer() {
