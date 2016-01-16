@@ -225,22 +225,26 @@ mod test {
 
   #[test]
   fn test_integer() {
-    assert_eq!(integer("345_12_678"), Done("", "345_12_678"));
+    let p = Parser::new();
+    assert_eq!(p.integer("345_12_678"), Done("", "345_12_678"));
   }
 
   #[test]
   fn test_float() {
-    assert_eq!(float("98_7.2_34e-8_8"), Done("", "98_7.2_34e-8_8"));
+    let p = Parser::new();
+    assert_eq!(p.float("98_7.2_34e-8_8"), Done("", "98_7.2_34e-8_8"));
   }
 
   #[test]
   fn test_basic_string() {
-    assert_eq!(basic_string("\"Tλïƨ ïƨ á βáƨïç ƨƭřïñϱ.\""), Done("", "Tλïƨ ïƨ á βáƨïç ƨƭřïñϱ."));
+    let p = Parser::new();
+    assert_eq!(p.basic_string("\"Tλïƨ ïƨ á βáƨïç ƨƭřïñϱ.\""), Done("", "Tλïƨ ïƨ á βáƨïç ƨƭřïñϱ."));
   }
 
   #[test]
   fn test_ml_basic_string() {
-    assert_eq!(ml_basic_string("\"\"\"£ïñè Óñè
+    let p = Parser::new();
+    assert_eq!(p.ml_basic_string("\"\"\"£ïñè Óñè
 £ïñè Tωô
 £ïñè Tλřèè\"\"\""), Done("", r#"£ïñè Óñè
 £ïñè Tωô
@@ -249,12 +253,14 @@ mod test {
 
   #[test]
   fn test_literal_string() {
-    assert_eq!(literal_string("'Abc џ'"), Done("", "Abc џ")); 
+    let p = Parser::new();
+    assert_eq!(p.literal_string("'Abc џ'"), Done("", "Abc џ")); 
   }
 
   #[test]
   fn test_ml_literal_string() {
-    assert_eq!(ml_literal_string(r#"'''
+    let p = Parser::new();
+    assert_eq!(p.ml_literal_string(r#"'''
                                     Abc џ
                                     '''"#),
       Done("", r#"
@@ -263,22 +269,18 @@ mod test {
   }
 
   #[test]
-  fn test_foo() {
-    assert!(true);
-  }
-
-  #[test]
   fn test_string() {
-    assert_eq!(string("\"βáƨïç_ƨƭřïñϱ\""), Done("", Value::String("βáƨïç_ƨƭřïñϱ", StrType::Basic)));
-assert_eq!(string(r#""""₥ℓ_βáƨïç_ƨƭřïñϱ
+    let p = Parser::new();
+    assert_eq!(p.string("\"βáƨïç_ƨƭřïñϱ\""), Done("", Value::String("βáƨïç_ƨƭřïñϱ", StrType::Basic)));
+assert_eq!(p.string(r#""""₥ℓ_βáƨïç_ƨƭřïñϱ
 ñú₥βèř_ƭωô
 NÛMßÉR-THRÉÉ
 """"#), Done("", Value::String(r#"₥ℓ_βáƨïç_ƨƭřïñϱ
 ñú₥βèř_ƭωô
 NÛMßÉR-THRÉÉ
 "#, StrType::MLBasic)));
-    assert_eq!(string("'£ÌTÉRÂ£§TRïNG'"), Done("", Value::String("£ÌTÉRÂ£§TRïNG", StrType::Literal)));
-    assert_eq!(string(r#"'''§ƥřïƭè
+    assert_eq!(p.string("'£ÌTÉRÂ£§TRïNG'"), Done("", Value::String("£ÌTÉRÂ£§TRïNG", StrType::Literal)));
+    assert_eq!(p.string(r#"'''§ƥřïƭè
 Çôƙè
 Þèƥƨï
 '''"#),
@@ -291,18 +293,21 @@ NÛMßÉR-THRÉÉ
 
   #[test]
   fn test_boolean() {
-    assert_eq!(boolean("true"), Done("", "true"));
-    assert_eq!(boolean("false"), Done("", "false"));
+    let p = Parser::new();
+    assert_eq!(p.boolean("true"), Done("", "true"));
+    assert_eq!(p.boolean("false"), Done("", "false"));
   }
 
   #[test]
   fn test_fractional() {
-    assert_eq!(fractional(".03856"), Done("", vec![".03856", "03856"]));
+    let p = Parser::new();
+    assert_eq!(p.fractional(".03856"), Done("", vec![".03856", "03856"]));
   }
 
   #[test]
   fn test_time() {
-    assert_eq!(time("11:22:33.456"),
+    let p = Parser::new();
+    assert_eq!(p.time("11:22:33.456"),
       Done("", Time{
         hour: "11",
         minute: "22",
@@ -310,7 +315,7 @@ NÛMßÉR-THRÉÉ
         fraction: "456"
       })
     );
-    assert_eq!(time("04:05:06"),
+    assert_eq!(p.time("04:05:06"),
       Done("", Time{
         hour: "04",
         minute: "05",
@@ -322,7 +327,8 @@ NÛMßÉR-THRÉÉ
 
   #[test]
   fn test_time_offset_amount() {
-    assert_eq!(time_offset_amount("+12:34"),
+    let p = Parser::new();
+    assert_eq!(p.time_offset_amount("+12:34"),
       Done("", TimeOffsetAmount{
         pos_neg: "+",
         hour: "12",
@@ -333,19 +339,21 @@ NÛMßÉR-THRÉÉ
 
   #[test]
   fn test_time_offset() {
-    assert_eq!(time_offset("+12:34"),
+    let p = Parser::new();
+    assert_eq!(p.time_offset("+12:34"),
       Done("", TimeOffset::Time(TimeOffsetAmount{
         pos_neg: "+",
         hour: "12",
         minute: "34"
       }))
     );
-    assert_eq!(time_offset("Z"), Done("", TimeOffset::Z));
+    assert_eq!(p.time_offset("Z"), Done("", TimeOffset::Z));
   }
 
   #[test]
   fn test_full_date() {
-    assert_eq!(full_date("1942-12-07"),
+    let p = Parser::new();
+    assert_eq!(p.full_date("1942-12-07"),
       Done("", FullDate{
         year: "1942", month: "12", day: "07"
       })
@@ -354,7 +362,8 @@ NÛMßÉR-THRÉÉ
 
   #[test]
   fn test_date_time() {
-    assert_eq!(date_time("1999-03-21T20:15:44.5-07:00"),
+    let p = Parser::new();
+    assert_eq!(p.date_time("1999-03-21T20:15:44.5-07:00"),
       Done("", DateTime{
         year: "1999", month: "03", day: "21",
         hour: "20", minute: "15", second: "44", fraction: "5",
@@ -369,28 +378,33 @@ NÛMßÉR-THRÉÉ
 
   #[test]
   fn test_unquoted_key() {
-    assert_eq!(unquoted_key("Un-Quoted_Key"), Done("", "Un-Quoted_Key"));
+    let p = Parser::new();
+    assert_eq!(p.unquoted_key("Un-Quoted_Key"), Done("", "Un-Quoted_Key"));
   }
 
   #[test]
   fn test_quoted_key() {
-    assert_eq!(quoted_key("\"QúôƭèδKè¥\""), Done("", "\"QúôƭèδKè¥\""));
+    let p = Parser::new();
+    assert_eq!(p.quoted_key("\"QúôƭèδKè¥\""), Done("", "\"QúôƭèδKè¥\""));
   }
 
   #[test]
   fn test_key() {
-    assert_eq!(key("\"Gřáƥèƒřúïƭ\""), Done("", "\"Gřáƥèƒřúïƭ\""));
-    assert_eq!(key("_is-key"), Done("", "_is-key"));
+    let p = Parser::new();
+    assert_eq!(p.key("\"Gřáƥèƒřúïƭ\""), Done("", "\"Gřáƥèƒřúïƭ\""));
+    assert_eq!(p.key("_is-key"), Done("", "_is-key"));
   }
 
   #[test]
   fn test_keyval_sep() {
-    assert_eq!(keyval_sep("\t \t= \t"), Done("", WSSep{ws1: "\t \t", ws2: " \t"}));
+    let p = Parser::new();
+    assert_eq!(p.keyval_sep("\t \t= \t"), Done("", WSSep{ws1: "\t \t", ws2: " \t"}));
   }
 
   #[test]
   fn test_val() {
-    assert_eq!(val("[4,9]"), Done("",
+    let p = Parser::new();
+    assert_eq!(p.val("[4,9]"), Done("",
       Value::Array(Box::new(Array{
         values: vec![
           ArrayValue{
@@ -408,7 +422,7 @@ NÛMßÉR-THRÉÉ
       }
     ))));
 
-    assert_eq!(val("{\"§ô₥è Þïϱ\"='Táƨƭ¥ Þôřƙ'}"), Done("",
+    assert_eq!(p.val("{\"§ô₥è Þïϱ\"='Táƨƭ¥ Þôřƙ'}"), Done("",
       Value::InlineTable(Box::new(InlineTable{
         keyvals: Some(vec![
           TableKeyVal{
@@ -426,23 +440,24 @@ NÛMßÉR-THRÉÉ
         }
     }))));
 
-    assert_eq!(val("2112-09-30T12:33:01.345-11:30"), Done("", Value::DateTime(DateTime{
+    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30"), Done("", Value::DateTime(DateTime{
                               year: "2112", month: "09", day: "30",
                               hour: "12", minute: "33", second: "01", fraction: "345",
                               offset: TimeOffset::Time(TimeOffsetAmount{
                                 pos_neg: "-", hour: "11", minute: "30"
                               })
                             })));
-    assert_eq!(val("3487.3289E+22"), Done("", Value::Float("3487.3289E+22")));
-    assert_eq!(val("8932838"), Done("", Value::Integer("8932838")));
-    assert_eq!(val("false"), Done("", Value::Boolean("false")));
-    assert_eq!(val("true"), Done("", Value::Boolean("true")));
-    assert_eq!(val("'§ô₥è §ƭřïñϱ'"), Done("", Value::String("§ô₥è §ƭřïñϱ", StrType::Literal)));
+    assert_eq!(p.val("3487.3289E+22"), Done("", Value::Float("3487.3289E+22")));
+    assert_eq!(p.val("8932838"), Done("", Value::Integer("8932838")));
+    assert_eq!(p.val("false"), Done("", Value::Boolean("false")));
+    assert_eq!(p.val("true"), Done("", Value::Boolean("true")));
+    assert_eq!(p.val("'§ô₥è §ƭřïñϱ'"), Done("", Value::String("§ô₥è §ƭřïñϱ", StrType::Literal)));
   }
 
   #[test]
   fn test_keyval() {
-    assert_eq!(keyval("Boolean = 84.67"), Done("", KeyVal{
+    let p = Parser::new();
+    assert_eq!(p.keyval("Boolean = 84.67"), Done("", KeyVal{
       key: "Boolean", keyval_sep: WSSep{
         ws1: " ", ws2: " "
       },

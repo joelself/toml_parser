@@ -6,210 +6,212 @@ use util::{ws, comment};
 use primitives::{key, val, keyval};
 use parser::{LINE_COUNT, LAST_TABLE, count_lines};
 
-// Table
-named!(pub table<&str, TableType>,
-  alt!(
-    complete!(array_table) |
-    complete!(std_table)
-  )
-);
+impl<'a> Parser<'a> {
+  // Table
+  method!(pub table<&mut Parser,&str, TableType>,
+    alt!(
+      complete_m!(self.array_table) |
+      complete_m!(self.std_table)
+    )
+  );
 
-named!(table_subkeys<&str, Vec<WSKeySep> >, many0!(table_subkey));
+  method!(table_subkeys<&mut Parser,&str, Vec<WSKeySep> >, many0_m!(self.table_subkey));
 
-named!(table_subkey<&str, WSKeySep>,
-  chain!(
-    ws1: ws         ~
-         tag_s!(".")~
-    ws2: ws         ~
-    key: key        ,
-    ||{
-      WSKeySep{
-        ws: WSSep{
-          ws1: ws1, ws2: ws2
-        },
-        key: key
-      }
-    } 
-  )
-);
-// Standard Table
-named!(std_table<&str, TableType>,
-  chain!(
-         tag_s!("[")    ~
-    ws1: ws             ~
-    key: key            ~
-subkeys: table_subkeys  ~
-    ws2: ws             ~
-         tag_s!("]")    ,
-    ||{
-      TableType::Standard(Table{
-        ws: WSSep{
-          ws1: ws1, ws2: ws2
-        },
-        key: key, subkeys: subkeys,
-      })
-    }
-  )
-);
-
-// Array Table
-named!(array_table<&str, TableType>,
-  chain!(
-         tag_s!("[[")   ~
-    ws1: ws             ~
-    key: key            ~
-subkeys: table_subkeys  ~
-    ws2: ws             ~
-         tag_s!("]]")   ,
-    ||{
-      LAST_TABLE.with(|t| *t.borrow_mut() = key);
-      TableType::Array(Table{
-        ws: WSSep{
-          ws1: ws1, ws2: ws2
-        },
-        key: key, subkeys: subkeys,
-      })
-    }
-  )
-);
-
-// Array
-named!(array_sep<&str, WSSep>,
-  chain!(
-    ws1: ws         ~
-         tag_s!(",")~
-    ws2: ws         ,
-    ||{
-      WSSep{ws1: ws1, ws2: ws2
-      }
-    }
-  )
-);
-
-named!(ws_newline<&str, &str>,
-  chain!(
- string: re_find!("^( |\t|\n|(\r\n))*"),
-    ||{LINE_COUNT.with(|f| *f.borrow_mut() = *f.borrow() + count_lines(string)); string}
-  )
- );
-
-named!(ws_newlines<&str, &str>,
-  chain!(
- string: re_find!("^(\n|(\r\n))( |\t|\n|(\r\n))*"),
-    ||{LINE_COUNT.with(|f| *f.borrow_mut() = *f.borrow() + count_lines(string)); string}
-  )
-);
-
-named!(comment_nl<&str, CommentNewLines>,
-  chain!(
- prewsnl: ws_newline  ~
- comment: comment     ~
-newlines: ws_newlines ,
-    ||{
-      CommentNewLines{
-        pre_ws_nl: prewsnl, comment: comment, newlines: newlines
-      }
-    }
-  )
-);
-
-named!(comment_or_nl<&str, CommentOrNewLines>,
-  alt!(
-    complete!(comment_nl)   => {|com| CommentOrNewLines::Comment(com)} |
-    complete!(ws_newlines)  => {|nl|  CommentOrNewLines::NewLines(nl)}
-  )
-);
-
-// TODO: Redo this with array_sep wrapped in a complete!() ?
-named!(array_value<&str, ArrayValue>,
-  alt!(
-    complete!(
-      chain!(
-        val: val                        ~
-  array_sep: array_sep                  ~
-  comment_nl: complete!(comment_or_nl)? ,
-        ||{
-          ArrayValue{
-            val: val,
-            array_sep: Some(array_sep),
-            comment_nl: comment_nl,
-          }
+  method!(table_subkey<&mut Parser,&str, WSKeySep>,
+    chain_m!(
+      ws1: self.ws         ~
+           tag_s!(".")~
+      ws2: self.ws         ~
+      key: self.key        ,
+      ||{
+        WSKeySep{
+          ws: WSSep{
+            ws1: ws1, ws2: ws2
+          },
+          key: key
         }
-      )
-    ) |
-    complete!(
-      chain!(
-        val: val                        ~
-  comment_nl: complete!(comment_or_nl)? ,
-        ||{
-          ArrayValue{
-            val: val,
-            array_sep: None,
-            comment_nl: comment_nl,
-          }
+      } 
+    )
+  );
+  // Standard Table
+  method!(std_table<&mut Parser,&str, TableType>,
+    chain_m!(
+           tag_s!("[")    ~
+      ws1: self.ws             ~
+      key: self.key            ~
+  subkeys: self.table_subkeys  ~
+      ws2: self.ws             ~
+           tag_s!("]")    ,
+      ||{
+        TableType::Standard(Table{
+          ws: WSSep{
+            ws1: ws1, ws2: ws2
+          },
+          key: key, subkeys: subkeys,
+        })
+      }
+    )
+  );
+
+  // Array Table
+  method!(array_table<&mut Parser,&str, TableType>,
+    chain_m!(
+           tag_s!("[[")   ~
+      ws1: self.ws             ~
+      key: self.key            ~
+  subkeys: self.table_subkeys  ~
+      ws2: self.ws             ~
+           tag_s!("]]")   ,
+      ||{
+        self.last_table = key;
+        TableType::Array(Table{
+          ws: WSSep{
+            ws1: ws1, ws2: ws2
+          },
+          key: key, subkeys: subkeys,
+        })
+      }
+    )
+  );
+
+  // Array
+  method!(array_sep<&mut Parser,&str, WSSep>,
+    chain_m!(
+      ws1: self.ws         ~
+           tag_s!(",")~
+      ws2: self.ws         ,
+      ||{
+        WSSep{ws1: ws1, ws2: ws2
         }
+      }
+    )
+  );
+
+  method!(ws_newline<&mut Parser,&str, &str>,
+    chain!(
+   string: re_find!("^( |\t|\n|(\r\n))*"),
+      ||{self.line_count += count_lines(string)); string}
+    )
+   );
+
+  method!(ws_newlines<&str, &str>,
+    chain!(
+   string: re_find!("^(\n|(\r\n))( |\t|\n|(\r\n))*"),
+      ||{self.line_count += count_lines(string)); string}
+    )
+  );
+
+  method!(comment_nl<&mut Parser,&str, CommentNewLines>,
+    chain_m!(
+   prewsnl: self.ws_newline  ~
+   comment: self.comment     ~
+  newlines: self.ws_newlines ,
+      ||{
+        CommentNewLines{
+          pre_ws_nl: prewsnl, comment: comment, newlines: newlines
+        }
+      }
+    )
+  );
+
+  method!(comment_or_nl<&mut Parser,&str, CommentOrNewLines>,
+    alt!(
+      complete_m!(self.comment_nl)   => {|com| CommentOrNewLines::Comment(com)} |
+      complete_m!(self.ws_newlines)  => {|nl|  CommentOrNewLines::NewLines(nl)}
+    )
+  );
+
+  // TODO: Redo this with array_sep wrapped in a complete!() ?
+  method!(array_value<&mut Parser,&str, ArrayValue>,
+    alt!(
+      complete!(
+        chain_m!(
+          val: self.val                        ~
+    array_sep: self.array_sep                  ~
+    comment_nl: complete_m!(self.comment_or_nl)? ,
+          ||{
+            ArrayValue{
+              val: val,
+              array_sep: Some(array_sep),
+              comment_nl: comment_nl,
+            }
+          }
+        )
+      ) |
+      complete!(
+        chain_m!(
+          val: self.val                        ~
+    comment_nl: complete_m!(self.comment_or_nl)? ,
+          ||{
+            ArrayValue{
+              val: val,
+              array_sep: None,
+              comment_nl: comment_nl,
+            }
+          }
+        )
       )
     )
-  )
-);
+  );
 
-named!(array_values<&str, Vec<ArrayValue> >,
-  chain!(
-   vals: many0!(array_value) ,
-   ||{let mut tmp = vec![];
-      tmp.extend(vals);
-      tmp
-    }
-  )
-);
-
-named!(pub array<&str, Array>,
-  chain!(
-            tag_s!("[")   ~
-       ws1: ws_newline    ~
-array_vals: array_values ~
-       ws2: ws            ~
-            tag_s!("]")   ,
-    ||{
-      Array{
-        values: array_vals,
-        ws: WSSep{ws1: ws1, ws2: ws2},
+  method!(array_values<&mut Parser,&str, Vec<ArrayValue> >,
+    chain!(
+     vals: many0_m!(self.array_value) ,
+     ||{let mut tmp = vec![];
+        tmp.extend(vals);
+        tmp
       }
-    }
-  )
-);
+    )
+  );
 
-named!(table_keyval<&str, TableKeyVal>,
-      chain!(
-        ws1: ws     ~
-     keyval: keyval ~
-        ws2: ws     ,
-        ||{
-          TableKeyVal{
-            keyval: keyval,
-            kv_sep: WSSep{ws1: ws1, ws2: ws2}
-          }
+  method!(pub array<&mut Parser,&str, Array>,
+    chain_m!(
+              tag_s!("[")   ~
+         ws1: self.ws_newline    ~
+  array_vals: self.array_values ~
+         ws2: self.ws            ~
+              tag_s!("]")   ,
+      ||{
+        Array{
+          values: array_vals,
+          ws: WSSep{ws1: ws1, ws2: ws2},
         }
-      )
-);
+      }
+    )
+  );
 
-named!(inline_table_keyvals_non_empty<&str, Vec<TableKeyVal> >, separated_list!(tag_s!(","), table_keyval));
-
-named!(pub inline_table<&str, InlineTable>,
-  chain!(
-         tag_s!("{")                                ~
-    ws1: ws                                         ~
-keyvals: complete!(inline_table_keyvals_non_empty)? ~
-    ws2: ws                                         ~
-         tag_s!("}")                                ,
-        ||{
-          InlineTable{
-            keyvals: keyvals,
-            ws: WSSep{ws1: ws1, ws2: ws2}
+  method!(table_keyval<&mut Parser,&str, TableKeyVal>,
+        chain_m!(
+          ws1: self.ws     ~
+       keyval: self.keyval ~
+          ws2: self.ws     ,
+          ||{
+            TableKeyVal{
+              keyval: keyval,
+              kv_sep: WSSep{ws1: ws1, ws2: ws2}
+            }
           }
-        }
-  )
-);
+        )
+  );
+
+  method!(inline_table_keyvals_non_empty<&mut Parser,&str, Vec<TableKeyVal> >, separated_list_m!(tag_s!(","), self.table_keyval));
+
+  method!(pub inline_table<&mut Parser,&str, InlineTable>,
+    chain_m!(
+           tag_s!("{")                                ~
+      ws1: self.ws                                         ~
+  keyvals: complete_m!(self.inline_table_keyvals_non_empty)? ~
+      ws2: self.ws                                         ~
+           tag_s!("}")                                ,
+          ||{
+            InlineTable{
+              keyvals: keyvals,
+              ws: WSSep{ws1: ws1, ws2: ws2}
+            }
+          }
+    )
+  );
+}
 
 #[cfg(test)]
 mod test {
