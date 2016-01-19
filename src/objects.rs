@@ -2,27 +2,25 @@ use std::slice::SliceConcatExt;
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    CommentOrNewLines, ArrayValue, Array,
                    InlineTable, WSSep, TableKeyVal};
-use util::{ws, comment};
-use primitives::{key, val, keyval};
-use parser::{LINE_COUNT, LAST_TABLE, count_lines};
+use parser::{Parser, count_lines};
 
 impl<'a> Parser<'a> {
   // Table
-  method!(pub table<&mut Parser,&str, TableType>,
-    alt!(
-      complete_m!(self.array_table) |
-      complete_m!(self.std_table)
+  method!(pub table<&Parser<'a>,&'a str, TableType>, self,
+    alt_m!(self,
+      complete_m!(array_table) |
+      complete_m!(std_table)
     )
   );
 
-  method!(table_subkeys<&mut Parser,&str, Vec<WSKeySep> >, many0_m!(self.table_subkey));
+  method!(table_subkeys<&Parser<'a>,&'a str, Vec<WSKeySep> >, self, many0_m!(self,table_subkey));
 
-  method!(table_subkey<&mut Parser,&str, WSKeySep>,
-    chain_m!(
-      ws1: self.ws         ~
+  method!(table_subkey<&Parser<'a>,&'a str, WSKeySep>, self,
+    chain_m!(self,
+      ws1: ws         ~
            tag_s!(".")~
-      ws2: self.ws         ~
-      key: self.key        ,
+      ws2: ws         ~
+      key: key        ,
       ||{
         WSKeySep{
           ws: WSSep{
@@ -34,13 +32,13 @@ impl<'a> Parser<'a> {
     )
   );
   // Standard Table
-  method!(std_table<&mut Parser,&str, TableType>,
-    chain_m!(
+  method!(std_table<&Parser<'a>,&'a str, TableType>, self,
+    chain_m!(self,
            tag_s!("[")    ~
-      ws1: self.ws             ~
-      key: self.key            ~
-  subkeys: self.table_subkeys  ~
-      ws2: self.ws             ~
+      ws1: ws             ~
+      key: key            ~
+  subkeys: table_subkeys  ~
+      ws2: ws             ~
            tag_s!("]")    ,
       ||{
         TableType::Standard(Table{
@@ -54,16 +52,16 @@ impl<'a> Parser<'a> {
   );
 
   // Array Table
-  method!(array_table<&mut Parser,&str, TableType>,
-    chain_m!(
+  method!(array_table<&Parser<'a>,&'a str, TableType>, self,
+    chain_m!(self,
            tag_s!("[[")   ~
-      ws1: self.ws             ~
-      key: self.key            ~
-  subkeys: self.table_subkeys  ~
-      ws2: self.ws             ~
+      ws1: ws             ~
+      key: key            ~
+  subkeys: table_subkeys  ~
+      ws2: ws             ~
            tag_s!("]]")   ,
       ||{
-        self.last_table = key;
+        self.last_table.borrow_mut() = key;
         TableType::Array(Table{
           ws: WSSep{
             ws1: ws1, ws2: ws2
@@ -75,11 +73,11 @@ impl<'a> Parser<'a> {
   );
 
   // Array
-  method!(array_sep<&mut Parser,&str, WSSep>,
-    chain_m!(
-      ws1: self.ws         ~
+  method!(array_sep<&Parser<'a>,&'a str, WSSep>, self,
+    chain_m!(self,
+      ws1: ws         ~
            tag_s!(",")~
-      ws2: self.ws         ,
+      ws2: ws         ,
       ||{
         WSSep{ws1: ws1, ws2: ws2
         }
@@ -87,25 +85,25 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(ws_newline<&mut Parser,&str, &str>,
-    chain!(
+  method!(ws_newline<&Parser<'a>,&'a str, &'a str>, self,
+    chain!(self,
    string: re_find!("^( |\t|\n|(\r\n))*"),
-      ||{self.line_count += count_lines(string)); string}
+      ||{ string}
     )
    );
 
-  method!(ws_newlines<&str, &str>,
-    chain!(
+  method!(ws_newlines<&Parser<'a>,&'a str, &'a str>, self,
+    chain!(self,
    string: re_find!("^(\n|(\r\n))( |\t|\n|(\r\n))*"),
-      ||{self.line_count += count_lines(string)); string}
+      ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
     )
   );
 
-  method!(comment_nl<&mut Parser,&str, CommentNewLines>,
-    chain_m!(
-   prewsnl: self.ws_newline  ~
-   comment: self.comment     ~
-  newlines: self.ws_newlines ,
+  method!(comment_nl<&Parser<'a>,&'a str, CommentNewLines>, self,
+    chain_m!(self,
+   prewsnl: ws_newline  ~
+   comment: comment     ~
+  newlines: ws_newlines ,
       ||{
         CommentNewLines{
           pre_ws_nl: prewsnl, comment: comment, newlines: newlines
@@ -114,39 +112,39 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(comment_or_nl<&mut Parser,&str, CommentOrNewLines>,
-    alt!(
-      complete_m!(self.comment_nl)   => {|com| CommentOrNewLines::Comment(com)} |
-      complete_m!(self.ws_newlines)  => {|nl|  CommentOrNewLines::NewLines(nl)}
+  method!(comment_or_nl<&Parser<'a>,&'a str, CommentOrNewLines>, self,
+    alt_m!(self,
+      complete_m!!(comment_nl)   => {|com| CommentOrNewLines::Comment(com)} |
+      complete_m!!(ws_newlines)  => {|nl|  CommentOrNewLines::NewLines(nl)}
     )
   );
 
   // TODO: Redo this with array_sep wrapped in a complete!() ?
-  method!(array_value<&mut Parser,&str, ArrayValue>,
-    alt!(
-      complete!(
-        chain_m!(
-          val: self.val                        ~
-    array_sep: self.array_sep                  ~
-    comment_nl: complete_m!(self.comment_or_nl)? ,
+  method!(array_value<&Parser<'a>,&'a str, ArrayValue>, self,
+    alt_m!(self,
+      complete_m!!(
+        chain_m!!(
+          val: val                        ~
+    array_sep: array_sep                  ~
+    comment_nl: complete_m!(comment_or_nl) ,
           ||{
             ArrayValue{
               val: val,
               array_sep: Some(array_sep),
-              comment_nl: comment_nl,
+              comment_nl: Some(comment_nl),
             }
           }
         )
       ) |
-      complete!(
-        chain_m!(
-          val: self.val                        ~
-    comment_nl: complete_m!(self.comment_or_nl)? ,
+      complete_m!!(
+        chain_m!!(
+          val: val                        ~
+    comment_nl: complete_m!(comment_or_nl) ,
           ||{
             ArrayValue{
               val: val,
               array_sep: None,
-              comment_nl: comment_nl,
+              comment_nl: Some(comment_nl),
             }
           }
         )
@@ -154,7 +152,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(array_values<&mut Parser,&str, Vec<ArrayValue> >,
+  method!(array_values<&Parser<'a>,&'a str, Vec<ArrayValue> >, self,
     chain!(
      vals: many0_m!(self.array_value) ,
      ||{let mut tmp = vec![];
@@ -164,12 +162,12 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(pub array<&mut Parser,&str, Array>,
-    chain_m!(
+  method!(pub array<&Parser<'a>,&'a str, Array>, self,
+    chain_m!(self,
               tag_s!("[")   ~
-         ws1: self.ws_newline    ~
-  array_vals: self.array_values ~
-         ws2: self.ws            ~
+         ws1: ws_newline    ~
+  array_vals: array_values ~
+         ws2: ws            ~
               tag_s!("]")   ,
       ||{
         Array{
@@ -180,11 +178,11 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(table_keyval<&mut Parser,&str, TableKeyVal>,
-        chain_m!(
-          ws1: self.ws     ~
-       keyval: self.keyval ~
-          ws2: self.ws     ,
+  method!(table_keyval<&Parser<'a>,&'a str, TableKeyVal>, self,
+        chain_m!(self,
+          ws1: ws     ~
+       keyval: keyval ~
+          ws2: ws     ,
           ||{
             TableKeyVal{
               keyval: keyval,
@@ -194,14 +192,14 @@ impl<'a> Parser<'a> {
         )
   );
 
-  method!(inline_table_keyvals_non_empty<&mut Parser,&str, Vec<TableKeyVal> >, separated_list_m!(tag_s!(","), self.table_keyval));
+  method!(inline_table_keyvals_non_empty<&Parser<'a>,&'a str, Vec<TableKeyVal> >, self, separated_list_m!(tag_s!(","), self.table_keyval));
 
-  method!(pub inline_table<&mut Parser,&str, InlineTable>,
-    chain_m!(
+  method!(pub inline_table<&Parser<'a>,&'a str, InlineTable>, self,
+    chain_m!(self,
            tag_s!("{")                                ~
-      ws1: self.ws                                         ~
-  keyvals: complete_m!(self.inline_table_keyvals_non_empty)? ~
-      ws2: self.ws                                         ~
+      ws1: ws                                         ~
+  keyvals: complete_m!!(inline_table_keyvals_non_empty)? ~
+      ws2: ws                                         ~
            tag_s!("}")                                ,
           ||{
             InlineTable{

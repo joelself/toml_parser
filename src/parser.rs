@@ -1,17 +1,11 @@
 use std::fmt;
 use std::fmt::Display;
 use std::collections::HashMap;
-use std::cell::RefCell;
+use std::cell::{RefCell, Cell};
 use std::thread;
 use nom::IResult;
 use ast::structs::{Toml};
-use toml::toml;
 use types::HashValue;
-
-thread_local!(pub static LINE_COUNT: RefCell<u64> = RefCell::new(0));
-thread_local!(pub static KEY_VALUE_MAP: RefCell<HashMap<String, HashValue<'static>>> = 
-	RefCell::new(HashMap::new()));
-thread_local!(pub static LAST_TABLE: RefCell<&'a str> = RefCell::new(""));
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
 named!(all_lines<&str, Vec<&str> >, many0!(full_line));
@@ -25,11 +19,11 @@ pub fn count_lines(s: &str) -> u64 {
 }
 
 pub struct Parser<'a> {
-	root: Toml<'a>,
-	map: HashMap<&'a str, HashValue<'a>>,
-	leftover: &'a str,
-	line_count: u64,
-	last_table: &' str,
+	pub root: RefCell<Toml<'a>>,
+	pub map: RefCell<HashMap<&'a str, HashValue<'a>>>,
+	pub leftover: RefCell<&'a str>,
+	pub line_count: Cell<u64>,
+	pub last_table: RefCell<&'a str>,
 }
 
 impl<'a> Default for Parser<'a> {
@@ -47,11 +41,12 @@ impl<'a> Default for Parser<'a> {
 // TODO change this to return a parser result
 impl<'a> Parser<'a> {
 	pub fn new<'b>() -> Parser<'a> {
-		Parser{ root: Toml{ exprs: vec![] }, map: HashMap::new() }
+		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: RefCell::new(HashMap::new()),
+						leftover: RefCell::new(""), line_count: Cell::new(0), last_table: RefCell::new("") }
 	}
 
-	pub fn parse(&mut self, input: &'a str) {
-		let r = self.toml(input);
+	pub fn parse(self: &Parser<'a>, input: &'a str) {
+		let r: IResult<&'a str, Toml> = self.toml(input);
 		match r {
 			IResult::Done(i, o) => {
 				self.root = o;
