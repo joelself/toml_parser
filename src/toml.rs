@@ -3,24 +3,78 @@ use nom::eof;
 use parser::Parser;
 
 impl<'a> Parser<'a> {
+//   method!(pub toml<&'a mut Parser<'a>, &'a str, Toml>, self, [(self, sb)],
+//     chain!(
+//       expr: call_rc!(self.sb.expression)    ~
+//   nl_exprs: call_rc!(self.sb.nl_expressions),
+//       ||{
+//         let mut tmp = vec![NLExpression{ nl: "", expr: expr}];
+//         tmp.extend(nl_exprs); Toml{ exprs: tmp}
+//       }
+//     )
+//   );
+        pub fn toml(self: &'b mut Parser<'a>, i: &'a str)
+         -> ::nom::IResult<&'a str, Toml> {
+            use std::cell::RefCell;
+            self.rc = Option::Some(RefCell::new(self));
+            {
+                {
+                    use nom::InputLength;
+                    match { let res = self.rc.unwrap().borrow_mut().expression(i); res } {
+                        ::nom::IResult::Error(e) => ::nom::IResult::Error(e),
+                        ::nom::IResult::Incomplete(::nom::Needed::Unknown) =>
+                        ::nom::IResult::Incomplete(::nom::Needed::Unknown),
+                        ::nom::IResult::Incomplete(::nom::Needed::Size(i)) =>
+                        ::nom::IResult::Incomplete(::nom::Needed::Size(0usize
+                                                                           +
+                                                                           i)),
+                        ::nom::IResult::Done(i, o) => {
+                            let expr = o;
+                            match {
+                                      let res =
+                                          self.rc.unwrap().borrow_mut().nl_expressions(i);
+                                      res
+                                  } {
+                                ::nom::IResult::Error(e) =>
+                                ::nom::IResult::Error(e),
+                                ::nom::IResult::Incomplete(::nom::Needed::Unknown)
+                                =>
+                                ::nom::IResult::Incomplete(::nom::Needed::Unknown),
+                                ::nom::IResult::Incomplete(::nom::Needed::Size(p))
+                                =>
+                                ::nom::IResult::Incomplete(::nom::Needed::Size(0usize
+                                                                                   +
+                                                                                   ((i).input_len()
+                                                                                        -
+                                                                                        i.input_len())
+                                                                                   +
+                                                                                   p)),
+                                ::nom::IResult::Done(i, o) => {
+                                    let nl_exprs = o;
+                                    ::nom::IResult::Done(i,
+                                                         (|| {
+                                                             let mut tmp =
+                                                                 <[_]>::into_vec(::std::boxed::Box::new([NLExpression{nl:
+                                                                                                                          "",
+                                                                                                                      expr:
+                                                                                                                          expr,}]));
+                                                             tmp.extend(nl_exprs);
+                                                             Toml{exprs: tmp,}
+                                                         })())
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-  method!(pub toml<&Parser<'a>, &'a str, Toml>, self,
-    chain_m!(self,
-      expr: expression    ~
-  nl_exprs: nl_expressions,
-      ||{
-        let mut tmp = vec![NLExpression{ nl: "", expr: expr}];
-        tmp.extend(nl_exprs); Toml{ exprs: tmp}
-      }
-    )
-  );
+  method!(nl_expressions<&'a mut Parser<'a>, &'a str, Vec<NLExpression> >, self, [(self, sb)], many0!(call_rc!(self.sb.nl_expression)));
 
-  method!(nl_expressions<&Parser<'a>, &'a str, Vec<NLExpression> >, self, many0_m!(self,nl_expression));
-
-  method!(nl_expression<&Parser<'a>, &'a str, NLExpression>, self,
-    chain_m!(self,
-       nl: newline    ~
-     expr: expression ,
+  method!(nl_expression<&'a mut Parser<'a>, &'a str, NLExpression>, self, [(self, sb)],
+    chain!(
+       nl: call_rc!(self.sb.newline)    ~
+     expr: call_rc!(self.sb.expression) ,
       ||{
         NLExpression{
           nl: nl, expr: expr,
@@ -30,18 +84,18 @@ impl<'a> Parser<'a> {
   );
 
   // Expression
-  method!(expression<&Parser<'a>, &'a str,  Expression>, self,
-    alt!(self,
-      complete_m!!(table_comment)  |
-      complete_m!!(keyval_comment) |
-      complete_m!!(ws_comment)     |
-      complete_m!!(ws_expr)
+  method!(expression<&'a mut Parser<'a>, &'a str,  Expression>, self, [(self, sb)],
+    alt!(
+      complete!(call_rc!(self.sb.table_comment))  |
+      complete!(call_rc!(self.sb.keyval_comment)) |
+      complete!(call_rc!(self.sb.ws_comment))     |
+      complete!(call_rc!(self.sb.ws_expr))
     )
   );
 
-  method!(ws_expr<&Parser<'a>, &'a str, Expression>, self,
-    chain_m!(self,
-      ws: ws,
+  method!(ws_expr<&'a mut Parser<'a>, &'a str, Expression>, self, [(self, sb)],
+    chain!(
+      ws: call_rc!(self.sb.ws),
       ||{
         Expression{
           ws: WSSep{
@@ -53,12 +107,12 @@ impl<'a> Parser<'a> {
       }
     ));
 
-  method!(table_comment<&Parser<'a>, &'a str, Expression>, self,
-    chain_m!(self,
-      ws1: ws                 ~
-    table: table              ~
-      ws2: ws                 ~
-  comment: complete_m!(comment)?,
+  method!(table_comment<&'a mut Parser<'a>, &'a str, Expression>, self, [(self, sb)],
+    chain!(
+      ws1: call_rc!(self.sb.ws)                 ~
+    table: call_rc!(self.sb.table)              ~
+      ws2: call_rc!(self.sb.ws)                 ~
+  comment: complete!(call_rc!(self.sb.comment))?,
       ||{
         Expression{
           ws: WSSep{
@@ -71,12 +125,12 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(keyval_comment<&Parser<'a>, &'a str, Expression>, self,
-    chain_m!(self,
-      ws1: ws       ~
-   keyval: keyval   ~
-      ws2: ws       ~
-  comment: complete_m!!(comment) ? ,
+  method!(keyval_comment<&'a mut Parser<'a>, &'a str, Expression>, self, [(self, sb)],
+    chain!(
+      ws1: call_rc!(self.sb.ws)       ~
+   keyval: call_rc!(self.sb.keyval)   ~
+      ws2: call_rc!(self.sb.ws)       ~
+  comment: complete!(call_rc!(self.sb.comment)) ? ,
       ||{
         Expression{
           ws: WSSep{
@@ -89,10 +143,10 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(ws_comment<&Parser<'a>, &'a str, Expression>, self,
-    chain_m!(self,
-       ws: ws     ~
-  comment: comment,
+  method!(ws_comment<&'a mut Parser<'a>, &'a str, Expression>, self, [(self, sb)],
+    chain!(
+       ws: call_rc!(self.sb.ws)     ~
+  comment: call_rc!(self.sb.comment),
       ||{
         Expression{
           ws: WSSep{

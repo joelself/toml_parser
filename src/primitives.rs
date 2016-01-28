@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
 use parser::{Parser, count_lines};
@@ -14,39 +15,39 @@ fn is_keychar(chr: char) -> bool {
 
 impl<'a> Parser<'a> {
   // Integer
-  method!(integer<&Parser<'a>,&'a str, &'a str>, self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
+  method!(integer<&'a mut Parser<'a>,&'a str, &'a str>, self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
 
   // Float
-  method!(float<&Parser<'a>,&'a str, &'a str>, self,
+  method!(float<&'a mut Parser<'a>,&'a str, &'a str>, self,
          re_find!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
 
   // String
   // TODO: method!(string<&'a str, &'a str>, alt!(basic_string | ml_basic_string | literal_string | ml_literal_string));
 
   // Basic String
-  method!(raw_basic_string<&Parser<'a>,&'a str, &'a str>, self,
+  method!(raw_basic_string<&'a mut Parser<'a>,&'a str, &'a str>, self,
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*?\""));
   // Multiline Basic String
-  method!(raw_ml_basic_string<&Parser<'a>,&'a str, &'a str>, self,
+  method!(raw_ml_basic_string<&'a mut Parser<'a>,&'a str, &'a str>, self, [(self, sb)],
     chain!(
    string: re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*?\"\"\""),
-      ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
+      ||{self.sb.unwrap().line_count.set(self.sb.unwrap().line_count.get() + count_lines(string)); string}
     )
   );
   // Literal String
-  method!(raw_literal_string<&Parser<'a>,&'a str, &'a str>, self, re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
+  method!(raw_literal_string<&'a mut Parser<'a>,&'a str, &'a str>, self, re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
   // Multiline Literal String
-  method!(raw_ml_literal_string<&Parser<'a>,&'a str, &'a str>, self,
+  method!(raw_ml_literal_string<&'a mut Parser<'a>,&'a str, &'a str>, self, [(self, sb)],
     chain!(
    string: re_find!("^'''(	|[ -􏿿]|\n|(\r\n))*?'''"),
-      ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
+      ||{self.sb.unwrap().line_count.set(self.sb.unwrap().line_count.get() + count_lines(string)); string}
     )
   );
 
 
-  fn ml_basic_string<'nom>(self: &Parser<'a>, input: &'a str) -> nom::IResult<&'a str, &'a str> {
-    let cell = RefCell::new(self);
-    let raw = cell.borrow_mut().raw_ml_basic_string(input);
+  fn ml_basic_string(self: &'a mut Parser<'a>, input: &'a str) -> nom::IResult<&'a str, &'a str> {
+    self.sb = Some(RefCell::new(self).borrow_mut());
+    let raw = get_field!(self.sb).raw_ml_basic_string(input);
     match &raw {
       &IResult::Done(i, o) => IResult::Done(i, &o["\"\"\"".len()..o.len()-"\"\"\"".len()]),
       &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
@@ -54,9 +55,9 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn basic_string<'nom>(self: &Parser<'a>, input: &'a str) -> nom::IResult<&'a str, &'a str> {
-    let cell = RefCell::new(self);
-    let raw = cell.borrow_mut().raw_basic_string(input);
+  fn basic_string(self: &'a mut Parser<'a>, input: &'a str) -> nom::IResult<&'a str, &'a str> {
+    self.sb = Some(RefCell::new(self).borrow_mut());
+    let raw = get_field!(self.sb).raw_basic_string(input);
     match &raw {
       &IResult::Done(i, o) => IResult::Done(i, &o["\"".len()..o.len()-"\"".len()]),
       &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
@@ -64,9 +65,9 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn ml_literal_string<'nom>(self: &Parser<'a>, input: &'a str) -> nom::IResult<&'a str, &'a str> {
-    let cell = RefCell::new(self);
-    let raw = cell.borrow_mut().raw_ml_literal_string(input);
+  fn ml_literal_string(self: &'a mut Parser<'a>, input: &'a str) -> nom::IResult<&'a str, &'a str> {
+    self.sb = Some(RefCell::new(self).borrow_mut());
+    let raw = get_field!(self.sb).raw_ml_literal_string(input);
     match &raw {
       &IResult::Done(i, o) => IResult::Done(i, &o["'''".len()..o.len()-"'''".len()]),
       &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
@@ -74,9 +75,9 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn literal_string<'nom>(self: &Parser<'a>, input: &'a str) -> nom::IResult<&'a str, &'a str> {
-    let cell = RefCell::new(self);
-    let raw = cell.borrow_mut().raw_literal_string(input);
+  fn literal_string(self: &'a mut Parser<'a>, input: &'a str) -> nom::IResult<&'a str, &'a str> {
+    self.sb = Some(RefCell::new(self).borrow_mut());
+    let raw = get_field!(self.sb).raw_literal_string(input);
     match &raw {
       &IResult::Done(i, o) => IResult::Done(i, &o["'".len()..o.len()-"'".len()]),
       &IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
@@ -84,32 +85,32 @@ impl<'a> Parser<'a> {
     }
   }
 
-  method!(string<&Parser<'a>,&'a str, Value>, self,
-    alt_m!(self,
-      complete_m!!(ml_literal_string)  => {|ml| Value::String(ml, StrType::MLLiteral)}  |
-      complete_m!!(ml_basic_string)    => {|mb| Value::String(mb, StrType::MLBasic)}  |
-      complete_m!!(basic_string)       => {|b| Value::String(b, StrType::Basic)}    |
-      complete_m!!(literal_string)     => {|l| Value::String(l, StrType::Literal)}
+  method!(string<&'a mut Parser<'a>,&'a str, Value>, self, [(self, sb)],
+    alt!(
+      complete!(call_rc!(self.sb.ml_literal_string))  => {|ml| Value::String(ml, StrType::MLLiteral)}  |
+      complete!(call_rc!(self.sb.ml_basic_string))    => {|mb| Value::String(mb, StrType::MLBasic)}  |
+      complete!(call_rc!(self.sb.basic_string))       => {|b| Value::String(b, StrType::Basic)}    |
+      complete!(call_rc!(self.sb.literal_string))     => {|l| Value::String(l, StrType::Literal)}
     )
   );
 
   // Boolean
-  method!(boolean<&Parser<'a>,&'a str, &'a str>, self, alt!(complete!(tag_s!("false")) | complete!(tag_s!("true"))));
+  method!(boolean<&'a mut Parser<'a>,&'a str, &'a str>, self, alt!(complete!(tag_s!("false")) | complete!(tag_s!("true"))));
 
 
   // Datetime
   // I use re_capture here because I only want the number without the dot. It captures the entire match
   // in the 0th position and the first capture group in the 1st position
-  method!(fractional<&Parser<'a>,&'a str, Vec<&'a str> >, self, re_capture!("^\\.([0-9]+)"));
+  method!(fractional<&'a mut Parser<'a>,&'a str, Vec<&'a str> >, self, re_capture!("^\\.([0-9]+)"));
 
-  method!(time<&Parser<'a>,&'a str, Time>, self,
+  method!(time<&'a mut Parser<'a>,&'a str, Time>, self, [(self, sb)],
     chain!(
       hour: re_find!("^[0-9]{2}")   ~
             tag_s!(":")             ~
     minute: re_find!("^[0-9]{2}")   ~
             tag_s!(":")             ~
     second: re_find!("^[0-9]{2}")   ~
-   fraction: complete_m!(self.fractional)? ,
+   fraction: complete!(call_rc!(self.sb.fractional)) ? ,
       ||{
         Time{
           hour: hour, minute: minute, second: second, fraction: match fraction {
@@ -121,7 +122,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(time_offset_amount<&Parser<'a>,&'a str, TimeOffsetAmount>, self,
+  method!(time_offset_amount<&'a mut Parser<'a>,&'a str, TimeOffsetAmount>, self,
     chain!(
   pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
      hour: re_find!("^[0-9]{2}")                                                                      ~
@@ -135,14 +136,14 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(time_offset<&Parser<'a>,&'a str, TimeOffset>, self,
+  method!(time_offset<&'a mut Parser<'a>,&'a str, TimeOffset>, self, [(self, sb)],
     alt!(
-      complete!(tag_s!("Z"))                => {|_|       TimeOffset::Z} |
-      complete_m!(self.time_offset_amount)  => {|offset|  TimeOffset::Time(offset)}
+      complete!(tag_s!("Z"))                       => {|_|       TimeOffset::Z} |
+      complete!(call_rc!(self.sb.time_offset_amount))  => {|offset|  TimeOffset::Time(offset)}
     )
   );
 
-  method!(full_date<&Parser<'a>,&'a str, FullDate>, self,
+  method!(full_date<&'a mut Parser<'a>,&'a str, FullDate>, self,
     chain!(
      year: re_find!("^([0-9]{4})") ~
            tag_s!("-") ~
@@ -157,12 +158,12 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(date_time<&Parser<'a>,&'a str, DateTime>, self,
-    chain_m!(self,
-     date: full_date  ~
+  method!(date_time<&'a mut Parser<'a>,&'a str, DateTime>, self, [(self, sb)],
+    chain!(
+     date: call_rc!(self.sb.full_date)  ~
            tag_s!("T")~
-     time: time       ~
-   offset: time_offset,
+     time: call_rc!(self.sb.time)       ~
+   offset: call_rc!(self.sb.time_offset),
         ||{
         DateTime{
           year: date.year, month: date.month, day: date.day,
@@ -174,16 +175,16 @@ impl<'a> Parser<'a> {
   );
 
   // Key-Value pairs
-  method!(unquoted_key<&Parser<'a>,&'a str, &'a str>, self, take_while1_s!(is_keychar));
-  method!(quoted_key<&Parser<'a>,&'a str, &'a str>, self, re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
+  method!(unquoted_key<&'a mut Parser<'a>,&'a str, &'a str>, self, [(self, sb)], take_while1_s!(is_keychar));
+  method!(quoted_key<&'a mut Parser<'a>,&'a str, &'a str>, self, re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
-  method!(pub key<&Parser<'a>,&'a str, &'a str>, self, alt_m!(complete_m!!(quoted_key) | complete_m!!(unquoted_key)));
+  method!(pub key<&'a mut Parser<'a>,&'a str, &'a str>, self, [(self, sb)], alt!(complete!(call_rc!(self.sb.quoted_key)) | complete!(call_rc!(self.sb.unquoted_key))));
 
-  method!(keyval_sep<&Parser<'a>,&'a str, WSSep>, self,
-    chain_m!(self,
-      ws1: ws         ~
-           tag_s!("=")~
-      ws2: ws         ,
+  method!(keyval_sep<&'a mut Parser<'a>,&'a str, WSSep>, self, [(self, sb)],
+    chain!(
+      ws1: call_rc!(self.sb.ws) ~
+           tag_s!("=")      ~
+      ws2: call_rc!(self.sb.ws) ,
       ||{
         WSSep{
           ws1: ws1, ws2: ws2
@@ -192,23 +193,23 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(pub val<&Parser<'a>, &'a str, Value>, self,
-    alt_m!(self,
-      complete_m!!(array)        => {|arr|   Value::Array(Box::new(arr))}      |
-      complete_m!!(inline_table) => {|it|    Value::InlineTable(Box::new(it))} |
-      complete_m!!(date_time)    => {|dt|    Value::DateTime(dt)}              |
-      complete_m!!(float)        => {|flt|   Value::Float(flt)}                |
-      complete_m!!(integer)      => {|int|   Value::Integer(int)}              |
-      complete_m!!(boolean)      => {|b|     Value::Boolean(b)}                |
-      complete_m!!(string)       => {|s|     s}
+  method!(pub val<&'a mut Parser<'a>, &'a str, Value>, self, [(self, sb)],
+    alt!(
+      complete!(call_rc!(self.sb.array))        => {|arr|   Value::Array(Box::new(arr))}      |
+      complete!(call_rc!(self.sb.inline_table)) => {|it|    Value::InlineTable(Box::new(it))} |
+      complete!(call_rc!(self.sb.date_time))    => {|dt|    Value::DateTime(dt)}              |
+      complete!(call_rc!(self.sb.float))        => {|flt|   Value::Float(flt)}                |
+      complete!(call_rc!(self.sb.integer))      => {|int|   Value::Integer(int)}              |
+      complete!(call_rc!(self.sb.boolean))      => {|b|     Value::Boolean(b)}                |
+      complete!(call_rc!(self.sb.string))       => {|s|     s}
     )
   );
 
-  method!(pub keyval<&Parser<'a>,&'a str, KeyVal>, self,
-    chain_m!(self,
-      key: key        ~
-       ws: keyval_sep ~
-      val: val        ,
+  method!(pub keyval<&'a mut Parser<'a>,&'a str, KeyVal>, self, [(self, sb)],
+    chain!(
+      key: call_rc!(self.sb.key)        ~
+       ws: call_rc!(self.sb.keyval_sep) ~
+      val: call_rc!(self.sb.val)        ,
       || {
         KeyVal{
           key: key, keyval_sep: ws, val: val
