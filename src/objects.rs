@@ -6,21 +6,21 @@ use parser::{Parser, count_lines};
 
 impl<'a> Parser<'a> {
   // Table
-  method!(pub table<&'a mut Parser<'a>,&'a str, TableType>, self, [(self, sb)],
+  method!(pub table<&'a mut Parser<'a>, TableType>, self, rcs,
     alt!(
-      complete!(call_rc!(self.sb.array_table)) |
-      complete!(call_rc!(self.sb.std_table))
+      complete!(call_rc!(rcs.array_table)) |
+      complete!(call_rc!(rcs.std_table))
     )
   );
 
-  method!(table_subkeys<&'a mut Parser<'a>,&'a str, Vec<WSKeySep> >, self, [(self, sb)], many0!(call_rc!(self.sb.table_subkey)));
+  method!(table_subkeys<&'a mut Parser<'a>, Vec<WSKeySep> >, self, rcs, many0!(call_rc!(rcs.table_subkey)));
 
-  method!(table_subkey<&'a mut Parser<'a>,&'a str, WSKeySep>, self, [(self, sb)],
+  method!(table_subkey<&'a mut Parser<'a>, WSKeySep>, self, rcs,
     chain!(
-      ws1: call_rc!(self.sb.ws)         ~
+      ws1: call_rc!(rcs.ws)         ~
            tag_s!(".")~
-      ws2: call_rc!(self.sb.ws)         ~
-      key: call_rc!(self.sb.key)        ,
+      ws2: call_rc!(rcs.ws)         ~
+      key: call_rc!(rcs.key)        ,
       ||{
         WSKeySep{
           ws: WSSep{
@@ -32,13 +32,13 @@ impl<'a> Parser<'a> {
     )
   );
   // Standard Table
-  method!(std_table<&'a mut Parser<'a>,&'a str, TableType>, self, [(self, sb)],
+  method!(std_table<&'a mut Parser<'a>, TableType>, self, rcs,
     chain!(
            tag_s!("[")    ~
-      ws1: call_rc!(self.sb.ws)             ~
-      key: call_rc!(self.sb.key)            ~
-  subkeys: call_rc!(self.sb.table_subkeys)  ~
-      ws2: call_rc!(self.sb.ws)             ~
+      ws1: call_rc!(rcs.ws)             ~
+      key: call_rc!(rcs.key)            ~
+  subkeys: call_rc!(rcs.table_subkeys)  ~
+      ws2: call_rc!(rcs.ws)             ~
            tag_s!("]")    ,
       ||{
         TableType::Standard(Table{
@@ -52,16 +52,16 @@ impl<'a> Parser<'a> {
   );
 
   // Array Table
-  method!(array_table<&'a mut Parser<'a>,&'a str, TableType>, self, [(self, sb)],
+  method!(array_table<&'a mut Parser<'a>, TableType>, self, rcs,
     chain!(
            tag_s!("[[")   ~
-      ws1: call_rc!(self.sb.ws)             ~
-      key: call_rc!(self.sb.key)            ~
-  subkeys: call_rc!(self.sb.table_subkeys)  ~
-      ws2: call_rc!(self.sb.ws)             ~
+      ws1: call_rc!(rcs.ws)             ~
+      key: call_rc!(rcs.key)            ~
+  subkeys: call_rc!(rcs.table_subkeys)  ~
+      ws2: call_rc!(rcs.ws)             ~
            tag_s!("]]")   ,
       ||{
-        *get_field!(self.sb).last_table.borrow_mut() = key;
+        *rcs.borrow_mut().last_table.borrow_mut() = key;
         TableType::Array(Table{
           ws: WSSep{
             ws1: ws1, ws2: ws2
@@ -73,11 +73,11 @@ impl<'a> Parser<'a> {
   );
 
   // Array
-  method!(array_sep<&'a mut Parser<'a>,&'a str, WSSep>, self, [(self, sb)],
+  method!(array_sep<&'a mut Parser<'a>, WSSep>, self, rcs,
     chain!(
-      ws1: call_rc!(self.sb.ws)         ~
+      ws1: call_rc!(rcs.ws)         ~
            tag_s!(",")~
-      ws2: call_rc!(self.sb.ws)         ,
+      ws2: call_rc!(rcs.ws)         ,
       ||{
         WSSep{ws1: ws1, ws2: ws2
         }
@@ -85,25 +85,25 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(ws_newline<&'a mut Parser<'a>,&'a str, &'a str>, self,
+  method!(ws_newline<&'a mut Parser<'a>, &'a str>, self, rcs,
     chain!(
    string: re_find!("^( |\t|\n|(\r\n))*"),
       ||{ string}
     )
    );
 
-  method!(ws_newlines<&'a mut Parser<'a>,&'a str, &'a str>, self, [(self, sb)],
+  method!(ws_newlines<&'a mut Parser<'a>, &'a str>, self, rcs,
     chain!(
    string: re_find!("^(\n|(\r\n))( |\t|\n|(\r\n))*"),
-      ||{get_field!(self.sb).line_count.set(get_field!(self.sb).line_count.get() + count_lines(string)); string}
+      ||{rcs.borrow_mut().line_count.set(rcs.borrow_mut().line_count.get() + count_lines(string)); string}
     )
   );
 
-  method!(comment_nl<&'a mut Parser<'a>,&'a str, CommentNewLines>, self, [(self, sb)],
+  method!(comment_nl<&'a mut Parser<'a>, CommentNewLines>, self, rcs,
     chain!(
-   prewsnl: call_rc!(self.sb.ws_newline)  ~
-   comment: call_rc!(self.sb.comment)     ~
-  newlines: call_rc!(self.sb.ws_newlines) ,
+   prewsnl: call_rc!(rcs.ws_newline)  ~
+   comment: call_rc!(rcs.comment)     ~
+  newlines: call_rc!(rcs.ws_newlines) ,
       ||{
         CommentNewLines{
           pre_ws_nl: prewsnl, comment: comment, newlines: newlines
@@ -112,21 +112,21 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(comment_or_nl<&'a mut Parser<'a>,&'a str, CommentOrNewLines>, self, [(self, sb)],
+  method!(comment_or_nl<&'a mut Parser<'a>, CommentOrNewLines>, self, rcs,
     alt!(
-      complete!(call_rc!(self.sb.comment_nl))   => {|com| CommentOrNewLines::Comment(com)} |
-      complete!(call_rc!(self.sb.ws_newlines))  => {|nl|  CommentOrNewLines::NewLines(nl)}
+      complete!(call_rc!(rcs.comment_nl))   => {|com| CommentOrNewLines::Comment(com)} |
+      complete!(call_rc!(rcs.ws_newlines))  => {|nl|  CommentOrNewLines::NewLines(nl)}
     )
   );
 
   // TODO: Redo this with array_sep wrapped in a complete!() ?
-  method!(array_value<&'a mut Parser<'a>,&'a str, ArrayValue>, self, [(self, sb)],
+  method!(array_value<&'a mut Parser<'a>, ArrayValue>, self, rcs,
     alt!(
       complete!(
         chain!(
-          val: call_rc!(self.sb.val)                        ~
-    array_sep: call_rc!(self.sb.array_sep)                  ~
-    comment_nl: complete!(call_rc!(self.sb.comment_or_nl)) ,
+          val: call_rc!(rcs.val)                        ~
+    array_sep: call_rc!(rcs.array_sep)                  ~
+    comment_nl: complete!(call_rc!(rcs.comment_or_nl)) ,
           ||{
             ArrayValue{
               val: val,
@@ -138,8 +138,8 @@ impl<'a> Parser<'a> {
       ) |
       complete!(
         chain!(
-          val: call_rc!(self.sb.val)                        ~
-    comment_nl: complete!(call_rc!(self.sb.comment_or_nl)) ,
+          val: call_rc!(rcs.val)                        ~
+    comment_nl: complete!(call_rc!(rcs.comment_or_nl)) ,
           ||{
             ArrayValue{
               val: val,
@@ -152,9 +152,9 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(array_values<&'a mut Parser<'a>,&'a str, Vec<ArrayValue> >, self, [(self, sb)],
+  method!(array_values<&'a mut Parser<'a>, Vec<ArrayValue> >, self, rcs,
     chain!(
-     vals: many0!(call_rc!(self.sb.array_value)) ,
+     vals: many0!(call_rc!(rcs.array_value)) ,
      ||{let mut tmp = vec![];
         tmp.extend(vals);
         tmp
@@ -162,12 +162,12 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(pub array<&'a mut Parser<'a>,&'a str, Array>, self, [(self, sb)],
+  method!(pub array<&'a mut Parser<'a>, Array>, self, rcs,
     chain!(
               tag_s!("[")   ~
-         ws1: call_rc!(self.sb.ws_newline)    ~
-  array_vals: call_rc!(self.sb.array_values) ~
-         ws2: call_rc!(self.sb.ws)            ~
+         ws1: call_rc!(rcs.ws_newline)    ~
+  array_vals: call_rc!(rcs.array_values) ~
+         ws2: call_rc!(rcs.ws)            ~
               tag_s!("]")   ,
       ||{
         Array{
@@ -178,11 +178,11 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(table_keyval<&'a mut Parser<'a>, &'a str, TableKeyVal>, self, [(self, sb)],
+  method!(table_keyval<&'a mut Parser<'a>, TableKeyVal>, self, rcs,
         chain!(
-          ws1: call_rc!(self.sb.ws)     ~
-       keyval: call_rc!(self.sb.keyval) ~
-          ws2: call_rc!(self.sb.ws)     ,
+          ws1: call_rc!(rcs.ws)     ~
+       keyval: call_rc!(rcs.keyval) ~
+          ws2: call_rc!(rcs.ws)     ,
           ||{
             TableKeyVal{
               keyval: keyval,
@@ -192,14 +192,14 @@ impl<'a> Parser<'a> {
         )
   );
 
-  method!(inline_table_keyvals_non_empty<&'a mut Parser<'a>,&'a str, Vec<TableKeyVal> >, self, [(self, sb)], separated_list!(tag_s!(","), call_rc!(self.sb.table_keyval)));
+  method!(inline_table_keyvals_non_empty<&'a mut Parser<'a>, Vec<TableKeyVal> >, self, rcs, separated_list!(tag_s!(","), call_rc!(rcs.table_keyval)));
 
-  method!(pub inline_table<&'a mut Parser<'a>,&'a str, InlineTable>, self, [(self, sb)],
+  method!(pub inline_table<&'a mut Parser<'a>, InlineTable>, self, rcs,
     chain!(
            tag_s!("{")                                ~
-      ws1: call_rc!(self.sb.ws)                                         ~
-  keyvals: complete!(call_rc!(self.sb.inline_table_keyvals_non_empty))? ~
-      ws2: call_rc!(self.sb.ws)                                         ~
+      ws1: call_rc!(rcs.ws)                                         ~
+  keyvals: complete!(call_rc!(rcs.inline_table_keyvals_non_empty))? ~
+      ws2: call_rc!(rcs.ws)                                         ~
            tag_s!("}")                                ,
           ||{
             InlineTable{

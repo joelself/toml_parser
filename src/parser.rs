@@ -6,6 +6,8 @@ use std::thread;
 use nom::IResult;
 use ast::structs::{Toml};
 use types::HashValue;
+use nom;
+use std::any::Any;
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
 named!(all_lines<&str, Vec<&str> >, many0!(full_line));
@@ -24,8 +26,7 @@ pub struct Parser<'a> {
 	pub leftover: RefCell<&'a str>,
 	pub line_count: Cell<u64>,
 	pub last_table: RefCell<&'a str>,
-	pub sb: Option<RefMut<'a, &'a mut Parser<'a>>>,
-	pub rc: Option<RefCell<&'a mut Parser<'a>>>,
+	pub input: &'a str,
 }
 
 impl<'a> Default for Parser<'a> {
@@ -36,8 +37,7 @@ impl<'a> Default for Parser<'a> {
     	leftover: RefCell::new(""),
     	line_count: Cell::new(0u64),
     	last_table: RefCell::new(""),
-    	sb: Option::None,
-    	rc: Option::None,
+    	input: "",
     }
   }
 }
@@ -47,11 +47,13 @@ impl<'a> Parser<'a> {
 	pub fn new<'b>() -> Parser<'a> {
 		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: RefCell::new(HashMap::new()),
 						leftover: RefCell::new(""), line_count: Cell::new(0),
-						last_table: RefCell::new(""), sb: Option::None, rc: Option::None}
+						last_table: RefCell::new(""), input: ""}
 	}
 
 	pub fn parse(self: &'a mut Parser<'a>, input: &'a str) {
-		let mut res = self.toml(input);
+		self.input = input;
+		self.toml();
+		let mut res = self.result;
 		match res {
 			IResult::Done(i, o) => {
 				*self.root.borrow_mut() = o;
