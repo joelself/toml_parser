@@ -1,80 +1,24 @@
 use ast::structs::{Toml, NLExpression, Expression, WSSep};
-use nom::eof;
-use parser::Parser;
+use parser::{Parser, ParseData};
 
-impl<'a> Parser<'a> {
-//   method!(pub toml<&'a mut Parser<'a>, &'a str, Toml>, self, [(self, sb)],
-//     chain!(
-//       expr: call_rc!(self.sb.expression)    ~
-//   nl_exprs: call_rc!(self.sb.nl_expressions),
-//       ||{
-//         let mut tmp = vec![NLExpression{ nl: "", expr: expr}];
-//         tmp.extend(nl_exprs); Toml{ exprs: tmp}
-//       }
-//     )
-//   );
-        pub fn toml(self: &'b mut Parser<'a>, i: &'a str)
-         -> ::nom::IResult<&'a str, Toml> {
-            use std::cell::RefCell;
-            self.rc = Option::Some(RefCell::new(self));
-            {
-                {
-                    use nom::InputLength;
-                    match { let res = self.rc.unwrap().borrow_mut().expression(i); res } {
-                        ::nom::IResult::Error(e) => ::nom::IResult::Error(e),
-                        ::nom::IResult::Incomplete(::nom::Needed::Unknown) =>
-                        ::nom::IResult::Incomplete(::nom::Needed::Unknown),
-                        ::nom::IResult::Incomplete(::nom::Needed::Size(i)) =>
-                        ::nom::IResult::Incomplete(::nom::Needed::Size(0usize
-                                                                           +
-                                                                           i)),
-                        ::nom::IResult::Done(i, o) => {
-                            let expr = o;
-                            match {
-                                      let res =
-                                          self.rc.unwrap().borrow_mut().nl_expressions(i);
-                                      res
-                                  } {
-                                ::nom::IResult::Error(e) =>
-                                ::nom::IResult::Error(e),
-                                ::nom::IResult::Incomplete(::nom::Needed::Unknown)
-                                =>
-                                ::nom::IResult::Incomplete(::nom::Needed::Unknown),
-                                ::nom::IResult::Incomplete(::nom::Needed::Size(p))
-                                =>
-                                ::nom::IResult::Incomplete(::nom::Needed::Size(0usize
-                                                                                   +
-                                                                                   ((i).input_len()
-                                                                                        -
-                                                                                        i.input_len())
-                                                                                   +
-                                                                                   p)),
-                                ::nom::IResult::Done(i, o) => {
-                                    let nl_exprs = o;
-                                    ::nom::IResult::Done(i,
-                                                         (|| {
-                                                             let mut tmp =
-                                                                 <[_]>::into_vec(::std::boxed::Box::new([NLExpression{nl:
-                                                                                                                          "",
-                                                                                                                      expr:
-                                                                                                                          expr,}]));
-                                                             tmp.extend(nl_exprs);
-                                                             Toml{exprs: tmp,}
-                                                         })())
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-  method!(nl_expressions<&'a mut Parser<'a>, &'a str, Vec<NLExpression> >, self, [(self, sb)], many0!(call_rc!(self.sb.nl_expression)));
-
-  method!(nl_expression<&'a mut Parser<'a>, &'a str, NLExpression>, self, [(self, sb)],
+impl<'a> Parser {
+  named!(pub toml<&'a str, Toml<'a>, &mut ParseData<'a> >, data,
     chain!(
-       nl: call_rc!(self.sb.newline)    ~
-     expr: call_rc!(self.sb.expression) ,
+      expr: call_d!(Parser::expression, data)    ~
+  nl_exprs: call_d!(Parser::nl_expressions, data),
+      ||{
+        let mut tmp = vec![NLExpression{ nl: "", expr: expr}];
+        tmp.extend(nl_exprs); Toml{ exprs: tmp}
+      }
+    )
+  );
+
+  named!(nl_expressions<&'a str, Vec<NLExpression<'a>>, &mut ParseData<'a> >, data, many0!(call_d!(Parser::nl_expression, data)));
+
+  named!(nl_expression<&'a str, NLExpression<'a>, &mut ParseData<'a> >, data,
+    chain!(
+       nl: call_d!(Parser::newline, data)    ~
+     expr: call_d!(Parser::expression, data) ,
       ||{
         NLExpression{
           nl: nl, expr: expr,
@@ -84,18 +28,18 @@ impl<'a> Parser<'a> {
   );
 
   // Expression
-  method!(expression<&'a mut Parser<'a>, &'a str,  Expression>, self, [(self, sb)],
+  named!(expression<&'a str,  Expression<'a>, &mut ParseData<'a> >, data,
     alt!(
-      complete!(call_rc!(self.sb.table_comment))  |
-      complete!(call_rc!(self.sb.keyval_comment)) |
-      complete!(call_rc!(self.sb.ws_comment))     |
-      complete!(call_rc!(self.sb.ws_expr))
+      complete!(call_d!(Parser::table_comment, data))  |
+      complete!(call_d!(Parser::keyval_comment, data)) |
+      complete!(call_d!(Parser::ws_comment, data))     |
+      complete!(call_d!(Parser::ws_expr, data))
     )
   );
 
-  method!(ws_expr<&'a mut Parser<'a>, &'a str, Expression>, self, [(self, sb)],
+  named!(ws_expr<&'a str, Expression<'a>, &mut ParseData<'a> >, data,
     chain!(
-      ws: call_rc!(self.sb.ws),
+      ws: call_d!(Parser::ws, data),
       ||{
         Expression{
           ws: WSSep{
@@ -107,12 +51,12 @@ impl<'a> Parser<'a> {
       }
     ));
 
-  method!(table_comment<&'a mut Parser<'a>, &'a str, Expression>, self, [(self, sb)],
+  named!(table_comment<&'a str, Expression<'a>, &mut ParseData<'a> >, data,
     chain!(
-      ws1: call_rc!(self.sb.ws)                 ~
-    table: call_rc!(self.sb.table)              ~
-      ws2: call_rc!(self.sb.ws)                 ~
-  comment: complete!(call_rc!(self.sb.comment))?,
+      ws1: call_d!(Parser::ws, data)                 ~
+    table: call_d!(Parser::table, data)              ~
+      ws2: call_d!(Parser::ws, data)                 ~
+  comment: complete!(call_d!(Parser::comment, data))?,
       ||{
         Expression{
           ws: WSSep{
@@ -125,12 +69,12 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(keyval_comment<&'a mut Parser<'a>, &'a str, Expression>, self, [(self, sb)],
+  named!(keyval_comment<&'a str, Expression<'a>, &mut ParseData<'a> >, data,
     chain!(
-      ws1: call_rc!(self.sb.ws)       ~
-   keyval: call_rc!(self.sb.keyval)   ~
-      ws2: call_rc!(self.sb.ws)       ~
-  comment: complete!(call_rc!(self.sb.comment)) ? ,
+      ws1: call_d!(Parser::ws, data)       ~
+   keyval: call_d!(Parser::keyval, data)   ~
+      ws2: call_d!(Parser::ws, data)       ~
+  comment: complete!(call_d!(Parser::comment, data)) ? ,
       ||{
         Expression{
           ws: WSSep{
@@ -143,10 +87,10 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(ws_comment<&'a mut Parser<'a>, &'a str, Expression>, self, [(self, sb)],
+  named!(ws_comment<&'a str, Expression<'a>, &mut ParseData<'a> >, data,
     chain!(
-       ws: call_rc!(self.sb.ws)     ~
-  comment: call_rc!(self.sb.comment),
+       ws: call_d!(Parser::ws, data)     ~
+  comment: call_d!(Parser::comment, data),
       ||{
         Expression{
           ws: WSSep{
@@ -163,7 +107,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use parser::Parser;
+  use Parser;
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
                      TableType, Value, NLExpression, StrType, ArrayValue, Toml,
                      Time, Array};
@@ -172,7 +116,7 @@ mod test {
 
   #[test]
   fn test_toml() {
-    let p = Parser::new();
+    let p = new();
     assert_eq!(p.toml(
 r#"# Tλïƨ ïƨ á TÓM£ δôçú₥èñƭ.
 
@@ -304,7 +248,7 @@ enabled = true"#), Done("",
 
   #[test]
   fn test_nl_expressions() {
-    let p = Parser::new();
+    let p = new();
     // allow for zero expressions
     assert_eq!(p.nl_expressions("aoeunth £ôřè₥ ïƥƨú₥ doℓôř ƨïƭ amet, çônƨèçƭeƭuř áδïƥïscïñϱ èℓïƭ"),
       Done(
@@ -375,7 +319,7 @@ enabled = true"#), Done("",
 // named!(nl_expression<&'a str, NLExpression>,
   #[test]
   fn test_nl_expression() {
-    let p = Parser::new();
+    let p = new();
     assert_eq!(p.nl_expression("\r\n   SimpleKey = 1_2_3_4_5     #  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£\r\n"),
       Done("\r\n", NLExpression{
         nl: "\r\n", expr: Expression{
@@ -395,7 +339,7 @@ enabled = true"#), Done("",
 
   #[test]
   fn test_expression() {
-    let p = Parser::new();
+    let p = new();
     assert_eq!(p.expression(" \t[\"δřáƒƭ\".THISKEY  . \tkeythethird] \t#Mèƨƨáϱè Rèƥℓïèδ\n"),
       Done("\n",
         Expression{
@@ -444,7 +388,7 @@ enabled = true"#), Done("",
 
   #[test]
   fn test_ws_expr() {
-    let p = Parser::new();
+    let p = new();
     assert_eq!(p.ws_expr("  \t \t \n"), Done("\n", 
       Expression{
         ws: WSSep{
@@ -458,7 +402,7 @@ enabled = true"#), Done("",
 
   #[test]
   fn test_table_comment() {
-    let p = Parser::new();
+    let p = new();
     assert_eq!(p.table_comment(" [table.\"ƭáβℓè\"] #úñïçôřñřôβôƭ\n"),
       Done("\n",
         Expression{
@@ -476,7 +420,7 @@ enabled = true"#), Done("",
 
   #[test]
   fn test_keyval_comment() {
-    let p = Parser::new();
+    let p = new();
     assert_eq!(p.keyval_comment(" \"Tôƭáℓℓ¥\" = true\t#λèřè ïƨ ₥¥ çô₥₥èñƭ\n"),
       Done("\n",
         Expression{
@@ -495,7 +439,7 @@ enabled = true"#), Done("",
 
   #[test]
   fn test_ws_comment() {
-    let p = Parser::new();
+    let p = new();
     assert_eq!(p.ws_comment(" \t #This is RÂNÐÓM §TRÌNG\n"), Done("\n",
       Expression{
         ws: WSSep{ws1: " \t ", ws2: ""},

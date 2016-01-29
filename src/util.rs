@@ -1,27 +1,27 @@
 use ast::structs::Comment;
-use parser::Parser;
+use parser::{Parser, ParseData};
 
-fn not_eol(chr: char) -> bool {
-  chr as u32 == 0x09 || (chr as u32 >= 0x20 && chr as u32 <= 0x10FFF)
-}
+  fn not_eol(chr: char) -> bool {
+    chr as u32 == 0x09 || (chr as u32 >= 0x20 && chr as u32 <= 0x10FFF)
+  }
 
-impl<'a> Parser<'a> {
+impl<'a> Parser {
   // Newline
-  method!(pub newline<&'a mut Parser<'a>,&'a str, &'a str>, self, [(self, sb)],
+  named!(pub newline<&'a str, &'a str, &mut ParseData<'a> >, data,
     chain!(
    string: alt!(
         complete!(tag_s!("\r\n")) |
         complete!(tag_s!("\n"))
       ),
-      ||{get_field!(self.sb).line_count.set(get_field!(self.sb).line_count.get() + 1); string}
+      ||{data.line_count.set(data.line_count.get() + 1); string}
     )
   );
 
   // Whitespace
-  method!(pub ws<&'a mut Parser<'a>,&'a str, &'a str>, self, re_find!("^( |\t)*"));
+  named!(pub ws<&'a str, &'a str, &mut ParseData<'a> >, data, re_find!("^( |\t)*"));
 
   // Comment
-  method!(pub comment<&'a mut Parser<'a>,&'a str, Comment>, self,
+  named!(pub comment<&'a str, Comment<'a>, &mut ParseData<'a> >, data,
     chain!(
                tag_s!("#")            ~
   comment_txt: take_while_s!(not_eol) ,

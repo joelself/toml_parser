@@ -1,9 +1,9 @@
 extern crate tomllib;
-use tomllib::parser::Parser;
+use tomllib::parser::{Parser, ParseData};
     //println!("Hello in English: {}", tomllib::ast::structs::hello());
 fn main() {
-	let mut parser = Parser::new();
-	parser.parse(r#"# This is a TOML document.
+  let mut data = ParseData::default();
+	Parser::parse(r#"# This is a TOML document.
 
 title = "TOML Example"
 
@@ -35,6 +35,6 @@ data = [ ["gamma", "delta"], [1, 2] ]
 hosts = [
   "alpha",
   "omega"
-]"#);
-	println!("{}", parser);
+]"#, &mut data);
+	println!("{}", data);
  }
