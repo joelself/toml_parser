@@ -3,7 +3,7 @@ use tomllib::parser::Parser;
     //println!("Hello in English: {}", tomllib::ast::structs::hello());
 fn main() {
 	let mut parser = Parser::new();
-	parser.parse(r#"# This is a TOML document.
+	let parser = parser.parse(r#"# This is a TOML document.
 
 title = "TOML Example"
 
