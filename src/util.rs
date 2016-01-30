@@ -7,6 +7,7 @@ fn not_eol(chr: char) -> bool {
 
 impl<'a> Parser<'a> {
   // Newline
+  // TODO: Remove the chain! macro
   method!(pub newline<Parser<'a>, &'a str,  &'a str>, self,
     chain!(
    string: alt!(
@@ -36,27 +37,28 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
-  use nom::IResult::Done;
+  use nomplusplus::IResult::Done;
   use parser::Parser;
   use ast::structs::Comment;
 
   #[test]
   fn test_newline() {
-    let p = Parser::new();
-    assert_eq!(p.newline("\r\n"), Done("", "\r\n"));
-    assert_eq!(p.newline("\n"), Done("", "\n"));
+    let mut p = Parser::new();
+    assert_eq!(p.newline("\r\n").1, Done("", "\r\n"));
+    p = Parser::new();
+    assert_eq!(p.newline("\n").1, Done("", "\n"));
   }
 
   #[test]
   fn test_ws() {
     let p = Parser::new();
-    assert_eq!(p.ws(" \t  "), Done("", " \t  "));
+    assert_eq!(p.ws(" \t  ").1, Done("", " \t  "));
   }
 
   #[test]
   fn test_comment() {
     let p = Parser::new();
-    assert_eq!(p.comment("# Hèřè'ƨ ₥¥ çô₥₥èñƭ. -?#word"),
+    assert_eq!(p.comment("# Hèřè'ƨ ₥¥ çô₥₥èñƭ. -?#word").1,
       Done("", Comment{text: " Hèřè'ƨ ₥¥ çô₥₥èñƭ. -?#word"}));
   }
 }

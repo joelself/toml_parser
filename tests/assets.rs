@@ -2,42 +2,74 @@ use std::fs;
 use std::fs::{DirEntry,File};
 extern crate tomllib;
 use tomllib::parser::Parser;
-use std::io::{Read, Result};
+use std::io::{Read, Result, BufReader};
+use std::io::Error;
 
-fn process_toml_file<'a>(entry: DirEntry) -> Result<File> {
-	// TODO: Read file => parse file => write file => compare file to original
-    let path = entry.path();
-    let mut f: File = try!(File::open(path.to_str()
-                        .expect("Unable to convert file PathBuffer to string.")))
-                        .expect("Unable to open file path.");
-    let mut contents = String::new();
-    try!(file.read_to_string(&mut contents));
+fn verify(input: String) -> (bool, Option<(String, String)>) {
+    let input_copy = input.clone();
     let parser = Parser::new();
-    parser.parse(&contents[..]);
-    println!("{}", parser);
-    Some("Remove me")
+    let parser = parser.parse(&input_copy);
+    let result = format!("{}", parser);
+    if result != input  {
+        return (false, Some((input, result)));
+    } else {
+        return (true, None);
+    }
+}
+
+fn do_nothing(_unused: Error) {
 }
 
 #[test]
 fn test_all_assets() {
 	let paths = fs::read_dir("./assets/").unwrap();
-    let mut failed: Vec<&str> = vec![];
+    let mut failed: Vec<(String, Option<(String, String)>)> = vec![];
 
     for path in paths {
-    	let file = path.unwrap();
-    	if file.file_type().unwrap().is_file() {
-    		let path = &*file.path();
-    		match path.extension() {
-    			Some(ext) if ext.to_str() == Some("toml") => {
-    				match process_toml_file(file) {
-    					Some(ref name) 	=> failed.push(name),
-    					_	 			=> {}
-    				};
-    			},
-    			_ => {} 
-    		};
-            break; // Just see if this works
-    	}
+        let dir_entry = path.unwrap(); // DirEntry
+        if dir_entry.file_type().unwrap().is_file() {
+            let filename_osstr = dir_entry.file_name();
+            let filename = filename_osstr.to_str().
+                            unwrap_or_else(|| "").to_string();
+            if filename == "" {
+                failed.push((format!("{:?}", filename_osstr), None));
+                continue;
+            }
+            let pathbuf = dir_entry.path();
+            let filepath = pathbuf.to_str().unwrap_or_else(|| {failed.push((filename.clone(), None)); ""});
+            if filepath == "" {
+                continue;
+            }
+            let file_res = File::open(filepath);
+            if !file_res.is_ok() {
+                failed.push((filename.clone(), None));
+                continue;
+            }
+            let file = file_res.unwrap();
+            let mut contents = BufReader::new(&file);
+            let mut buffer = String::new();
+            if contents.read_to_string(&mut buffer).is_ok() {
+                let (success, in_out) = verify(buffer);
+                if !success {
+                    failed.push((filename.clone(), in_out));
+                }
+            }
+            else {
+                failed.push((filename.clone(), None));
+            }
+        }
     }
-    // TODO: if failed is non-empty assert false with all the names of failed files
+    if failed.len() > 0 {
+        let mut panic_string = String::new();
+        for &(ref filename, ref in_out) in &failed {
+            let s;
+            match in_out {
+                &Some((ref input, ref output)) =>
+                {s = format!("Failed to correctly parse file \"{}\".\nExpected:\n\"{}\"\nGot:\n\"{}\"", filename, input, output)},
+                &None => {s = format!("Failed to correctly parse file \"{}\"",filename)}
+            }
+            panic_string.push_str(&s);
+        }
+        assert!(false, panic_string);
+    }
 }

@@ -105,7 +105,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
-  use nom::IResult::Done;
+  use nomplusplus::IResult::Done;
   use parser::Parser;
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
                      TableType, Value, NLExpression, StrType, ArrayValue, Toml,
@@ -129,7 +129,7 @@ dob = 1979-05-27T07:32:00-08:00 # Fïřƨƭ çℓáƨƨ δáƭèƨ
 server = "192.168.1.1"
 ports = [ 8001, 8001, 8002 ]
 connection_max = 5000
-enabled = true"#), Done("",
+enabled = true"#).1, Done("",
       Toml { exprs: vec![
         NLExpression {
           nl: "", expr: Expression {
@@ -247,14 +247,15 @@ enabled = true"#), Done("",
 
   #[test]
   fn test_nl_expressions() {
-    let p = Parser::new();
+    let mut p = Parser::new();
     // allow for zero expressions
-    assert_eq!(p.nl_expressions("aoeunth £ôřè₥ ïƥƨú₥ doℓôř ƨïƭ amet, çônƨèçƭeƭuř áδïƥïscïñϱ èℓïƭ"),
+    assert_eq!(p.nl_expressions("aoeunth £ôřè₥ ïƥƨú₥ doℓôř ƨïƭ amet, çônƨèçƭeƭuř áδïƥïscïñϱ èℓïƭ").1,
       Done(
         "aoeunth £ôřè₥ ïƥƨú₥ doℓôř ƨïƭ amet, çônƨèçƭeƭuř áδïƥïscïñϱ èℓïƭ", vec![]
       )
     );
-    assert_eq!(p.nl_expressions("\n[\"δřá\"]#Mèƨsaϱè\r\nkey=\"value\"#wλïƭeƨƥáçè\n"),
+    p = Parser::new();
+    assert_eq!(p.nl_expressions("\n[\"δřá\"]#Mèƨsaϱè\r\nkey=\"value\"#wλïƭeƨƥáçè\n").1,
       Done(
         "", vec![
           NLExpression{
@@ -296,7 +297,8 @@ enabled = true"#), Done("",
         ]
       )
     );
-    assert_eq!(p.nl_expressions("\n[[NODOTNET.\"NÓJÂVÂ\"]]"),
+    p = Parser::new();
+    assert_eq!(p.nl_expressions("\n[[NODOTNET.\"NÓJÂVÂ\"]]").1,
       Done(
         "", vec![
           NLExpression{
@@ -319,7 +321,7 @@ enabled = true"#), Done("",
   #[test]
   fn test_nl_expression() {
     let p = Parser::new();
-    assert_eq!(p.nl_expression("\r\n   SimpleKey = 1_2_3_4_5     #  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£\r\n"),
+    assert_eq!(p.nl_expression("\r\n   SimpleKey = 1_2_3_4_5     #  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£\r\n").1,
       Done("\r\n", NLExpression{
         nl: "\r\n", expr: Expression{
           ws: WSSep{ws1: "   ", ws2: "     "},
@@ -338,8 +340,8 @@ enabled = true"#), Done("",
 
   #[test]
   fn test_expression() {
-    let p = Parser::new();
-    assert_eq!(p.expression(" \t[\"δřáƒƭ\".THISKEY  . \tkeythethird] \t#Mèƨƨáϱè Rèƥℓïèδ\n"),
+    let mut p = Parser::new();
+    assert_eq!(p.expression(" \t[\"δřáƒƭ\".THISKEY  . \tkeythethird] \t#Mèƨƨáϱè Rèƥℓïèδ\n").1,
       Done("\n",
         Expression{
           ws: WSSep{ws1: " \t", ws2: " \t"},
@@ -353,7 +355,8 @@ enabled = true"#), Done("",
           comment: Some(Comment{text: "Mèƨƨáϱè Rèƥℓïèδ"})
         }
     ));
-    assert_eq!(p.expression("\t\t\t\"řúññïñϱôúƭôƒωôřδƨ\" = 0.1  #Â₥èřïçáñ Éжƥřèƨƨ\n"),
+    p = Parser::new();
+    assert_eq!(p.expression("\t\t\t\"řúññïñϱôúƭôƒωôřδƨ\" = 0.1  #Â₥èřïçáñ Éжƥřèƨƨ\n").1,
       Done("\n",
         Expression{
           ws: WSSep{ws1: "\t\t\t", ws2: "  "},
@@ -367,7 +370,8 @@ enabled = true"#), Done("",
           comment: Some(Comment{text: "Â₥èřïçáñ Éжƥřèƨƨ"})
         }
       ));
-    assert_eq!(p.expression("\t \t #Þℓèáƨè Ʋèřïƒ¥ Your áççôúñƭ\n"), Done("\n",
+    p = Parser::new();
+    assert_eq!(p.expression("\t \t #Þℓèáƨè Ʋèřïƒ¥ Your áççôúñƭ\n").1, Done("\n",
       Expression{
         ws: WSSep{ws1: "\t \t ", ws2: ""},
         keyval: None,
@@ -375,7 +379,8 @@ enabled = true"#), Done("",
         comment: Some(Comment{text: "Þℓèáƨè Ʋèřïƒ¥ Your áççôúñƭ"})
       }
     ));
-    assert_eq!(p.expression("\t  \t  \t\n"), Done("\n",
+    p = Parser::new();
+    assert_eq!(p.expression("\t  \t  \t\n").1, Done("\n",
       Expression{
         ws: WSSep{
           ws1: "\t  \t  \t",
@@ -388,7 +393,7 @@ enabled = true"#), Done("",
   #[test]
   fn test_ws_expr() {
     let p = Parser::new();
-    assert_eq!(p.ws_expr("  \t \t \n"), Done("\n", 
+    assert_eq!(p.ws_expr("  \t \t \n").1, Done("\n", 
       Expression{
         ws: WSSep{
           ws1: "  \t \t ",
@@ -402,7 +407,7 @@ enabled = true"#), Done("",
   #[test]
   fn test_table_comment() {
     let p = Parser::new();
-    assert_eq!(p.table_comment(" [table.\"ƭáβℓè\"] #úñïçôřñřôβôƭ\n"),
+    assert_eq!(p.table_comment(" [table.\"ƭáβℓè\"] #úñïçôřñřôβôƭ\n").1,
       Done("\n",
         Expression{
           ws: WSSep{ws1: " ", ws2: " "},
@@ -420,7 +425,7 @@ enabled = true"#), Done("",
   #[test]
   fn test_keyval_comment() {
     let p = Parser::new();
-    assert_eq!(p.keyval_comment(" \"Tôƭáℓℓ¥\" = true\t#λèřè ïƨ ₥¥ çô₥₥èñƭ\n"),
+    assert_eq!(p.keyval_comment(" \"Tôƭáℓℓ¥\" = true\t#λèřè ïƨ ₥¥ çô₥₥èñƭ\n").1,
       Done("\n",
         Expression{
           ws: WSSep{ws1: " ", ws2: "\t"},
@@ -439,7 +444,7 @@ enabled = true"#), Done("",
   #[test]
   fn test_ws_comment() {
     let p = Parser::new();
-    assert_eq!(p.ws_comment(" \t #This is RÂNÐÓM §TRÌNG\n"), Done("\n",
+    assert_eq!(p.ws_comment(" \t #This is RÂNÐÓM §TRÌNG\n").1, Done("\n",
       Expression{
         ws: WSSep{ws1: " \t ", ws2: ""},
         keyval: None,

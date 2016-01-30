@@ -84,6 +84,7 @@ impl<'a> Parser<'a> {
     )
   );
 
+  // TODO: remove the chain macro
   method!(ws_newline<Parser<'a>, &'a str, &'a str>, self,
     chain!(
    string: re_find!("^( |\t|\n|(\r\n))*"),
@@ -118,13 +119,13 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(comment_or_ws_or_nl<Parser<'a>, &'a str, CommentOrNewLines>, mut self,
-    alt!(
-      complete!(call_m!(self.comment_nl))   => {|com| CommentOrNewLines::Comment(com)} |
-      complete!(call_m!(self.ws_newlines))  => {|nl|  CommentOrNewLines::NewLines(nl)} |
-      complete!(call_m!(self.ws_newline))   => {|ws|  CommentOrNewLines::NewLines(ws)}
-    )
-  );
+  // method!(comment_or_ws_or_nl<Parser<'a>, &'a str, CommentOrNewLines>, mut self,
+  //   alt!(
+  //     complete!(call_m!(self.comment_nl))   => {|com| CommentOrNewLines::Comment(com)} |
+  //     complete!(call_m!(self.ws_newlines))  => {|nl|  CommentOrNewLines::NewLines(nl)} |
+  //     complete!(call_m!(self.ws_newline))   => {|ws|  CommentOrNewLines::NewLines(ws)}
+  //   )
+  // );
 
   // TODO: Redo this with array_sep wrapped in a complete!() ?
   method!(array_value<Parser<'a>, &'a str, ArrayValue>, mut self,
@@ -145,8 +146,8 @@ impl<'a> Parser<'a> {
       ) |
       complete!(
         chain!(
-          val: call_m!(self.val)                        ~
-    comment_nl: complete!(call_m!(self.comment_or_ws_or_nl)) ,
+          val: call_m!(self.val)                       ~
+    comment_nl: complete!(call_m!(self.comment_or_nl)) ,
           ||{
             ArrayValue{
               val: val,
@@ -174,7 +175,7 @@ impl<'a> Parser<'a> {
               tag_s!("[")   ~
          ws1: call_m!(self.ws_newline)    ~
   array_vals: call_m!(self.array_values) ~
-         ws2: call_m!(self.ws)            ~
+         ws2: call_m!(self.ws_newline)            ~
               tag_s!("]")   ,
       ||{
         Array{
@@ -220,26 +221,25 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
-  use nom::IResult::Done;
-  use super::{array, inline_table_keyvals_non_empty, inline_table, table_keyval,
-              array_values, comment_or_nl, ws_newlines, ws_newline, array_value,
-              array_sep, array_table, comment_nl, std_table, table_subkeys,
-              table_subkey, table};
+  use nomplusplus::IResult::Done;
   use ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
                      KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table,
                      TableType, Value, StrType};
   use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
+  use parser::Parser;
 
   #[test]
   fn test_table() {
-    assert_eq!(table("[ _underscore_ . \"-δáƨλèƨ-\" ]"), Done("",
+    let mut p = Parser::new();
+    assert_eq!(p.table("[ _underscore_ . \"-δáƨλèƨ-\" ]").1, Done("",
       TableType::Standard(Table{
         ws: WSSep{ws1: " ", ws2: " "}, key: "_underscore_", subkeys: vec![
           WSKeySep{ws: WSSep{ws1: " ", ws2: " "}, key: "\"-δáƨλèƨ-\""}
         ]
       })
     ));
-    assert_eq!(table("[[\t NumberOne\t.\tnUMBERtWO \t]]"), Done("",
+    p = Parser::new();
+    assert_eq!(p.table("[[\t NumberOne\t.\tnUMBERtWO \t]]").1, Done("",
       TableType::Array(Table{
         ws: WSSep{ws1: "\t ", ws2: " \t"}, key: "NumberOne", subkeys: vec![
           WSKeySep{ws: WSSep{ws1: "\t", ws2: "\t"}, key: "nUMBERtWO"}
@@ -250,14 +250,16 @@ mod test {
 
   #[test]
   fn test_table_subkey() {
-    assert_eq!(table_subkey("\t . \t\"áƭúƨôèλôñèƭúññèôúñôèƭú\""), Done("",
+    let p = Parser::new();
+    assert_eq!(p.table_subkey("\t . \t\"áƭúƨôèλôñèƭúññèôúñôèƭú\"").1, Done("",
       WSKeySep{ws: WSSep{ws1: "\t ", ws2: " \t"}, key: "\"áƭúƨôèλôñèƭúññèôúñôèƭú\""},
     ));
   }
 
   #[test]
   fn test_table_subkeys() {
-    assert_eq!(table_subkeys(" .\tAPPLE.MAC . \"ßÓÓK\""), Done("",
+    let p = Parser::new();
+    assert_eq!(p.table_subkeys(" .\tAPPLE.MAC . \"ßÓÓK\"").1, Done("",
       vec![
         WSKeySep{ws: WSSep{ws1: " ", ws2: "\t"}, key: "APPLE"},
         WSKeySep{ws: WSSep{ws1: "", ws2: ""}, key: "MAC"},
@@ -268,7 +270,8 @@ mod test {
 
   #[test]
   fn test_std_table() {
-    assert_eq!(std_table("[Dr-Pepper  . \"ƙè¥_TWÓ\"]"), Done("",
+    let p = Parser::new();
+    assert_eq!(p.std_table("[Dr-Pepper  . \"ƙè¥_TWÓ\"]").1, Done("",
       TableType::Standard(Table{
         ws: WSSep{ws1: "", ws2: ""}, key: "Dr-Pepper", subkeys: vec![
           WSKeySep{ws: WSSep{ws1: "  ", ws2: " "}, key: "\"ƙè¥_TWÓ\""}
@@ -279,7 +282,8 @@ mod test {
 
   #[test]
   fn test_array_table() {
-    assert_eq!(array_table("[[\"ƙè¥ôñè\"\t. key_TWO]]"), Done("",
+    let p = Parser::new();
+    assert_eq!(p.array_table("[[\"ƙè¥ôñè\"\t. key_TWO]]").1, Done("",
       TableType::Array(Table{
         ws: WSSep{ws1: "", ws2: ""}, key: "\"ƙè¥ôñè\"", subkeys: vec![
           WSKeySep{ws: WSSep{ws1: "\t", ws2: " "}, key: "key_TWO"}
@@ -290,22 +294,26 @@ mod test {
 
   #[test]
   fn test_array_sep() {
-    assert_eq!(array_sep("  ,  "), Done("", WSSep{ws1: "  ", ws2: "  "}));
+    let p = Parser::new();
+    assert_eq!(p.array_sep("  ,  ").1, Done("", WSSep{ws1: "  ", ws2: "  "}));
   }
 
   #[test]
   fn test_ws_newline() {
-    assert_eq!(ws_newline("\t\n\n"), Done("", "\t\n\n"));
+    let p = Parser::new();
+    assert_eq!(p.ws_newline("\t\n\n").1, Done("", "\t\n\n"));
   }
 
   #[test]
   fn test_ws_newlines() {
-    assert_eq!(ws_newlines("\n \t\n\r\n "), Done("", "\n \t\n\r\n "));
+    let p = Parser::new();
+    assert_eq!(p.ws_newlines("\n \t\n\r\n ").1, Done("", "\n \t\n\r\n "));
   }
 
   #[test]
   fn test_comment_nl() {
-    assert_eq!(comment_nl("\r\n\t#çô₥₥èñƭñèωℓïñè\n \n \n"), Done("",
+    let p = Parser::new();
+    assert_eq!(p.comment_nl("\r\n\t#çô₥₥èñƭñèωℓïñè\n \n \n").1, Done("",
       CommentNewLines{
         pre_ws_nl: "\r\n\t", comment: Comment{text: "çô₥₥èñƭñèωℓïñè"},
         newlines: "\n \n \n"
@@ -315,22 +323,32 @@ mod test {
 
   #[test]
   fn test_comment_or_nl() {
-    assert_eq!(comment_or_nl("#ωôřƙωôřƙ\n"), Done("",
+    let mut p = Parser::new();
+    assert_eq!(p.comment_or_nl("#ωôřƙωôřƙ\n").1, Done("",
       CommentOrNewLines::Comment(CommentNewLines{
         pre_ws_nl: "", comment: Comment{text: "ωôřƙωôřƙ"}, newlines: "\n"
       })
     ));
-    assert_eq!(comment_or_nl(" \t\n#ωôřƙωôřƙ\n \r\n"), Done("",
+    p = Parser::new();
+    assert_eq!(p.comment_or_nl(" \t\n#ωôřƙωôřƙ\n \r\n").1, Done("",
       CommentOrNewLines::Comment(CommentNewLines{
         pre_ws_nl: " \t\n", comment: Comment{text: "ωôřƙωôřƙ"}, newlines: "\n \r\n"
       })
     ));
-    assert_eq!(comment_or_nl("\n\t\r\n "), Done("", CommentOrNewLines::NewLines("\n\t\r\n ")));
+    p = Parser::new();
+    assert_eq!(p.comment_or_nl("\n\t\r\n ").1, Done("", CommentOrNewLines::NewLines("\n\t\r\n ")));
   }
+
+  // #[test]
+  // fn test_comment_or_ws_or_nl() {
+  //   let mut p = Parser::new();
+  //   assert_eq!(p.comment_or_ws_nl("   \t").1, Done("", CommentOrNewLines::NewLines("   \t")));
+  // }
 
   #[test]
   fn test_array_value() {
-    assert_eq!(array_value("54.6, \n#çô₥₥èñƭ\n\n"),
+    let mut p = Parser::new();
+    assert_eq!(p.array_value("54.6, \n#çô₥₥èñƭ\n\n").1,
       Done("",ArrayValue{
         val: Value::Float("54.6"), array_sep: Some(WSSep{
           ws1: "", ws2: " "
@@ -340,12 +358,14 @@ mod test {
         }))
       })
     );
-    assert_eq!(array_value("\"ƨƥáϱλèƭƭï\""),
+    p = Parser::new();
+    assert_eq!(p.array_value("\"ƨƥáϱλèƭƭï\"").1,
       Done("",ArrayValue{
         val: Value::String("ƨƥáϱλèƭƭï", StrType::Basic), array_sep: None, comment_nl: None
       })
     );
-    assert_eq!(array_value("44_9 , "),
+    p = Parser::new();
+    assert_eq!(p.array_value("44_9 , ").1,
       Done("",ArrayValue{
         val: Value::Integer("44_9"), array_sep: Some(WSSep{
           ws1: " ", ws2: " "
@@ -357,14 +377,16 @@ mod test {
 
   #[test]
   fn test_array_values() {
-    assert_eq!(array_values("1, 2, 3"), Done("", vec![
+    let mut p = Parser::new();
+    assert_eq!(p.array_values("1, 2, 3").1, Done("", vec![
       ArrayValue{val: Value::Integer("1"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
       comment_nl: None},
       ArrayValue{val: Value::Integer("2"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
       comment_nl: None},
       ArrayValue{val: Value::Integer("3"), array_sep: None, comment_nl: None}
     ]));
-    assert_eq!(array_values("1, 2, #çô₥₥èñƭ\n3, "), Done("", vec![
+    p = Parser::new();
+    assert_eq!(p.array_values("1, 2, #çô₥₥èñƭ\n3, ").1, Done("", vec![
       ArrayValue{val: Value::Integer("1"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
       comment_nl: None},
       ArrayValue{val: Value::Integer("2"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
@@ -378,7 +400,8 @@ mod test {
 
   #[test]
   fn test_non_nested_array() {
-    assert_eq!(array("[2010-10-10T10:10:10.33Z, 1950-03-30T21:04:14.123+05:00]"),
+    let p = Parser::new();
+    assert_eq!(p.array("[2010-10-10T10:10:10.33Z, 1950-03-30T21:04:14.123+05:00]").1,
       Done("", Array {
         values: vec![ArrayValue {
           val: Value::DateTime(DateTime {
@@ -410,7 +433,8 @@ mod test {
 
   #[test]
   fn test_nested_array() {
-    assert_eq!(array("[[3,4], [4,5], [6]]"),
+    let p = Parser::new();
+    assert_eq!(p.array("[[3,4], [4,5], [6]]").1,
       Done("", Array{
         values: vec![
           ArrayValue {
@@ -466,7 +490,8 @@ mod test {
 
   #[test]
   fn test_table_keyval() {
-    assert_eq!(table_keyval("\"Ì WúƲ Húϱƨ!\"\t=\t'Mè ƭôô!' "), Done("", TableKeyVal{
+    let p = Parser::new();
+    assert_eq!(p.table_keyval("\"Ì WúƲ Húϱƨ!\"\t=\t'Mè ƭôô!' ").1, Done("", TableKeyVal{
       keyval: KeyVal{
         key: "\"Ì WúƲ Húϱƨ!\"", val: Value::String("Mè ƭôô!", StrType::Literal), keyval_sep: WSSep{
           ws1: "\t", ws2: "\t"
@@ -480,7 +505,8 @@ mod test {
 
   #[test]
   fn test_inline_table_keyvals_non_empty() {
-    assert_eq!(inline_table_keyvals_non_empty(" Key =\t54,\"Key2\" = '34.99'\t"),
+    let p = Parser::new();
+    assert_eq!(p.inline_table_keyvals_non_empty(" Key =\t54,\"Key2\" = '34.99'\t").1,
       Done("", vec![
         TableKeyVal{
           keyval: KeyVal{
@@ -510,7 +536,8 @@ mod test {
 
   #[test]
   fn test_inline_table() {
-    assert_eq!(inline_table("{\tKey = 3.14E+5 , \"Key2\" = '''New\nLine'''\t}"),
+    let p = Parser::new();
+    assert_eq!(p.inline_table("{\tKey = 3.14E+5 , \"Key2\" = '''New\nLine'''\t}").1,
       Done("", InlineTable{
         keyvals: Some(vec![
           TableKeyVal{
