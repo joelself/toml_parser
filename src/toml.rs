@@ -1,16 +1,11 @@
 use ast::structs::{Toml, NLExpression, Expression, WSSep};
-use util::{newline, ws, comment};
-use objects::{table};
-use primitives::{keyval};
-use nom::eof;
 use parser::Parser;
 
 impl<'a> Parser<'a> {
-
-  method!(pub toml<&mut Parser<'a>, &str, Toml>,
-    chain_m!(
-      expr: self.expression    ~
-  nl_exprs: self.nl_expressions,
+  method!(pub toml<Parser<'a>, &'a str, Toml>, mut self,
+    chain!(
+      expr: call_m!(self.expression)    ~
+  nl_exprs: call_m!(self.nl_expressions),
       ||{
         let mut tmp = vec![NLExpression{ nl: "", expr: expr}];
         tmp.extend(nl_exprs); Toml{ exprs: tmp}
@@ -18,12 +13,12 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(nl_expressions<&mut Parser<'a>, &str, Vec<NLExpression> >, many0_m!(self.nl_expression));
+  method!(nl_expressions<Parser<'a>, &'a str, Vec<NLExpression> >, mut self, many0!(call_m!(self.nl_expression)));
 
-  method!(nl_expression<&mut Parser<'a>, &str, NLExpression>,
-    chain_m!(
-       nl: self.newline    ~
-     expr: self.expression ,
+  method!(nl_expression<Parser<'a>, &'a str, NLExpression>, mut self,
+    chain!(
+       nl: call_m!(self.newline)    ~
+     expr: call_m!(self.expression) ,
       ||{
         NLExpression{
           nl: nl, expr: expr,
@@ -32,19 +27,18 @@ impl<'a> Parser<'a> {
     )
   );
 
-  // Expression
-  method!(expression<&mut Parser<'a>, &str,  Expression>,
+  method!(expression<Parser<'a>, &'a str,  Expression>, mut self,
     alt!(
-      complete_m!(self.table_comment)  |
-      complete_m!(self.keyval_comment) |
-      complete_m!(self.ws_comment)     |
-      complete_m!(self.ws_expr)
+      complete!(call_m!(self.table_comment))  |
+      complete!(call_m!(self.keyval_comment)) |
+      complete!(call_m!(self.ws_comment))     |
+      complete!(call_m!(self.ws_expr))
     )
   );
 
-  method!(ws_expr<&mut Parser<'a>, &str, Expression>,
-    chain_m!(
-      ws: self.ws,
+  method!(ws_expr<Parser<'a>, &'a str, Expression>, mut self,
+    chain!(
+      ws: call_m!(self.ws),
       ||{
         Expression{
           ws: WSSep{
@@ -56,12 +50,12 @@ impl<'a> Parser<'a> {
       }
     ));
 
-  method!(table_comment<&mut Parser<'a>, &str, Expression>,
-    chain_m!(
-      ws1: self.ws                 ~
-    table: self.table              ~
-      ws2: self.ws                 ~
-  comment: complete_m!(self.comment)?,
+  method!(table_comment<Parser<'a>, &'a str, Expression>, mut self,
+    chain!(
+      ws1: call_m!(self.ws)                 ~
+    table: call_m!(self.table)              ~
+      ws2: call_m!(self.ws)                 ~
+  comment: complete!(call_m!(self.comment))?,
       ||{
         Expression{
           ws: WSSep{
@@ -74,12 +68,12 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(keyval_comment<&mut Parser<'a>, &str, Expression>,
-    chain_m!(
-      ws1: self.ws       ~
-   keyval: self.keyval   ~
-      ws2: self.ws       ~
-  comment: complete_m!(self.comment) ? ,
+  method!(keyval_comment<Parser<'a>, &'a str, Expression>, mut self,
+    chain!(
+      ws1: call_m!(self.ws)       ~
+   keyval: call_m!(self.keyval)   ~
+      ws2: call_m!(self.ws)       ~
+  comment: complete!(call_m!(self.comment)) ? ,
       ||{
         Expression{
           ws: WSSep{
@@ -92,10 +86,10 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(ws_comment<&mut Parser<'a>, &str, Expression>,
-    chain_m!(
-       ws: self.ws     ~
-  comment: self.comment,
+  method!(ws_comment<Parser<'a>, &'a str, Expression>, mut self,
+    chain!(
+       ws: call_m!(self.ws)     ~
+  comment: call_m!(self.comment),
       ||{
         Expression{
           ws: WSSep{
@@ -321,7 +315,7 @@ enabled = true"#), Done("",
       )
     );
   }
-// named!(nl_expression<&str, NLExpression>,
+// named!(nl_expression<&'a str, NLExpression>,
   #[test]
   fn test_nl_expression() {
     let p = Parser::new();

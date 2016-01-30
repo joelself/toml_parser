@@ -3,10 +3,9 @@ name = "tomllib"
 version = "0.1.0"
 authors = ["Joel Self <joel@dislocal.com>"]
 
-[dependencies.nom]
-git = "https://github.com/joelself/nom.git"
+[dependencies]
+nomplusplus = { git = "https://github.com/joelself/nomplusplus.git", rev = "ef23e3a", features = ["regexp"] }
 
-features = ["regexp"]
 [dependencies.regex]
 # Uncomment these, and comment out the regexp feature to turn on statically compiled regexes
 #features = ["regexp_macros"]
