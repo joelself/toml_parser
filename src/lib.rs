@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate nom;
+extern crate nomplusplus;
 extern crate regex;
 mod ast;
 mod toml;

@@ -7,7 +7,7 @@ fn not_eol(chr: char) -> bool {
 
 impl<'a> Parser<'a> {
   // Newline
-  method!(pub newline<Parser<'a>, &'a str,  &'a str># self:
+  method!(pub newline<Parser<'a>, &'a str,  &'a str>, self,
     chain!(
    string: alt!(
         complete!(tag_s!("\r\n")) |
@@ -18,10 +18,10 @@ impl<'a> Parser<'a> {
   );
 
   // Whitespace
-  method!(pub ws<Parser<'a>, &'a str,  &'a str># self: re_find!("^( |\t)*"));
+  method!(pub ws<Parser<'a>, &'a str,  &'a str>, self, re_find!("^( |\t)*"));
 
   // Comment
-  method!(pub comment<Parser<'a>, &'a str,  Comment># self:
+  method!(pub comment<Parser<'a>, &'a str,  Comment>, self,
     chain!(
                tag_s!("#")            ~
   comment_txt: take_while_s!(not_eol) ,

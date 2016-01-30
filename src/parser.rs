@@ -1,14 +1,10 @@
 use std::fmt;
 use std::fmt::Display;
 use std::collections::HashMap;
-use std::cell::{RefCell, Cell, RefMut};
-use std::thread;
-use nom::IResult;
-use ast::structs::{Toml};
+use std::cell::{RefCell, Cell};
+use nomplusplus::IResult;
+use ast::structs::Toml;
 use types::HashValue;
-use nom;
-use std::any::Any;
-use ast::structs::{Expression, NLExpression, WSSep, Comment};
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
 named!(all_lines<&str, Vec<&str> >, many0!(full_line));
@@ -50,7 +46,7 @@ impl<'a> Parser<'a> {
 	}
 
 	pub fn parse(mut self: Parser<'a>, input: &'a str) -> Parser<'a> {
-		let (tmp, mut res) = self.toml(input);
+		let (tmp, res) = self.toml(input);
 		self = tmp;
 		//let mut res = self.result;
 		match res {

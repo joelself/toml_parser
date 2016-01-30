@@ -1,7 +1,7 @@
 use std::fmt;
 use std::fmt::Display;
 use std::option::Option;
-use nom::IResult;
+use nomplusplus::IResult;
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
 
 /// Compares two Options that contain comparable structs
