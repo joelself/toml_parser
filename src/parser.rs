@@ -23,6 +23,7 @@ pub struct Parser<'a> {
 	pub leftover: RefCell<&'a str>,
 	pub line_count: Cell<u64>,
 	pub last_table: RefCell<&'a str>,
+	pub tabs: String,
 }
 
 impl<'a> Default for Parser<'a> {
@@ -33,6 +34,7 @@ impl<'a> Default for Parser<'a> {
     	leftover: RefCell::new(""),
     	line_count: Cell::new(0u64),
     	last_table: RefCell::new(""),
+    	tabs: String::new(),
     }
   }
 }
@@ -42,7 +44,7 @@ impl<'a> Parser<'a> {
 	pub fn new<'b>() -> Parser<'a> {
 		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: RefCell::new(HashMap::new()),
 						leftover: RefCell::new(""), line_count: Cell::new(0),
-						last_table: RefCell::new("")}
+						last_table: RefCell::new(""), tabs: "".to_string()}
 	}
 
 	pub fn parse(mut self: Parser<'a>, input: &'a str) -> Parser<'a> {

@@ -84,26 +84,13 @@ impl<'a> Parser<'a> {
     )
   );
 
-  // TODO: remove the chain macro
-  method!(ws_newline<Parser<'a>, &'a str, &'a str>, self,
-    chain!(
-   string: re_find!("^( |\t|\n|(\r\n))*"),
-      ||{string}
-    )
-   );
-
-  method!(ws_newlines<Parser<'a>, &'a str, &'a str>, self,
-    chain!(
-   string: re_find!("^(\n|(\r\n))( |\t|\n|(\r\n))*"),
-      ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
-    )
-  );
+  method!(ws_newline<Parser<'a>, &'a str, &'a str>, self, re_find!("^( |\t|\n|(\r\n))*"));
 
   method!(comment_nl<Parser<'a>, &'a str, CommentNewLines>, mut self,
     chain!(
    prewsnl: call_m!(self.ws_newline)  ~
    comment: call_m!(self.comment)     ~
-  newlines: call_m!(self.ws_newlines) ,
+  newlines: call_m!(self.ws_newline) ,
       ||{
         CommentNewLines{
           pre_ws_nl: prewsnl, comment: comment, newlines: newlines
@@ -115,18 +102,12 @@ impl<'a> Parser<'a> {
   method!(comment_or_nl<Parser<'a>, &'a str, CommentOrNewLines>, mut self,
     alt!(
       complete!(call_m!(self.comment_nl))   => {|com| CommentOrNewLines::Comment(com)} |
-      complete!(call_m!(self.ws_newlines))  => {|nl|  CommentOrNewLines::NewLines(nl)}
+      complete!(call_m!(self.ws_newline))  => {|nl|  CommentOrNewLines::NewLines(nl)}
     )
   );
 
-  // method!(comment_or_ws_or_nl<Parser<'a>, &'a str, CommentOrNewLines>, mut self,
-  //   alt!(
-  //     complete!(call_m!(self.comment_nl))   => {|com| CommentOrNewLines::Comment(com)} |
-  //     complete!(call_m!(self.ws_newlines))  => {|nl|  CommentOrNewLines::NewLines(nl)} |
-  //     complete!(call_m!(self.ws_newline))   => {|ws|  CommentOrNewLines::NewLines(ws)}
-  //   )
-  // );
-
+  method!(comment_or_nls<Parser<'a>, &'a str, Vec<CommentOrNewLines> >, mut self, many1!(call_m!(self.comment_or_nl)));
+  
   // TODO: Redo this with array_sep wrapped in a complete!() ?
   method!(array_value<Parser<'a>, &'a str, ArrayValue>, mut self,
     alt!(
@@ -134,12 +115,12 @@ impl<'a> Parser<'a> {
         chain!(
           val: call_m!(self.val)                        ~
     array_sep: call_m!(self.array_sep)                  ~
-    comment_nl: complete!(call_m!(self.comment_or_nl)) ?,
+   comment_nls: complete!(call_m!(self.comment_or_nls))   ,
           ||{
             ArrayValue{
               val: val,
               array_sep: Some(array_sep),
-              comment_nl: comment_nl,
+              comment_nls: comment_nls,
             }
           }
         )
@@ -147,12 +128,12 @@ impl<'a> Parser<'a> {
       complete!(
         chain!(
           val: call_m!(self.val)                       ~
-    comment_nl: complete!(call_m!(self.comment_or_nl)) ,
+  comment_nls: complete!(call_m!(self.comment_or_nls)) ,
           ||{
             ArrayValue{
               val: val,
               array_sep: None,
-              comment_nl: Some(comment_nl),
+              comment_nls: comment_nls,
             }
           }
         )
@@ -163,7 +144,8 @@ impl<'a> Parser<'a> {
   method!(array_values<Parser<'a>, &'a str, Vec<ArrayValue> >, mut self,
     chain!(
      vals: many0!(call_m!(self.array_value)) ,
-     ||{let mut tmp = vec![];
+     ||{
+        let mut tmp = vec![];
         tmp.extend(vals);
         tmp
       }
@@ -173,18 +155,20 @@ impl<'a> Parser<'a> {
   method!(pub array<Parser<'a>, &'a str, Array>, mut self,
     chain!(
               tag_s!("[")   ~
-         ws1: call_m!(self.ws_newline)    ~
+         cn1: call_m!(self.comment_or_nls)    ~
   array_vals: call_m!(self.array_values) ~
-         ws2: call_m!(self.ws_newline)            ~
+         cn2: call_m!(self.comment_or_nls)            ~
               tag_s!("]")   ,
       ||{
         Array{
           values: array_vals,
-          ws: WSSep{ws1: ws1, ws2: ws2},
+          comment_nls1: cn1,
+          comment_nls2: cn2
         }
       }
     )
   );
+
 
   method!(table_keyval<Parser<'a>, &'a str, TableKeyVal>, mut self,
         chain!(
@@ -304,11 +288,11 @@ mod test {
     assert_eq!(p.ws_newline("\t\n\n").1, Done("", "\t\n\n"));
   }
 
-  #[test]
-  fn test_ws_newlines() {
-    let p = Parser::new();
-    assert_eq!(p.ws_newlines("\n \t\n\r\n ").1, Done("", "\n \t\n\r\n "));
-  }
+  // #[test]
+  // fn test_ws_newlines() {
+  //   let p = Parser::new();
+  //   assert_eq!(p.ws_newlines("\n \t\n\r\n ").1, Done("", "\n \t\n\r\n "));
+  // }
 
   #[test]
   fn test_comment_nl() {
@@ -353,15 +337,15 @@ mod test {
         val: Value::Float("54.6"), array_sep: Some(WSSep{
           ws1: "", ws2: " "
         }),
-        comment_nl: Some(CommentOrNewLines::Comment(CommentNewLines{
+        comment_nls: vec![CommentOrNewLines::Comment(CommentNewLines{
           pre_ws_nl: "\n", comment: Comment{text: "çô₥₥èñƭ"}, newlines: "\n\n"
-        }))
+        })]
       })
     );
     p = Parser::new();
     assert_eq!(p.array_value("\"ƨƥáϱλèƭƭï\"").1,
       Done("",ArrayValue{
-        val: Value::String("ƨƥáϱλèƭƭï", StrType::Basic), array_sep: None, comment_nl: None
+        val: Value::String("ƨƥáϱλèƭƭï", StrType::Basic), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
       })
     );
     p = Parser::new();
@@ -370,7 +354,7 @@ mod test {
         val: Value::Integer("44_9"), array_sep: Some(WSSep{
           ws1: " ", ws2: " "
         }),
-        comment_nl: None
+        comment_nls: vec![CommentOrNewLines::NewLines("")]
       })
     );
   }
@@ -380,21 +364,21 @@ mod test {
     let mut p = Parser::new();
     assert_eq!(p.array_values("1, 2, 3").1, Done("", vec![
       ArrayValue{val: Value::Integer("1"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
-      comment_nl: None},
+      comment_nls: vec![CommentOrNewLines::NewLines("")]},
       ArrayValue{val: Value::Integer("2"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
-      comment_nl: None},
-      ArrayValue{val: Value::Integer("3"), array_sep: None, comment_nl: None}
+      comment_nls: vec![CommentOrNewLines::NewLines("")]},
+      ArrayValue{val: Value::Integer("3"), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]}
     ]));
     p = Parser::new();
     assert_eq!(p.array_values("1, 2, #çô₥₥èñƭ\n3, ").1, Done("", vec![
       ArrayValue{val: Value::Integer("1"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
-      comment_nl: None},
+      comment_nls: vec![CommentOrNewLines::NewLines("")]},
       ArrayValue{val: Value::Integer("2"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
-      comment_nl: Some(CommentOrNewLines::Comment(CommentNewLines{pre_ws_nl: "",
+      comment_nls: vec![CommentOrNewLines::Comment(CommentNewLines{pre_ws_nl: "",
         comment: Comment{text: "çô₥₥èñƭ"},
-        newlines: "\n"}))},
+        newlines: "\n"})]},
       ArrayValue{val: Value::Integer("3"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
-      comment_nl: None}
+      comment_nls: vec![CommentOrNewLines::NewLines("")]}
     ]));
   }
 
@@ -406,27 +390,25 @@ mod test {
         values: vec![ArrayValue {
           val: Value::DateTime(DateTime {
             year: "2010", month: "10", day: "10",
-            hour: "10", minute: "10", second: "10", fraction: "33",
+            hour: "10", minute: "10", second: "10", fraction: Some("33"),
             offset: TimeOffset::Z
           }),
           array_sep: Some(WSSep{
             ws1: "", ws2: " "
           }),
-          comment_nl: None
+          comment_nls: vec![CommentOrNewLines::NewLines("")]
         },
         ArrayValue {
           val: Value::DateTime(DateTime{
             year: "1950", month: "03", day: "30",
-            hour: "21", minute: "04", second: "14", fraction: "123",
+            hour: "21", minute: "04", second: "14", fraction: Some("123"),
             offset: TimeOffset::Time(TimeOffsetAmount{
               pos_neg: "+", hour: "05", minute: "00"
             })
           }),
-          array_sep: None, comment_nl: None
+          array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
         }],
-        ws: WSSep{
-          ws1: "", ws2: ""
-        }
+        comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
       })
     );
   }
@@ -442,48 +424,46 @@ mod test {
               values: vec![
                 ArrayValue {
                   val: Value::Integer("3"), array_sep: Some(WSSep { ws1: "", ws2: "" }),
-                  comment_nl: None
+                  comment_nls: vec![CommentOrNewLines::NewLines("")]
                 },
                 ArrayValue {
-                  val: Value::Integer("4"), array_sep: None, comment_nl: None
+                  val: Value::Integer("4"), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
                 }
               ],
-              ws: WSSep { ws1 : "", ws2: "" }
+              comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
             })),
             array_sep: Some(WSSep { ws1: "", ws2: " " }),
-            comment_nl: None
+            comment_nls: vec![CommentOrNewLines::NewLines("")]
           },
           ArrayValue {
             val: Value::Array(Box::new(Array {
               values: vec![
                 ArrayValue {
                   val: Value::Integer("4"), array_sep: Some(WSSep { ws1: "", ws2: ""}),
-                  comment_nl: None
+                  comment_nls: vec![CommentOrNewLines::NewLines("")]
                 },
                 ArrayValue {
-                    val: Value::Integer("5"), array_sep: None, comment_nl: None
+                    val: Value::Integer("5"), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
                 }
               ],
-              ws: WSSep { ws1: "", ws2: ""}
+              comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
             })),
             array_sep: Some(WSSep { ws1: "", ws2: " "}),
-            comment_nl: None
+            comment_nls: vec![CommentOrNewLines::NewLines("")]
           },
           ArrayValue {
             val: Value::Array(Box::new(Array {
               values: vec![
                 ArrayValue {
-                  val: Value::Integer("6"), array_sep: None, comment_nl: None
+                  val: Value::Integer("6"), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
                 }
               ],
-              ws: WSSep { ws1: "", ws2: ""}
+             comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
             })),
-            array_sep: None, comment_nl: None
+            array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
           }
         ],
-        ws: WSSep {
-          ws1: "", ws2: ""
-        }
+        comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
       })
     );
   }

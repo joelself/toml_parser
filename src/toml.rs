@@ -109,7 +109,7 @@ mod test {
   use parser::Parser;
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
                      TableType, Value, NLExpression, StrType, ArrayValue, Toml,
-                     Time, Array};
+                     Time, Array, CommentOrNewLines};
   use types::{TimeOffsetAmount, DateTime, TimeOffset};
   
 
@@ -174,7 +174,7 @@ enabled = true"#).1, Done("",
           nl: "\n", expr: Expression {
             ws: WSSep { ws1: "", ws2: " " }, keyval: Some(KeyVal {
               key: "dob", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Value::DateTime(DateTime {
-                year: "1979", month: "05", day: "27", hour: "07", minute: "32", second: "00", fraction: "", offset: TimeOffset::Time(TimeOffsetAmount {
+                year: "1979", month: "05", day: "27", hour: "07", minute: "32", second: "00", fraction: None, offset: TimeOffset::Time(TimeOffsetAmount {
                   pos_neg: "-", hour: "08", minute: "00"
                 })
               })
@@ -210,16 +210,16 @@ enabled = true"#).1, Done("",
               key: "ports", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Value::Array(Box::new(Array {
                 values: vec![
                   ArrayValue {
-                    val: Value::Integer("8001"), array_sep: Some(WSSep { ws1: "", ws2: " " }), comment_nl: None
+                    val: Value::Integer("8001"), array_sep: Some(WSSep { ws1: "", ws2: " " }), comment_nls: vec![CommentOrNewLines::NewLines("")]
                   },
                   ArrayValue {
-                    val: Value::Integer("8001"), array_sep: Some(WSSep { ws1: "", ws2: " " }), comment_nl: None
+                    val: Value::Integer("8001"), array_sep: Some(WSSep { ws1: "", ws2: " " }), comment_nls: vec![CommentOrNewLines::NewLines("")]
                   },
                   ArrayValue {
-                    val: Value::Integer("8002"), array_sep: None, comment_nl: None
+                    val: Value::Integer("8002"), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines(" ")]
                   }
                 ],
-                ws: WSSep { ws1: " ", ws2: " " }
+                comment_nls1: vec![CommentOrNewLines::NewLines(" ")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
               }))
             }),
             table: None, comment: None

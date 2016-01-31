@@ -1,6 +1,6 @@
 extern crate tomllib;
 use tomllib::parser::Parser;
-    //println!("Hello in English: {}", tomllib::ast::structs::hello());
+
 fn main() {
 	let parser = Parser::new();
 	let parser = parser.parse(r#"# This is a TOML document.

@@ -5,14 +5,6 @@ use nomplusplus::IResult;
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
 
 /// Compares two Options that contain comparable structs
-///
-/// # Examples
-///
-/// ```
-/// # extern crate tomllib;
-/// let (a, b) = (Some("value"), Some("value"));
-/// assert!(tomllib::ast::structs::comp_opt(&a, &b));
-/// ```
 pub fn comp_opt<T: Eq>(left: &Option<T>, right: &Option<T>) -> bool {
 	match (left, right) {
 		(&Some(ref i), &Some(ref j)) if i == j => true,
@@ -321,7 +313,7 @@ pub struct Time<'a> {
     pub hour: &'a str,
 	pub minute: &'a str,
 	pub second: &'a str,
-	pub fraction: &'a str,
+	pub fraction: Option<&'a str>,
 }
 
 impl<'a> PartialEq for Time<'a> {
@@ -334,13 +326,12 @@ impl<'a> PartialEq for Time<'a> {
 }
 
 impl<'a> Display for Time<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	if self.fraction == "" {
-    		write!(f, "{}:{}:{}", self.hour, self.minute, self.second)
-    	} else {
-    		write!(f, "{}:{}:{}.{}", self.hour, self.minute, self.second, self.fraction)
-    	}
-    }
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  	match self.fraction {
+  		Some(frac) 	=> write!(f, "{}:{}:{}.{}", self.hour, self.minute, self.second, frac),
+  		None				=> write!(f, "{}:{}:{}", self.hour, self.minute, self.second),
+  	}
+  }
 }
 
 impl<'a> PartialEq for TimeOffsetAmount<'a> {
@@ -394,10 +385,16 @@ impl<'a> PartialEq for DateTime<'a> {
 
 impl<'a> Display for DateTime<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	write!(f, "{}-{}-{}T{}:{}:{}.{}{}",
-    		self.year, self.month, self.day,
-    		self.hour, self.minute, self.second, self.fraction,
-    		self.offset)
+    	match self.fraction {
+    		Some(frac) => write!(f, "{}-{}-{}T{}:{}:{}.{}{}",
+						    		self.year, self.month, self.day,
+						    		self.hour, self.minute, self.second, frac,
+						    		self.offset),
+    		None 		=> write!(f, "{}-{}-{}T{}:{}:{}{}",
+						    		self.year, self.month, self.day,
+						    		self.hour, self.minute, self.second,
+						    		self.offset),
+    	}
     }
 }
 
@@ -453,25 +450,27 @@ impl<'a> Display for CommentOrNewLines<'a> {
 pub struct ArrayValue<'a> {
 	pub val: Value<'a>,
 	pub array_sep: Option<WSSep<'a>>,
-	pub comment_nl: Option<CommentOrNewLines<'a>>,
+	pub comment_nls: Vec<CommentOrNewLines<'a>>,
 }
 
 impl<'a> PartialEq for ArrayValue<'a> {
 	fn eq(&self, other: &ArrayValue<'a>) -> bool {
 		self.val == other.val &&
 		comp_opt(&self.array_sep, &other.array_sep) &&
-		comp_opt(&self.comment_nl, &other.comment_nl)
+		self.comment_nls == other.comment_nls
 	}
 }
 
 impl<'a> Display for ArrayValue<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	match(&self.array_sep, &self.comment_nl) {
-    		(&Some(ref s), &None) => write!(f, "{}{},{}", self.val, s.ws1, s.ws2),
-    		(&Some(ref s), &Some(ref c)) => write!(f, "{}{},{}{}", self.val, s.ws1, s.ws2, c),
-    		(&None, &Some(ref c)) => write!(f, "{}{}", self.val, c),
-    		(&None, &None) => write!(f, "{}", self.val)
+    	match self.array_sep {
+    		Some(ref s) => try!(write!(f, "{}{},{}", self.val, s.ws1, s.ws2)),
+    		None => try!(write!(f, "{}", self.val)),
     	}
+    	for i in 0..self.comment_nls.len() - 1 {
+    		try!(write!(f, "{}", self.comment_nls[i]));
+    	}
+    	write!(f, "{}", self.comment_nls[self.comment_nls.len() - 1])
     }
 }
 
@@ -479,23 +478,31 @@ impl<'a> Display for ArrayValue<'a> {
 #[derive(Debug, Eq)]
 pub struct Array<'a> {
 	pub values: Vec<ArrayValue<'a>>,
-	pub ws: WSSep<'a>,
+	pub comment_nls1: Vec<CommentOrNewLines<'a>>,
+	pub comment_nls2: Vec<CommentOrNewLines<'a>>,
 }
 
 impl<'a> PartialEq for Array<'a> {
 	fn eq(&self, other: &Array<'a>) -> bool {
 		self.values == other.values &&
-		self.ws == other.ws
+		self.comment_nls1 == other.comment_nls1 &&
+		self.comment_nls2 == other.comment_nls2
 	}
 }
 
 impl<'a> Display for Array<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	try!(write!(f, "[{}", self.ws.ws1));
-		for val in self.values.iter() {
-			try!(write!(f, "{}", val));
-		}
-		write!(f, "{}]", self.ws.ws2)
+    	try!(write!(f, "["));
+    	for comment_nl in self.comment_nls1.iter() {
+    		try!(write!(f, "{}", comment_nl));
+    	}
+			for val in self.values.iter() {
+				try!(write!(f, "{}", val));
+			}
+    	for comment_nl in self.comment_nls2.iter() {
+    		try!(write!(f, "{}", comment_nl));
+    	}
+			write!(f, "]")
     }
 }
 
@@ -568,6 +575,19 @@ impl<'a> Display for InlineTable<'a> {
     		&None			=> write!(f, "{{{}{}}}", self.ws.ws1, self.ws.ws2),
     	}
     }
+}
+
+#[cfg(test)]
+mod test {
+	use ast::structs::comp_opt;
+	#[test]
+	fn test_comp_opt() {
+  	let (a, b) = (Some("value"), Some("value"));
+		assert!(comp_opt(&a, &b));
+		let d: Option<&str> = None;
+		let c = Some("stuff");
+		assert!(!comp_opt(&c, &d));
+	}
 }
 
 

@@ -120,8 +120,8 @@ impl<'a> Parser<'a> {
       ||{
         Time{
           hour: hour, minute: minute, second: second, fraction: match fraction {
-            Some(ref x) => x[1],
-            None        => "",
+            Some(ref x) => Some(x[1]),
+            None        => None,
           }
         }
       }
@@ -184,7 +184,9 @@ impl<'a> Parser<'a> {
   method!(unquoted_key<Parser<'a>, &'a str, &'a str>, self, take_while1_s!(is_keychar));
   method!(quoted_key<Parser<'a>, &'a str, &'a str>, self, re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
-  method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(complete!(call_m!(self.quoted_key)) | complete!(call_m!(self.unquoted_key))));
+  method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(
+    complete!(call_m!(self.quoted_key)) |
+    complete!(call_m!(self.unquoted_key))));
 
   method!(keyval_sep<Parser<'a>, &'a str, WSSep>, mut self,
     chain!(
@@ -201,12 +203,12 @@ impl<'a> Parser<'a> {
 
   method!(pub val<Parser<'a>, &'a str, Value>, mut self,
     alt!(
-      complete!(call_m!(self.array))        => {|arr|   Value::Array(Box::new(arr))}      |
-      complete!(call_m!(self.inline_table)) => {|it|    Value::InlineTable(Box::new(it))} |
-      complete!(call_m!(self.date_time))    => {|dt|    Value::DateTime(dt)}              |
-      complete!(call_m!(self.float))        => {|flt|   Value::Float(flt)}                |
-      complete!(call_m!(self.integer))      => {|int|   Value::Integer(int)}              |
-      complete!(call_m!(self.boolean))      => {|b|     Value::Boolean(b)}               |
+      complete!(call_m!(self.array))        => {|arr|   Value::Array(Box::new(arr))}       |
+      complete!(call_m!(self.inline_table)) => {|it|    Value::InlineTable(Box::new(it))}  |
+      complete!(call_m!(self.date_time))    => {|dt|    Value::DateTime(dt)}               |
+      complete!(call_m!(self.float))        => {|flt|   Value::Float(flt)}                 |
+      complete!(call_m!(self.integer))      => {|int|   Value::Integer(int)}               |
+      complete!(call_m!(self.boolean))      => {|b|     Value::Boolean(b)}                 |
       complete!(call_m!(self.string))       => {|s|     s}
     )
   );
@@ -229,7 +231,8 @@ impl<'a> Parser<'a> {
 mod test {
   use nomplusplus::IResult::Done;
   use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal,
-                     InlineTable, TableKeyVal, Value, StrType};
+                     InlineTable, TableKeyVal, Value, StrType,
+                     CommentOrNewLines};
   use ::types::{DateTime, TimeOffsetAmount, TimeOffset};
   use parser::Parser;
 
@@ -326,7 +329,7 @@ NÛMßÉR-THRÉÉ
         hour: "11",
         minute: "22",
         second: "33",
-        fraction: "456"
+        fraction: Some("456")
       })
     );
     p = Parser::new();
@@ -335,7 +338,7 @@ NÛMßÉR-THRÉÉ
         hour: "04",
         minute: "05",
         second: "06",
-        fraction: ""
+        fraction: None
       })
     );
   }
@@ -382,7 +385,7 @@ NÛMßÉR-THRÉÉ
     assert_eq!(p.date_time("1999-03-21T20:15:44.5-07:00").1,
       Done("", DateTime{
         year: "1999", month: "03", day: "21",
-        hour: "20", minute: "15", second: "44", fraction: "5",
+        hour: "20", minute: "15", second: "44", fraction: Some("5"),
         offset: TimeOffset::Time(TimeOffsetAmount{
           pos_neg: "-",
           hour: "07",
@@ -428,14 +431,14 @@ NÛMßÉR-THRÉÉ
             val: Value::Integer("4"), array_sep: Some(WSSep{
               ws1: "", ws2: ""
             }),
-            comment_nl: None
+            comment_nls: vec![CommentOrNewLines::NewLines("")]
           },
           ArrayValue{
             val: Value::Integer("9"), array_sep: None,
-            comment_nl: None
+            comment_nls: vec![CommentOrNewLines::NewLines("")]
           },
         ],
-        ws: WSSep{ws1: "", ws2: ""}
+        comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
       }
     ))));
     p = Parser::new();
@@ -459,7 +462,7 @@ NÛMßÉR-THRÉÉ
     p = Parser::new();
     assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Value::DateTime(DateTime{
                               year: "2112", month: "09", day: "30",
-                              hour: "12", minute: "33", second: "01", fraction: "345",
+                              hour: "12", minute: "33", second: "01", fraction: Some("345"),
                               offset: TimeOffset::Time(TimeOffsetAmount{
                                 pos_neg: "-", hour: "11", minute: "30"
                               })

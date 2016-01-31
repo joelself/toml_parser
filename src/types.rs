@@ -53,7 +53,7 @@ pub struct DateTime<'a> {
 	pub hour: &'a str,
 	pub minute: &'a str,
 	pub second: &'a str,
-	pub fraction: &'a str,
+	pub fraction: Option<&'a str>,
 	pub offset: TimeOffset<'a>,
 }
 

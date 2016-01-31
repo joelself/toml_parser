@@ -7,14 +7,10 @@ fn not_eol(chr: char) -> bool {
 
 impl<'a> Parser<'a> {
   // Newline
-  // TODO: Remove the chain! macro
   method!(pub newline<Parser<'a>, &'a str,  &'a str>, self,
-    chain!(
-   string: alt!(
-        complete!(tag_s!("\r\n")) |
-        complete!(tag_s!("\n"))
-      ),
-      ||{self.line_count.set(self.line_count.get() + 1); string}
+    alt!(
+      complete!(tag_s!("\r\n")) => {|s| {self.line_count.set(self.line_count.get() + 1); s}}  |
+      complete!(tag_s!("\n")) => {|s| {self.line_count.set(self.line_count.get() + 1); s}}
     )
   );
 
