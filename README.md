@@ -18,7 +18,7 @@ Next steps for the first release are:
 - [x] Might back off to use beta Rust or, less likely, stable Rust
 - [x] Unit tests for all parsers that don't have them yet
 - [x] Add module to nom that can create and call parser [methods](http://stackoverflow.com/questions/155609/difference-between-a-method-and-a-function) in addition to functions (this is a big one).
-- [ ] An integration test method that will iterate through each toml file in the assets directory (which includes the [toml-test valid tests](https://github.com/BurntSushi/toml-test/tree/master/tests/valid) and the toml examples mentioned earlier), parse the file, then reconstruct it and compare it to the original.
+- [x] An integration test method that will iterate through each toml file in the assets directory (which includes the [toml-test valid tests](https://github.com/BurntSushi/toml-test/tree/master/tests/valid) and the toml examples mentioned earlier), parse the file, then reconstruct it and compare it to the original.
 - [ ] Value look-up/modification
 - [ ] Key modification
 - [ ] Content validation, and non-failure error reporting (currently the parser doesn't complain about heterogeneous arrays or duplicate keys, because it wants to give you a chance to correct them rather than immediately fail and force you to fix it by hand.)
