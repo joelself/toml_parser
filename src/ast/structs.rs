@@ -1,6 +1,8 @@
 use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
+use std::cell::RefCell;
+use std::collections::{HashMap, LinkedList};
 use std::option::Option;
 use nomplusplus::IResult;
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
@@ -80,7 +82,7 @@ impl<'a> Display for NLExpression<'a> {
 pub struct Expression<'a> {
 	pub ws: WSSep<'a>,
 	pub keyval: Option<KeyVal<'a>>,
-	pub table: Option<TableType<'a>>,
+	pub table: Option<Rc<TableType<'a>>>,
 	pub comment: Option<Comment<'a>>,
 }
 
@@ -125,7 +127,8 @@ pub enum Value<'a> {
 	DateTime(DateTime<'a>),
 	Array(Rc<Array<'a>>),
 	String(&'a str, StrType),
-	InlineTable(Box<InlineTable<'a>>),
+	InlineTable(Rc<InlineTable<'a>>),
+	ArrayOfTables(Vec<HashMap<String, HashValue<'a>>>),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -138,6 +141,27 @@ pub enum ArrayType {
 	String,
 	InlineTable,
 	None,
+}
+
+#[derive(Debug, Eq)]
+pub struct HashValue<'a> {
+	pub value: Option<Rc<Value<'a>>>, 
+	pub subkeys: RefCell<LinkedList<String>>,
+}
+
+impl<'a> HashValue<'a> {
+	pub fn new(value: Value<'a>) -> HashValue<'a> {
+		HashValue {
+			value: Some(Rc::new(value)),
+			subkeys: RefCell::new(LinkedList::new()),
+		}
+	}
+}
+
+impl<'a> PartialEq for HashValue<'a> {
+	fn eq(&self, other: &HashValue<'a>) -> bool {
+		self.value == other.value
+	}
 }
 
 impl<'a> PartialEq for Value<'a> {
@@ -172,6 +196,7 @@ impl<'a> Display for Value<'a> {
 				}
 			},
 			&Value::InlineTable(ref i) => write!(f, "{}", i),
+			&Value::ArrayOfTables(ref i) => unimplemented!(),
 		}
    }
 }
@@ -256,7 +281,7 @@ impl<'a> PartialEq for WSSep<'a> {
 pub struct KeyVal<'a> {
 	pub key: &'a str,
 	pub keyval_sep: WSSep<'a>,
-	pub val: Value<'a>,
+	pub val: Rc<Value<'a>>,
 }
 
 impl<'a> PartialEq for KeyVal<'a> {
@@ -293,27 +318,35 @@ impl<'a> Display for WSKeySep<'a> {
     }
 }
 
+pub fn format_keys(keys: &Vec<WSKeySep>) -> String {
+	let mut s = String::new();
+	for i in 0..keys.len() - 1 {
+		s.push_str(keys[i].key);
+		s.push('.');
+	}
+	s.push_str(keys[keys.len() - 1].key);
+	s
+}
+
 // Standard: [<ws.ws1><key><subkeys*><ws.ws2>]
 // Array: [[<ws.ws1><key><subkeys*><ws.ws2>]]
 #[derive(Debug, Eq)]
 pub struct Table<'a> {
 	pub ws: WSSep<'a>, // opening whitespace and closing whitespace
-	pub key: &'a str,
-	pub subkeys: Vec<WSKeySep<'a>>,
+	pub keys: Vec<WSKeySep<'a>>,
 }
 
 impl<'a> PartialEq for Table<'a> {
 	fn eq(&self, other: &Table<'a>) -> bool {
 		self.ws == other.ws &&
-		self.key == other.key &&
-		self.subkeys == other.subkeys
+		self.keys == other.keys
 	}
 }
 
 impl<'a> Display for Table<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	try!(write!(f, "{}{}", self.ws.ws1, self.key));
-    	for key in &self.subkeys {
+    	try!(write!(f, "{}", self.ws.ws1));
+    	for key in &self.keys {
     		try!(write!(f, "{}", key));
     	}
     	write!(f, "{}", self.ws.ws2)

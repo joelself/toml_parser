@@ -1,27 +1,35 @@
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    CommentOrNewLines, ArrayValue, Array, Value,
-                   InlineTable, WSSep, TableKeyVal, ArrayType};
+                   InlineTable, WSSep, TableKeyVal, ArrayType,
+                   HashValue, format_keys};
 use parser::{Parser, count_lines};
 use types::ParseError;
+use std::cell::RefCell;
+use std::collections::{HashMap, LinkedList};
 use std::rc::Rc;
 use nomplusplus::IResult;
 
 #[inline(always)]
 fn map_val_to_array_type(val: &Value) -> ArrayType {
   match val {
-    &Value::Integer(_)     => ArrayType::Integer,
-    &Value::Float(_)       => ArrayType::Float,
-    &Value::Boolean(_)     => ArrayType::Boolean,
-    &Value::DateTime(_)    => ArrayType::DateTime,
-    &Value::Array(_)       => ArrayType::Array,
-    &Value::String(_,_)      => ArrayType::String,
-    &Value::InlineTable(_) => ArrayType::InlineTable,
+    &Value::Integer(_)        => ArrayType::Integer,
+    &Value::Float(_)          => ArrayType::Float,
+    &Value::Boolean(_)        => ArrayType::Boolean,
+    &Value::DateTime(_)       => ArrayType::DateTime,
+    &Value::Array(_)          => ArrayType::Array,
+    &Value::String(_,_)       => ArrayType::String,
+    &Value::InlineTable(_)    => ArrayType::InlineTable,
+    _                         => ArrayType::None, // unreachable
   }
+}
+
+fn insert_array_table(keys: &Vec<WSKeySep>, map: & mut RefCell<HashMap<String, HashValue>>) {
+
 }
 
 impl<'a> Parser<'a> {
   // Table
-  method!(pub table<Parser<'a>, &'a str, TableType>, mut self,
+  method!(pub table<Parser<'a>, &'a str, Rc<TableType> >, mut self,
     alt!(
       complete!(call_m!(self.array_table)) |
       complete!(call_m!(self.std_table))
@@ -47,42 +55,59 @@ impl<'a> Parser<'a> {
     )
   );
   // Standard Table
-  method!(std_table<Parser<'a>, &'a str, TableType>, mut self,
+  method!(std_table<Parser<'a>, &'a str, Rc<TableType> >, mut self,
     chain!(
            tag_s!("[")    ~
       ws1: call_m!(self.ws)             ~
       key: call_m!(self.key)            ~
-  subkeys: call_m!(self.table_subkeys)  ~
+  mut subkeys: call_m!(self.table_subkeys)  ~
       ws2: call_m!(self.ws)             ~
            tag_s!("]")    ,
       ||{
-        TableType::Standard(Table{
+        subkeys.insert(0, WSKeySep{
+          ws: WSSep {
+            ws1: "", ws2: ""
+          },
+          key: key
+        });
+        let res = Rc::new(TableType::Standard(Table{
           ws: WSSep{
             ws1: ws1, ws2: ws2
           },
-          key: key, subkeys: subkeys,
-        })
+          keys: subkeys,
+        }));
+        self.last_table = Some(res.clone());
+        res
       }
     )
   );
 
   // Array Table
-  method!(array_table<Parser<'a>, &'a str, TableType>, mut self,
+  method!(array_table<Parser<'a>, &'a str, Rc<TableType> >, mut self,
     chain!(
            tag_s!("[[")   ~
       ws1: call_m!(self.ws)             ~
       key: call_m!(self.key)            ~
-  subkeys: call_m!(self.table_subkeys)  ~
+mut subkeys: call_m!(self.table_subkeys)  ~
       ws2: call_m!(self.ws)             ~
            tag_s!("]]")   ,
       ||{
-        *self.last_table.borrow_mut() = key;
-        TableType::Array(Table{
+        subkeys.insert(0, WSKeySep{
+          ws: WSSep {
+            ws1: "", ws2: ""
+          },
+          key: key
+        });
+        // TODO: If there is a parent array of tables, add this one as a child
+        insert_array_table(&subkeys, & mut self.map);
+        let res = Rc::new(TableType::Array(Table{
           ws: WSSep{
             ws1: ws1, ws2: ws2
           },
-          key: key, subkeys: subkeys,
-        })
+          keys: subkeys
+        }));
+        self.last_table = Some(res.clone());
+        res
       }
     )
   );
@@ -143,7 +168,7 @@ impl<'a> Parser<'a> {
             self.last_array_type.borrow_mut().pop();
             self.last_array_type.borrow_mut().push(t);
             ArrayValue{
-              val: Rc::new(val),
+              val: val,
               array_sep: Some(array_sep),
               comment_nls: comment_nls,
             }
@@ -164,7 +189,7 @@ impl<'a> Parser<'a> {
             self.last_array_type.borrow_mut().pop();
             self.last_array_type.borrow_mut().push(t);
             ArrayValue{
-              val: Rc::new(val),
+              val: val,
               array_sep: None,
               comment_nls: comment_nls,
             }
@@ -219,229 +244,6 @@ impl<'a> Parser<'a> {
       }
     )
   );
-// pub fn array(mut self: Parser<'a>, i: &'a str)
-// -> (Parser<'a>, ::nomplusplus::IResult<&'a str, Rc<Array>, u32>) {
-//   let result =
-//   {
-//     {
-//       use nomplusplus::InputLength;
-//       match {
-//         let res: ::nomplusplus::IResult<_, _> =
-//         if "[".len() > i.len() {
-//           ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size("[".len()))
-//         } else if (i).starts_with("[") {
-//           ::nomplusplus::IResult::Done(&i["[".len()..],
-//            &i[0.."[".len()])
-//         } else {
-//           ::nomplusplus::IResult::Error(::nomplusplus::Err::Position(::nomplusplus::ErrorKind::TagStr,
-//            i))
-//         };
-//         res
-//       } {
-//         ::nomplusplus::IResult::Error(e) =>
-//         ::nomplusplus::IResult::Error(e),
-//         ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown)
-//         =>
-//         ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown),
-//         ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(i))
-//         =>
-//         ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(0usize
-//          +
-//          i)),
-//         ::nomplusplus::IResult::Done(i, _) => {
-//           {
-//             use nomplusplus::InputLength;
-//             match {
-//               let (tmp, res) =
-//               self.comment_or_nls(i);
-//               self = tmp;
-//               res
-//             } {
-//               ::nomplusplus::IResult::Error(e) =>
-//               ::nomplusplus::IResult::Error(e),
-//               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown)
-//               =>
-//               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown),
-//               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(n))
-//               =>
-//               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(0usize
-//                +
-//                ((i).input_len()
-//                 -
-//                 i.input_len())
-//                +
-//                n)),
-//               ::nomplusplus::IResult::Done(i, o) =>
-//               {
-//                 let cn1 = o;
-//                 {
-//                   use nomplusplus::InputLength;
-//                   match {
-//                     let (tmp, res) =
-//                     self.array_values(i);
-//                     self = tmp;
-//                     res
-//                   } {
-//                     ::nomplusplus::IResult::Error(e)
-//                     =>
-//                     ::nomplusplus::IResult::Error(e),
-//                     ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown)
-//                     =>
-//                     ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown),
-//                     ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(n))
-//                     =>
-//                     ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(0usize
-//                      +
-//                      ((i).input_len()
-//                       -
-//                       i.input_len())
-//                      +
-//                      ((i).input_len()
-//                       -
-//                       i.input_len())
-//                      +
-//                      n)),
-//                     ::nomplusplus::IResult::Done(i,
-//                      o)
-//                     => {
-//                       let array_vals = o;
-//                       {
-//                         use nomplusplus::InputLength;
-//                         match {
-//                           let (tmp,
-//                            res) =
-//                           self.comment_or_nls(i);
-//                           self =
-//                           tmp;
-//                           res
-//                         } {
-//                           ::nomplusplus::IResult::Error(e)
-//                           =>
-//                           ::nomplusplus::IResult::Error(e),
-//                           ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown)
-//                           =>
-//                           ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown),
-//                           ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(n))
-//                           =>
-//                           ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(0usize
-//                            +
-//                            ((i).input_len()
-//                             -
-//                             i.input_len())
-//                            +
-//                            ((i).input_len()
-//                             -
-//                             i.input_len())
-//                            +
-//                            ((i).input_len()
-//                             -
-//                             i.input_len())
-//                            +
-//                            n)),
-//                           ::nomplusplus::IResult::Done(i,
-//                            o)
-//                           => {
-//                             let cn2 =
-//                             o;
-//                             match {
-//                               let res:
-//                               ::nomplusplus::IResult<_,
-//                               _> =
-//                               if "]".len()
-//                               >
-//                               i.len()
-//                               {
-//                                 ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size("]".len()))
-//                               } else if (i).starts_with("]")
-//                               {
-//                                 ::nomplusplus::IResult::Done(&i["]".len()..],
-//                                  &i[0.."]".len()])
-//                               } else {
-//                                 ::nomplusplus::IResult::Error(::nomplusplus::Err::Position(::nomplusplus::ErrorKind::TagStr,
-//                                  i))
-//                               };
-//                               res
-//                             } {
-//                               ::nomplusplus::IResult::Error(e)
-//                               =>
-//                               ::nomplusplus::IResult::Error(e),
-//                               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown)
-//                               =>
-//                               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown),
-//                               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(n))
-//                               =>
-//                               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(0usize
-//                                +
-//                                ((i).input_len()
-//                                 -
-//                                 i.input_len())
-//                                +
-//                                ((i).input_len()
-//                                 -
-//                                 i.input_len())
-//                                +
-//                                ((i).input_len()
-//                                 -
-//                                 i.input_len())
-//                                +
-//                                ((i).input_len()
-//                                 -
-//                                 i.input_len())
-//                                +
-//                                n)),
-//                               ::nomplusplus::IResult::Done(i,
-//                                _)
-//                               => {
-//                                 ::nomplusplus::IResult::Done(i,
-//                                  (||
-//                                  {
-//                                    self.last_array_type.set(ArrayType::None);
-//                                    let array_result =
-//                                    Rc::new(Array{values:
-//                                      array_vals,
-//                                      comment_nls1:
-//                                      cn1,
-//                                      comment_nls2:
-//                                      cn2,});
-//                                      if self.mixed_array.get()
-//                                      {
-//                                        self.mixed_array.set(false);
-//                                        let mut vals: Vec<Rc<Value<'a>>> = vec![]; 
-//                                        //let array_vals = array_result.values;
-//                                        for x in 0..array_result.values.len() {
-//                                           vals.push(array_result.values[x].val.clone());
-//                                        }
-//                                        self.errors.borrow_mut()
-//                                         .push(ParseError::MixedArray(vals));
-//                                      }
-//                                      array_result
-//                                    })())
-// }
-// }
-// }
-// }
-// }
-// }
-// }
-// }
-// }
-// }
-// }
-// }
-// }
-// }
-// };
-// (self, result)
-// }
-
-  // fn error_mixed_array(self: &'a Parser<'a>, array: Array<'a>) -> (Array<'a>) {
-  //   let mut vals: Vec<&Value<'a>> = vec![];                                 
-  //   self.array = array;
-  //   let iter = self.array.values.iter();
-  //   iter.map(|x|  vals.push(&x.val));
-  //   self.errors.borrow_mut().push(ParseError::MixedArray((&array, vals)));
-  //   array
-  // }
 
   method!(table_keyval<Parser<'a>, &'a str, TableKeyVal>, mut self,
         chain!(

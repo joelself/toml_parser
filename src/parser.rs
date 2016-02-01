@@ -1,10 +1,11 @@
 use std::fmt;
 use std::fmt::Display;
-use std::collections::HashMap;
+use std::rc::Rc;
 use std::cell::{RefCell, Cell};
+use std::collections::HashMap;
 use nomplusplus::IResult;
-use ast::structs::{Toml, ArrayType, Array};
-use types::{HashValue, ParseError};
+use ast::structs::{Toml, ArrayType, Array, HashValue, TableType};
+use types::ParseError;
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
 named!(all_lines<&str, Vec<&str> >, many0!(full_line));
@@ -19,15 +20,13 @@ pub fn count_lines(s: &str) -> u64 {
 
 pub struct Parser<'a> {
 	pub root: RefCell<Toml<'a>>,
-	pub map: RefCell<HashMap<&'a str, HashValue<'a>>>,
+	pub map: RefCell<HashMap<String, HashValue<'a>>>,
 	pub errors: RefCell<Vec<ParseError<'a>>>,
 	pub leftover: RefCell<&'a str>,
 	pub line_count: Cell<u64>,
-	pub last_table: RefCell<&'a str>,
+	pub last_table: Option<Rc<TableType<'a>>>,
 	pub last_array_type: RefCell<Vec<ArrayType>>,
 	pub mixed_array: Cell<bool>,
-	pub tabs: String,
-	pub array: Array<'a>,
 }
 
 impl<'a> Default for Parser<'a> {
@@ -38,11 +37,9 @@ impl<'a> Default for Parser<'a> {
     	errors: RefCell::new(vec![]),
     	leftover: RefCell::new(""),
     	line_count: Cell::new(0u64),
-    	last_table: RefCell::new(""),
+    	last_table: None,
     	last_array_type: RefCell::new(vec![]),
     	mixed_array: Cell::new(false),
-    	tabs: String::new(),
-    	array: Array{values: vec![], comment_nls1: vec![], comment_nls2: vec![]}
     }
   }
 }
@@ -52,9 +49,8 @@ impl<'a> Parser<'a> {
 	pub fn new<'b>() -> Parser<'a> {
 		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: RefCell::new(HashMap::new()),
 						errors: RefCell::new(vec![]), leftover: RefCell::new(""),
-						line_count: Cell::new(0), last_table: RefCell::new(""),
-						last_array_type: RefCell::new(vec![]), mixed_array: Cell::new(false),
-						tabs: "".to_string(), array: Array{values: vec![], comment_nls1: vec![], comment_nls2: vec![]}}
+						line_count: Cell::new(0), last_table: None,
+						last_array_type: RefCell::new(vec![]), mixed_array: Cell::new(false),}
 	}
 
 	pub fn parse(mut self: Parser<'a>, input: &'a str) -> Parser<'a> {

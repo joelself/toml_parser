@@ -1,29 +1,8 @@
-use std::collections::LinkedList;
 use ast::structs::{Array, InlineTable};
 use ast::structs::Value;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-#[derive(Eq)]
-pub struct HashValue<'a> {
-	value: Option<Value<'a>>, 
-	subkeys: LinkedList<&'a str>,
-}
-
-impl<'a> HashValue<'a> {
-	pub fn new(value: Value<'a>) -> HashValue<'a> {
-		HashValue {
-			value: Some(value),
-			subkeys: LinkedList::new(),
-		}
-	}
-}
-
-impl<'a> PartialEq for HashValue<'a> {
-	fn eq(&self, other: &HashValue<'a>) -> bool {
-		self.value == other.value
-	}
-}
 
 pub enum ParseResult<'a> {
 	Success(&'a str),

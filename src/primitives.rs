@@ -1,17 +1,67 @@
 use std::cell::RefCell;
+use std::rc::Rc;
+use std::collections::{HashMap, LinkedList};
 use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode,
-                   Array};
+                   Array, HashValue, TableType, format_keys};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
 use parser::{Parser, count_lines};
 use nomplusplus;
 use nomplusplus::{IResult, InputLength};
-
+// TODO LIST:
+// Make sure empty key is accepted
+// Allow Date only. Right now we require time and offset for a full date-time
+//
+#[inline(always)]
 fn is_keychar(chr: char) -> bool {
   let uchr = chr as u32;
   uchr >= 0x41 && uchr <= 0x5A || // A-Z
   uchr >= 0x61 && uchr <= 0x7A || // a-z
   uchr >= 0x30 && uchr <= 0x39 || // 0-9
   uchr == 0x2D || uchr == 0x5f    // "-", "_"
+}
+
+#[inline(always)]
+
+
+fn insert_keyval_into_map<'a>(key: &str, val: Rc<Value<'a>>,
+  last_table: &Option<Rc<TableType>>,
+  map: &RefCell<HashMap<String, HashValue<'a>>>) {
+  // If the last table is None
+  //  If the key exists
+  //    If the value is empty insert the value
+  //    If the value in non-empty add the key/val to the error list
+  //  If the key doesn't exist, insert it
+  let key = key.to_string();
+  match last_table {
+    &None => {
+      if map.borrow().contains_key(&key) {
+        match map.borrow().get(&key).unwrap().value {
+          None => {
+            map.borrow_mut().remove(&key); map.borrow_mut().insert(key, HashValue{
+              value: Some(val), subkeys: RefCell::new(LinkedList::new())
+            });
+          },
+          _ => ()
+        }
+      }
+    },
+    _ => (),
+  }
+  // If the last table was a StandardTable:
+  //  If the key exists
+  //    If the value is empty, insert the value
+  //    If the value is non-empty add the key/val pair to the error list
+  //    If the key is for an ArrayOfTables add the key/val to the error list
+  //  If the key doesn't exist add the key/value pair to the hash table
+
+  // If the last table was an ArrayOfTables:
+  //  Get the last table in the vector
+  //  If the key exists
+  //    If the value is empty insert the value
+  //    if the value is non-empty add the ArrayTable key/value pair to the error list
+  //  If the key doesn't exist add the key/value pair to the table
+  //  (New ArrayOfTables declarations should add an empty HashMap to the end of the vector for that
+
 }
 
 impl<'a> Parser<'a> {
@@ -46,7 +96,6 @@ impl<'a> Parser<'a> {
       ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
     )
   );
-
 
   fn ml_basic_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nomplusplus::IResult<&'a str, &'a str>) {
     let (tmp, raw) = self.raw_ml_basic_string(input);
@@ -133,9 +182,9 @@ impl<'a> Parser<'a> {
   method!(time_offset_amount<Parser<'a>, &'a str, TimeOffsetAmount>, self,
     chain!(
   pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
-     hour: re_find!("^[0-9]{2}")                                                                      ~
-           tag_s!(":")                                                                                      ~
-  minute: re_find!("^[0-9]{2}")                                                                       ,
+     hour: re_find!("^[0-9]{2}")                                  ~
+           tag_s!(":")                                            ~
+  minute: re_find!("^[0-9]{2}")                                   ,
       ||{
         TimeOffsetAmount{
           pos_neg: pos_neg, hour: hour, minute: minute
@@ -184,7 +233,8 @@ impl<'a> Parser<'a> {
 
   // Key-Value pairs
   method!(unquoted_key<Parser<'a>, &'a str, &'a str>, self, take_while1_s!(is_keychar));
-  method!(quoted_key<Parser<'a>, &'a str, &'a str>, self, re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
+  method!(quoted_key<Parser<'a>, &'a str, &'a str>, self,
+    re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
   method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(
     complete!(call_m!(self.quoted_key)) |
@@ -203,15 +253,15 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(pub val<Parser<'a>, &'a str, Value>, mut self,
+  method!(pub val<Parser<'a>, &'a str, Rc<Value> >, mut self,
     alt!(
-      complete!(call_m!(self.array))        => {|arr|   Value::Array(arr)}       |
-      complete!(call_m!(self.inline_table)) => {|it|    Value::InlineTable(Box::new(it))}  |
-      complete!(call_m!(self.date_time))    => {|dt|    Value::DateTime(dt)}               |
-      complete!(call_m!(self.float))        => {|flt|   Value::Float(flt)}                 |
-      complete!(call_m!(self.integer))      => {|int|   Value::Integer(int)}               |
-      complete!(call_m!(self.boolean))      => {|b|     Value::Boolean(b)}                 |
-      complete!(call_m!(self.string))       => {|s|     s}
+      complete!(call_m!(self.array))        => {|arr|   Rc::new(Value::Array(arr))}               |
+      complete!(call_m!(self.inline_table)) => {|it|    Rc::new(Value::InlineTable(Rc::new(it)))}  |
+      complete!(call_m!(self.date_time))    => {|dt|    Rc::new(Value::DateTime(dt))}              |
+      complete!(call_m!(self.float))        => {|flt|   Rc::new(Value::Float(flt))}                |
+      complete!(call_m!(self.integer))      => {|int|   Rc::new(Value::Integer(int))}              |
+      complete!(call_m!(self.boolean))      => {|b|     Rc::new(Value::Boolean(b))}                |
+      complete!(call_m!(self.string))       => {|s|     Rc::new(s)}
     )
   );
 
@@ -221,9 +271,11 @@ impl<'a> Parser<'a> {
        ws: call_m!(self.keyval_sep) ~
       val: call_m!(self.val)        ,
       || {
-        KeyVal{
+        let res = KeyVal{
           key: key, keyval_sep: ws, val: val
-        }
+        };
+        insert_keyval_into_map(key, res.val.clone(), &self.last_table, &self.map);
+        res
       }
     )
   );
