@@ -1,4 +1,6 @@
-use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode};
+use std::cell::RefCell;
+use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode,
+                   Array};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
 use parser::{Parser, count_lines};
 use nomplusplus;
@@ -203,7 +205,7 @@ impl<'a> Parser<'a> {
 
   method!(pub val<Parser<'a>, &'a str, Value>, mut self,
     alt!(
-      complete!(call_m!(self.array))        => {|arr|   Value::Array(Box::new(arr))}       |
+      complete!(call_m!(self.array))        => {|arr|   Value::Array(arr)}       |
       complete!(call_m!(self.inline_table)) => {|it|    Value::InlineTable(Box::new(it))}  |
       complete!(call_m!(self.date_time))    => {|dt|    Value::DateTime(dt)}               |
       complete!(call_m!(self.float))        => {|flt|   Value::Float(flt)}                 |

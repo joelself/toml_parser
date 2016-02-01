@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::Display;
+use std::rc::Rc;
 use std::option::Option;
 use nomplusplus::IResult;
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
@@ -122,9 +123,21 @@ pub enum Value<'a> {
 	Float(&'a str),
 	Boolean(&'a str),
 	DateTime(DateTime<'a>),
-	Array(Box<Array<'a>>),
+	Array(Rc<Array<'a>>),
 	String(&'a str, StrType),
 	InlineTable(Box<InlineTable<'a>>),
+}
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum ArrayType {
+	Integer,
+	Float,
+	Boolean,
+	DateTime,
+	Array,
+	String,
+	InlineTable,
+	None,
 }
 
 impl<'a> PartialEq for Value<'a> {
@@ -448,7 +461,7 @@ impl<'a> Display for CommentOrNewLines<'a> {
 // <val><<array_sep.ws1>,<array_sep.ws2>?><comment_nl?><array_vals?>
 #[derive(Debug, Eq)]
 pub struct ArrayValue<'a> {
-	pub val: Value<'a>,
+	pub val: Rc<Value<'a>>,
 	pub array_sep: Option<WSSep<'a>>,
 	pub comment_nls: Vec<CommentOrNewLines<'a>>,
 }

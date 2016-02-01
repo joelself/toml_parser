@@ -1,7 +1,23 @@
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
-                   CommentOrNewLines, ArrayValue, Array,
-                   InlineTable, WSSep, TableKeyVal};
+                   CommentOrNewLines, ArrayValue, Array, Value,
+                   InlineTable, WSSep, TableKeyVal, ArrayType};
 use parser::{Parser, count_lines};
+use types::ParseError;
+use std::rc::Rc;
+use nomplusplus::IResult;
+
+#[inline(always)]
+fn map_val_to_array_type(val: &Value) -> ArrayType {
+  match val {
+    &Value::Integer(_)     => ArrayType::Integer,
+    &Value::Float(_)       => ArrayType::Float,
+    &Value::Boolean(_)     => ArrayType::Boolean,
+    &Value::DateTime(_)    => ArrayType::DateTime,
+    &Value::Array(_)       => ArrayType::Array,
+    &Value::String(_,_)      => ArrayType::String,
+    &Value::InlineTable(_) => ArrayType::InlineTable,
+  }
+}
 
 impl<'a> Parser<'a> {
   // Table
@@ -106,7 +122,8 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(comment_or_nls<Parser<'a>, &'a str, Vec<CommentOrNewLines> >, mut self, many1!(call_m!(self.comment_or_nl)));
+  method!(comment_or_nls<Parser<'a>, &'a str, Vec<CommentOrNewLines> >, mut self,
+    many1!(call_m!(self.comment_or_nl)));
   
   // TODO: Redo this with array_sep wrapped in a complete!() ?
   method!(array_value<Parser<'a>, &'a str, ArrayValue>, mut self,
@@ -117,8 +134,16 @@ impl<'a> Parser<'a> {
     array_sep: call_m!(self.array_sep)                  ~
    comment_nls: complete!(call_m!(self.comment_or_nls))   ,
           ||{
+            let t = map_val_to_array_type(&val);
+            let len = self.last_array_type.borrow().len();
+            if self.last_array_type.borrow()[len - 1] != ArrayType::None &&
+               self.last_array_type.borrow()[len - 1] != t {
+              self.mixed_array.set(true);
+            }
+            self.last_array_type.borrow_mut().pop();
+            self.last_array_type.borrow_mut().push(t);
             ArrayValue{
-              val: val,
+              val: Rc::new(val),
               array_sep: Some(array_sep),
               comment_nls: comment_nls,
             }
@@ -130,8 +155,16 @@ impl<'a> Parser<'a> {
           val: call_m!(self.val)                       ~
   comment_nls: complete!(call_m!(self.comment_or_nls)) ,
           ||{
+            let t = map_val_to_array_type(&val);
+            let len = self.last_array_type.borrow().len();
+            if self.last_array_type.borrow()[len - 1] != ArrayType::None &&
+               self.last_array_type.borrow()[len - 1] != t {
+              self.mixed_array.set(true);
+            }
+            self.last_array_type.borrow_mut().pop();
+            self.last_array_type.borrow_mut().push(t);
             ArrayValue{
-              val: val,
+              val: Rc::new(val),
               array_sep: None,
               comment_nls: comment_nls,
             }
@@ -152,23 +185,263 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(pub array<Parser<'a>, &'a str, Array>, mut self,
+  pub fn array(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, IResult<&'a str, Rc<Array>>) {
+    // Initialize last array type to None, we need a stack because arrays can be nested
+    self.last_array_type.borrow_mut().push(ArrayType::None);
+    let (tmp, res) = self.array_internal(input);
+    self = tmp; // Restore self
+    self.last_array_type.borrow_mut().pop();
+    (self, res)
+  }
+
+  method!(pub array_internal<Parser<'a>, &'a str, Rc<Array> >, mut self,
     chain!(
-              tag_s!("[")   ~
-         cn1: call_m!(self.comment_or_nls)    ~
-  array_vals: call_m!(self.array_values) ~
-         cn2: call_m!(self.comment_or_nls)            ~
-              tag_s!("]")   ,
+              tag_s!("[")                   ~
+         cn1: call_m!(self.comment_or_nls)  ~
+  array_vals: call_m!(self.array_values)    ~
+         cn2: call_m!(self.comment_or_nls)  ~
+              tag_s!("]")                   ,
       ||{
-        Array{
+       let array_result = Rc::new(Array{
           values: array_vals,
           comment_nls1: cn1,
-          comment_nls2: cn2
+          comment_nls2: cn2,
+        });
+        if self.mixed_array.get() {
+          self.mixed_array.set(false);
+          let mut vals: Vec<Rc<Value<'a>>> = vec![]; 
+          for x in 0..array_result.values.len() {
+            vals.push(array_result.values[x].val.clone());
+          }
+          self.errors.borrow_mut().push(ParseError::MixedArray(vals));
         }
+        array_result
       }
     )
   );
+// pub fn array(mut self: Parser<'a>, i: &'a str)
+// -> (Parser<'a>, ::nomplusplus::IResult<&'a str, Rc<Array>, u32>) {
+//   let result =
+//   {
+//     {
+//       use nomplusplus::InputLength;
+//       match {
+//         let res: ::nomplusplus::IResult<_, _> =
+//         if "[".len() > i.len() {
+//           ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size("[".len()))
+//         } else if (i).starts_with("[") {
+//           ::nomplusplus::IResult::Done(&i["[".len()..],
+//            &i[0.."[".len()])
+//         } else {
+//           ::nomplusplus::IResult::Error(::nomplusplus::Err::Position(::nomplusplus::ErrorKind::TagStr,
+//            i))
+//         };
+//         res
+//       } {
+//         ::nomplusplus::IResult::Error(e) =>
+//         ::nomplusplus::IResult::Error(e),
+//         ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown)
+//         =>
+//         ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown),
+//         ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(i))
+//         =>
+//         ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(0usize
+//          +
+//          i)),
+//         ::nomplusplus::IResult::Done(i, _) => {
+//           {
+//             use nomplusplus::InputLength;
+//             match {
+//               let (tmp, res) =
+//               self.comment_or_nls(i);
+//               self = tmp;
+//               res
+//             } {
+//               ::nomplusplus::IResult::Error(e) =>
+//               ::nomplusplus::IResult::Error(e),
+//               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown)
+//               =>
+//               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown),
+//               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(n))
+//               =>
+//               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(0usize
+//                +
+//                ((i).input_len()
+//                 -
+//                 i.input_len())
+//                +
+//                n)),
+//               ::nomplusplus::IResult::Done(i, o) =>
+//               {
+//                 let cn1 = o;
+//                 {
+//                   use nomplusplus::InputLength;
+//                   match {
+//                     let (tmp, res) =
+//                     self.array_values(i);
+//                     self = tmp;
+//                     res
+//                   } {
+//                     ::nomplusplus::IResult::Error(e)
+//                     =>
+//                     ::nomplusplus::IResult::Error(e),
+//                     ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown)
+//                     =>
+//                     ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown),
+//                     ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(n))
+//                     =>
+//                     ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(0usize
+//                      +
+//                      ((i).input_len()
+//                       -
+//                       i.input_len())
+//                      +
+//                      ((i).input_len()
+//                       -
+//                       i.input_len())
+//                      +
+//                      n)),
+//                     ::nomplusplus::IResult::Done(i,
+//                      o)
+//                     => {
+//                       let array_vals = o;
+//                       {
+//                         use nomplusplus::InputLength;
+//                         match {
+//                           let (tmp,
+//                            res) =
+//                           self.comment_or_nls(i);
+//                           self =
+//                           tmp;
+//                           res
+//                         } {
+//                           ::nomplusplus::IResult::Error(e)
+//                           =>
+//                           ::nomplusplus::IResult::Error(e),
+//                           ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown)
+//                           =>
+//                           ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown),
+//                           ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(n))
+//                           =>
+//                           ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(0usize
+//                            +
+//                            ((i).input_len()
+//                             -
+//                             i.input_len())
+//                            +
+//                            ((i).input_len()
+//                             -
+//                             i.input_len())
+//                            +
+//                            ((i).input_len()
+//                             -
+//                             i.input_len())
+//                            +
+//                            n)),
+//                           ::nomplusplus::IResult::Done(i,
+//                            o)
+//                           => {
+//                             let cn2 =
+//                             o;
+//                             match {
+//                               let res:
+//                               ::nomplusplus::IResult<_,
+//                               _> =
+//                               if "]".len()
+//                               >
+//                               i.len()
+//                               {
+//                                 ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size("]".len()))
+//                               } else if (i).starts_with("]")
+//                               {
+//                                 ::nomplusplus::IResult::Done(&i["]".len()..],
+//                                  &i[0.."]".len()])
+//                               } else {
+//                                 ::nomplusplus::IResult::Error(::nomplusplus::Err::Position(::nomplusplus::ErrorKind::TagStr,
+//                                  i))
+//                               };
+//                               res
+//                             } {
+//                               ::nomplusplus::IResult::Error(e)
+//                               =>
+//                               ::nomplusplus::IResult::Error(e),
+//                               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown)
+//                               =>
+//                               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Unknown),
+//                               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(n))
+//                               =>
+//                               ::nomplusplus::IResult::Incomplete(::nomplusplus::Needed::Size(0usize
+//                                +
+//                                ((i).input_len()
+//                                 -
+//                                 i.input_len())
+//                                +
+//                                ((i).input_len()
+//                                 -
+//                                 i.input_len())
+//                                +
+//                                ((i).input_len()
+//                                 -
+//                                 i.input_len())
+//                                +
+//                                ((i).input_len()
+//                                 -
+//                                 i.input_len())
+//                                +
+//                                n)),
+//                               ::nomplusplus::IResult::Done(i,
+//                                _)
+//                               => {
+//                                 ::nomplusplus::IResult::Done(i,
+//                                  (||
+//                                  {
+//                                    self.last_array_type.set(ArrayType::None);
+//                                    let array_result =
+//                                    Rc::new(Array{values:
+//                                      array_vals,
+//                                      comment_nls1:
+//                                      cn1,
+//                                      comment_nls2:
+//                                      cn2,});
+//                                      if self.mixed_array.get()
+//                                      {
+//                                        self.mixed_array.set(false);
+//                                        let mut vals: Vec<Rc<Value<'a>>> = vec![]; 
+//                                        //let array_vals = array_result.values;
+//                                        for x in 0..array_result.values.len() {
+//                                           vals.push(array_result.values[x].val.clone());
+//                                        }
+//                                        self.errors.borrow_mut()
+//                                         .push(ParseError::MixedArray(vals));
+//                                      }
+//                                      array_result
+//                                    })())
+// }
+// }
+// }
+// }
+// }
+// }
+// }
+// }
+// }
+// }
+// }
+// }
+// }
+// }
+// };
+// (self, result)
+// }
 
+  // fn error_mixed_array(self: &'a Parser<'a>, array: Array<'a>) -> (Array<'a>) {
+  //   let mut vals: Vec<&Value<'a>> = vec![];                                 
+  //   self.array = array;
+  //   let iter = self.array.values.iter();
+  //   iter.map(|x|  vals.push(&x.val));
+  //   self.errors.borrow_mut().push(ParseError::MixedArray((&array, vals)));
+  //   array
+  // }
 
   method!(table_keyval<Parser<'a>, &'a str, TableKeyVal>, mut self,
         chain!(

@@ -2,6 +2,7 @@ use std::collections::LinkedList;
 use ast::structs::{Array, InlineTable};
 use ast::structs::Value;
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 
 #[derive(Eq)]
 pub struct HashValue<'a> {
@@ -31,21 +32,21 @@ pub enum ParseResult<'a> {
 	Failure,
 }
 
-#[derive(Debug, Eq)]
+#[derive(Debug, Eq, Clone, Copy)]
 pub enum TimeOffset<'a> {
 	Z,
 	Time(TimeOffsetAmount<'a>),
 }
  
 // (+|-)<hour>:<minute>
-#[derive(Debug, Eq)]
+#[derive(Debug, Eq, Clone, Copy)]
 pub struct TimeOffsetAmount<'a> {
 	pub pos_neg: &'a str,
 	pub hour: &'a str,
 	pub minute: &'a str,
 }
 
-#[derive(Debug, Eq)]
+#[derive(Debug, Eq, Clone, Copy)]
 pub struct DateTime<'a> {
 	pub year: &'a str,
 	pub month: &'a str,
@@ -58,6 +59,6 @@ pub struct DateTime<'a> {
 }
 
 pub enum ParseError<'a> {
-	MixedArray(Array<'a>),
+	MixedArray(Vec<Rc<Value<'a>>>),
 	DuplicateTableName(String, Box<Fn(&String)>),
 }
