@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::collections::{HashMap, LinkedList};
 use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode,
                    Array, HashValue, TableType, format_keys};
-use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
+use ::types::{DateTime, TimeOffset, TimeOffsetAmount, ParseError};
 use parser::{Parser, count_lines};
 use nomplusplus;
 use nomplusplus::{IResult, InputLength};
@@ -23,36 +23,61 @@ fn is_keychar(chr: char) -> bool {
 #[inline(always)]
 
 
-fn insert_keyval_into_map<'a>(key: &str, val: Rc<Value<'a>>,
+fn insert_keyval_into_map<'a>(key: &'a str, val: Rc<Value<'a>>,
   last_table: &Option<Rc<TableType>>,
-  map: &RefCell<HashMap<String, HashValue<'a>>>) {
+  map: &RefCell<HashMap<String, HashValue<'a>>>,
+  errors: &RefCell<Vec<ParseError<'a>>>) {
   // If the last table is None
   //  If the key exists
   //    If the value is empty insert the value
   //    If the value in non-empty add the key/val to the error list
   //  If the key doesn't exist, insert it
-  let key = key.to_string();
+  let full_key = key.to_string();
   match last_table {
     &None => {
-      if map.borrow().contains_key(&key) {
-        match map.borrow().get(&key).unwrap().value {
+      if (*map.borrow()).contains_key(&full_key) {
+        match map.borrow().get(&full_key).unwrap().value {
           None => {
-            map.borrow_mut().remove(&key); map.borrow_mut().insert(key, HashValue{
+            map.borrow_mut().remove(&full_key);
+            map.borrow_mut().insert(full_key.clone(), HashValue{
               value: Some(val), subkeys: RefCell::new(LinkedList::new())
             });
           },
-          _ => ()
+          Some(_) => {
+            errors.borrow_mut().push(ParseError::DuplicateKeyName(
+              full_key.clone(), val.clone()
+            ));
+          },
         }
+      } else {
+        map.borrow_mut().insert(full_key.clone(), HashValue{
+          value: Some(val), subkeys: RefCell::new(LinkedList::new())
+        });
       }
     },
-    _ => (),
+    &Some(ref ttype) => {
+      match **ttype {
+        // If the last table was a StandardTable:
+        //  If the key exists
+        //    If the value is empty, insert the value
+        //    If the value is non-empty add the key/val pair to the error list
+        //    If the key is for an ArrayOfTables add the key/val to the error list
+        //  If the key doesn't exist add the key/value pair to the hash table
+        TableType::Standard(ref t) => {
+          let full_key = format!("{}.{}", format_keys(&t.keys), full_key);
+          if !map.borrow().contains_key(&full_key) {
+            map.borrow_mut().insert(full_key.clone(), HashValue{
+              value: Some(val), subkeys: RefCell::new(LinkedList::new())
+            });
+          } else {
+
+            unimplemented!();
+          }
+        },
+        _ => (),
+      }
+    }
   }
-  // If the last table was a StandardTable:
-  //  If the key exists
-  //    If the value is empty, insert the value
-  //    If the value is non-empty add the key/val pair to the error list
-  //    If the key is for an ArrayOfTables add the key/val to the error list
-  //  If the key doesn't exist add the key/value pair to the hash table
 
   // If the last table was an ArrayOfTables:
   //  Get the last table in the vector
@@ -237,8 +262,9 @@ impl<'a> Parser<'a> {
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
   method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(
-    complete!(call_m!(self.quoted_key)) |
-    complete!(call_m!(self.unquoted_key))));
+    complete!(call_m!(self.quoted_key))   |
+    complete!(call_m!(self.unquoted_key))
+  ));
 
   method!(keyval_sep<Parser<'a>, &'a str, WSSep>, mut self,
     chain!(
@@ -274,7 +300,7 @@ impl<'a> Parser<'a> {
         let res = KeyVal{
           key: key, keyval_sep: ws, val: val
         };
-        insert_keyval_into_map(key, res.val.clone(), &self.last_table, &self.map);
+        insert_keyval_into_map(key, res.val.clone(), &self.last_table, &self.map, &self.errors);
         res
       }
     )

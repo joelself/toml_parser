@@ -2,6 +2,7 @@ use ast::structs::{Array, InlineTable};
 use ast::structs::Value;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
+use std::cell::RefCell;
 
 
 pub enum ParseResult<'a> {
@@ -39,5 +40,5 @@ pub struct DateTime<'a> {
 
 pub enum ParseError<'a> {
 	MixedArray(Vec<Rc<Value<'a>>>),
-	DuplicateTableName(String, Box<Fn(&String)>),
+	DuplicateKeyName(String, Rc<Value<'a>>),
 }
