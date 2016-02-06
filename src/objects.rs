@@ -1,8 +1,8 @@
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    CommentOrNewLines, ArrayValue, Array, Value,
                    InlineTable, WSSep, TableKeyVal, ArrayType,
-                   HashValue, format_keys};
-use parser::{Parser, count_lines};
+                   HashValue, format_tt_keys};
+use parser::Parser;
 use types::ParseError;
 use std::cell::RefCell;
 use std::collections::{HashMap, LinkedList};
@@ -21,10 +21,6 @@ fn map_val_to_array_type(val: &Value) -> ArrayType {
     &Value::InlineTable(_)    => ArrayType::InlineTable,
     _                         => ArrayType::None, // unreachable
   }
-}
-
-fn insert_array_table(keys: &Vec<WSKeySep>, map: & mut RefCell<HashMap<String, HashValue>>) {
-
 }
 
 impl<'a> Parser<'a> {
@@ -60,23 +56,36 @@ impl<'a> Parser<'a> {
            tag_s!("[")    ~
       ws1: call_m!(self.ws)             ~
       key: call_m!(self.key)            ~
-  mut subkeys: call_m!(self.table_subkeys)  ~
+  subkeys: call_m!(self.table_subkeys)  ~
       ws2: call_m!(self.ws)             ~
            tag_s!("]")    ,
       ||{
-        subkeys.insert(0, WSKeySep{
-          ws: WSSep {
-            ws1: "", ws2: ""
-          },
-          key: key
-        });
         let res = Rc::new(TableType::Standard(Table{
           ws: WSSep{
             ws1: ws1, ws2: ws2
           },
-          keys: subkeys,
+          key: key,
+          subkeys: subkeys,
         }));
-        self.last_table = Some(res.clone());
+        if self.last_array_tables.borrow().len() > 0 {
+          let last_table = &*self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1];
+          if !res.is_subtable_of(last_table) ||
+            format_tt_keys(&res) == format_tt_keys(last_table) {
+            self.errors.borrow_mut().push(ParseError::InvalidTable (
+              format_tt_keys(&res), RefCell::new(HashMap::new())
+            ));
+            self.array_error.set(true);
+          } else {
+            self.array_error.set(false);
+          }
+          let full_key = format_tt_keys(&res);
+          if !self.map.borrow().contains_key(&full_key) {
+            self.map.borrow_mut().insert(full_key, HashValue{
+              value: None, subkeys: RefCell::new(LinkedList::new())
+            });
+          }
+          self.last_table = Some(res.clone());
+        }
         res
       }
     )
@@ -88,24 +97,31 @@ impl<'a> Parser<'a> {
            tag_s!("[[")   ~
       ws1: call_m!(self.ws)             ~
       key: call_m!(self.key)            ~
-mut subkeys: call_m!(self.table_subkeys)  ~
+  subkeys: call_m!(self.table_subkeys)  ~
       ws2: call_m!(self.ws)             ~
            tag_s!("]]")   ,
       ||{
-        subkeys.insert(0, WSKeySep{
-          ws: WSSep {
-            ws1: "", ws2: ""
-          },
-          key: key
-        });
-        // TODO: If there is a parent array of tables, add this one as a child
-        insert_array_table(&subkeys, & mut self.map);
         let res = Rc::new(TableType::Array(Table{
           ws: WSSep{
             ws1: ws1, ws2: ws2
           },
-          keys: subkeys
+          key: key,
+          subkeys: subkeys
         }));
+        self.array_error.set(false);
+        let len = self.last_array_tables.borrow().len();
+        if len > 0 {
+          let len = self.last_array_tables.borrow().len();
+          let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
+          if subtable {
+            self.last_array_tables.borrow_mut().push(res.clone());
+          } else {
+            self.last_array_tables.borrow_mut().clear();
+            self.last_array_tables.borrow_mut().push(res.clone());
+          }
+        }else {
+          self.last_array_tables.borrow_mut().push(res.clone());
+        }
         self.last_table = Some(res.clone());
         res
       }
@@ -161,7 +177,7 @@ mut subkeys: call_m!(self.table_subkeys)  ~
           ||{
             let t = map_val_to_array_type(&val);
             let len = self.last_array_type.borrow().len();
-            if self.last_array_type.borrow()[len - 1] != ArrayType::None &&
+            if len > 0 && self.last_array_type.borrow()[len - 1] != ArrayType::None &&
                self.last_array_type.borrow()[len - 1] != t {
               self.mixed_array.set(true);
             }
@@ -182,7 +198,7 @@ mut subkeys: call_m!(self.table_subkeys)  ~
           ||{
             let t = map_val_to_array_type(&val);
             let len = self.last_array_type.borrow().len();
-            if self.last_array_type.borrow()[len - 1] != ArrayType::None &&
+            if len > 0 && self.last_array_type.borrow()[len - 1] != ArrayType::None &&
                self.last_array_type.borrow()[len - 1] != t {
               self.mixed_array.set(true);
             }
@@ -286,25 +302,26 @@ mod test {
                      TableType, Value, StrType};
   use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
   use parser::Parser;
+  use std::rc::Rc;
 
   #[test]
   fn test_table() {
     let mut p = Parser::new();
     assert_eq!(p.table("[ _underscore_ . \"-δáƨλèƨ-\" ]").1, Done("",
-      TableType::Standard(Table{
+      Rc::new(TableType::Standard(Table{
         ws: WSSep{ws1: " ", ws2: " "}, key: "_underscore_", subkeys: vec![
           WSKeySep{ws: WSSep{ws1: " ", ws2: " "}, key: "\"-δáƨλèƨ-\""}
         ]
       })
-    ));
+    )));
     p = Parser::new();
     assert_eq!(p.table("[[\t NumberOne\t.\tnUMBERtWO \t]]").1, Done("",
-      TableType::Array(Table{
+      Rc::new(TableType::Array(Table{
         ws: WSSep{ws1: "\t ", ws2: " \t"}, key: "NumberOne", subkeys: vec![
           WSKeySep{ws: WSSep{ws1: "\t", ws2: "\t"}, key: "nUMBERtWO"}
         ]
       })
-    ));
+    )));
   }
 
   #[test]
@@ -331,11 +348,11 @@ mod test {
   fn test_std_table() {
     let p = Parser::new();
     assert_eq!(p.std_table("[Dr-Pepper  . \"ƙè¥_TWÓ\"]").1, Done("",
-      TableType::Standard(Table{
+      Rc::new(TableType::Standard(Table{
         ws: WSSep{ws1: "", ws2: ""}, key: "Dr-Pepper", subkeys: vec![
           WSKeySep{ws: WSSep{ws1: "  ", ws2: " "}, key: "\"ƙè¥_TWÓ\""}
         ]
-      })
+      }))
     ));
   }
 
@@ -343,12 +360,12 @@ mod test {
   fn test_array_table() {
     let p = Parser::new();
     assert_eq!(p.array_table("[[\"ƙè¥ôñè\"\t. key_TWO]]").1, Done("",
-      TableType::Array(Table{
+      Rc::new(TableType::Array(Table{
         ws: WSSep{ws1: "", ws2: ""}, key: "\"ƙè¥ôñè\"", subkeys: vec![
           WSKeySep{ws: WSSep{ws1: "\t", ws2: " "}, key: "key_TWO"}
         ]
       })
-    ));
+    )));
   }
 
   #[test]
@@ -362,12 +379,6 @@ mod test {
     let p = Parser::new();
     assert_eq!(p.ws_newline("\t\n\n").1, Done("", "\t\n\n"));
   }
-
-  // #[test]
-  // fn test_ws_newlines() {
-  //   let p = Parser::new();
-  //   assert_eq!(p.ws_newlines("\n \t\n\r\n ").1, Done("", "\n \t\n\r\n "));
-  // }
 
   #[test]
   fn test_comment_nl() {
@@ -398,18 +409,12 @@ mod test {
     assert_eq!(p.comment_or_nl("\n\t\r\n ").1, Done("", CommentOrNewLines::NewLines("\n\t\r\n ")));
   }
 
-  // #[test]
-  // fn test_comment_or_ws_or_nl() {
-  //   let mut p = Parser::new();
-  //   assert_eq!(p.comment_or_ws_nl("   \t").1, Done("", CommentOrNewLines::NewLines("   \t")));
-  // }
-
   #[test]
   fn test_array_value() {
     let mut p = Parser::new();
     assert_eq!(p.array_value("54.6, \n#çô₥₥èñƭ\n\n").1,
       Done("",ArrayValue{
-        val: Value::Float("54.6"), array_sep: Some(WSSep{
+        val: Rc::new(Value::Float("54.6")), array_sep: Some(WSSep{
           ws1: "", ws2: " "
         }),
         comment_nls: vec![CommentOrNewLines::Comment(CommentNewLines{
@@ -420,13 +425,13 @@ mod test {
     p = Parser::new();
     assert_eq!(p.array_value("\"ƨƥáϱλèƭƭï\"").1,
       Done("",ArrayValue{
-        val: Value::String("ƨƥáϱλèƭƭï", StrType::Basic), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
+        val: Rc::new(Value::String("ƨƥáϱλèƭƭï", StrType::Basic)), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
       })
     );
     p = Parser::new();
     assert_eq!(p.array_value("44_9 , ").1,
       Done("",ArrayValue{
-        val: Value::Integer("44_9"), array_sep: Some(WSSep{
+        val: Rc::new(Value::Integer("44_9")), array_sep: Some(WSSep{
           ws1: " ", ws2: " "
         }),
         comment_nls: vec![CommentOrNewLines::NewLines("")]
@@ -438,21 +443,21 @@ mod test {
   fn test_array_values() {
     let mut p = Parser::new();
     assert_eq!(p.array_values("1, 2, 3").1, Done("", vec![
-      ArrayValue{val: Value::Integer("1"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
+      ArrayValue{val: Rc::new(Value::Integer("1")), array_sep: Some(WSSep{ws1: "", ws2: " "}),
       comment_nls: vec![CommentOrNewLines::NewLines("")]},
-      ArrayValue{val: Value::Integer("2"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
+      ArrayValue{val: Rc::new(Value::Integer("2")), array_sep: Some(WSSep{ws1: "", ws2: " "}),
       comment_nls: vec![CommentOrNewLines::NewLines("")]},
-      ArrayValue{val: Value::Integer("3"), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]}
+      ArrayValue{val: Rc::new(Value::Integer("3")), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]}
     ]));
     p = Parser::new();
     assert_eq!(p.array_values("1, 2, #çô₥₥èñƭ\n3, ").1, Done("", vec![
-      ArrayValue{val: Value::Integer("1"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
+      ArrayValue{val: Rc::new(Value::Integer("1")), array_sep: Some(WSSep{ws1: "", ws2: " "}),
       comment_nls: vec![CommentOrNewLines::NewLines("")]},
-      ArrayValue{val: Value::Integer("2"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
+      ArrayValue{val: Rc::new(Value::Integer("2")), array_sep: Some(WSSep{ws1: "", ws2: " "}),
       comment_nls: vec![CommentOrNewLines::Comment(CommentNewLines{pre_ws_nl: "",
         comment: Comment{text: "çô₥₥èñƭ"},
         newlines: "\n"})]},
-      ArrayValue{val: Value::Integer("3"), array_sep: Some(WSSep{ws1: "", ws2: " "}),
+      ArrayValue{val: Rc::new(Value::Integer("3")), array_sep: Some(WSSep{ws1: "", ws2: " "}),
       comment_nls: vec![CommentOrNewLines::NewLines("")]}
     ]));
   }
@@ -461,30 +466,30 @@ mod test {
   fn test_non_nested_array() {
     let p = Parser::new();
     assert_eq!(p.array("[2010-10-10T10:10:10.33Z, 1950-03-30T21:04:14.123+05:00]").1,
-      Done("", Array {
+      Done("", Rc::new(Array {
         values: vec![ArrayValue {
-          val: Value::DateTime(DateTime {
+          val: Rc::new(Value::DateTime(DateTime {
             year: "2010", month: "10", day: "10",
             hour: "10", minute: "10", second: "10", fraction: Some("33"),
             offset: TimeOffset::Z
-          }),
+          })),
           array_sep: Some(WSSep{
             ws1: "", ws2: " "
           }),
           comment_nls: vec![CommentOrNewLines::NewLines("")]
         },
         ArrayValue {
-          val: Value::DateTime(DateTime{
+          val: Rc::new(Value::DateTime(DateTime{
             year: "1950", month: "03", day: "30",
             hour: "21", minute: "04", second: "14", fraction: Some("123"),
             offset: TimeOffset::Time(TimeOffsetAmount{
               pos_neg: "+", hour: "05", minute: "00"
             })
-          }),
+          })),
           array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
         }],
         comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
-      })
+      }))
     );
   }
 
@@ -492,54 +497,54 @@ mod test {
   fn test_nested_array() {
     let p = Parser::new();
     assert_eq!(p.array("[[3,4], [4,5], [6]]").1,
-      Done("", Array{
+      Done("", Rc::new(Array{
         values: vec![
           ArrayValue {
-            val: Value::Array(Box::new(Array {
+            val: Rc::new(Value::Array(Rc::new(Array {
               values: vec![
                 ArrayValue {
-                  val: Value::Integer("3"), array_sep: Some(WSSep { ws1: "", ws2: "" }),
+                  val: Rc::new(Value::Integer("3")), array_sep: Some(WSSep { ws1: "", ws2: "" }),
                   comment_nls: vec![CommentOrNewLines::NewLines("")]
                 },
                 ArrayValue {
-                  val: Value::Integer("4"), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
+                  val: Rc::new(Value::Integer("4")), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
                 }
               ],
               comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
-            })),
+            }))),
             array_sep: Some(WSSep { ws1: "", ws2: " " }),
             comment_nls: vec![CommentOrNewLines::NewLines("")]
           },
           ArrayValue {
-            val: Value::Array(Box::new(Array {
+            val: Rc::new(Value::Array(Rc::new(Array {
               values: vec![
                 ArrayValue {
-                  val: Value::Integer("4"), array_sep: Some(WSSep { ws1: "", ws2: ""}),
+                  val: Rc::new(Value::Integer("4")), array_sep: Some(WSSep { ws1: "", ws2: ""}),
                   comment_nls: vec![CommentOrNewLines::NewLines("")]
                 },
                 ArrayValue {
-                    val: Value::Integer("5"), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
+                    val: Rc::new(Value::Integer("5")), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
                 }
               ],
               comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
-            })),
+            }))),
             array_sep: Some(WSSep { ws1: "", ws2: " "}),
             comment_nls: vec![CommentOrNewLines::NewLines("")]
           },
           ArrayValue {
-            val: Value::Array(Box::new(Array {
+            val: Rc::new(Value::Array(Rc::new(Array {
               values: vec![
                 ArrayValue {
-                  val: Value::Integer("6"), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
+                  val: Rc::new(Value::Integer("6")), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
                 }
               ],
              comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
-            })),
+            }))),
             array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines("")]
           }
         ],
         comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
-      })
+      }))
     );
   }
 
@@ -548,7 +553,7 @@ mod test {
     let p = Parser::new();
     assert_eq!(p.table_keyval("\"Ì WúƲ Húϱƨ!\"\t=\t'Mè ƭôô!' ").1, Done("", TableKeyVal{
       keyval: KeyVal{
-        key: "\"Ì WúƲ Húϱƨ!\"", val: Value::String("Mè ƭôô!", StrType::Literal), keyval_sep: WSSep{
+        key: "\"Ì WúƲ Húϱƨ!\"", val: Rc::new(Value::String("Mè ƭôô!", StrType::Literal)), keyval_sep: WSSep{
           ws1: "\t", ws2: "\t"
         }
       },
@@ -568,7 +573,7 @@ mod test {
             key: "Key", keyval_sep: WSSep{
               ws1: " ", ws2: "\t"
             },
-            val: Value::Integer("54")
+            val: Rc::new(Value::Integer("54"))
           },
           kv_sep: WSSep{
             ws1: " ", ws2: ""
@@ -579,7 +584,7 @@ mod test {
             key: "\"Key2\"", keyval_sep: WSSep{
               ws1: " ", ws2: " "
             },
-            val: Value::String("34.99", StrType::Literal)
+            val: Rc::new(Value::String("34.99", StrType::Literal))
           },
           kv_sep: WSSep{
             ws1: "", ws2: "\t"
@@ -600,7 +605,7 @@ mod test {
               key: "Key", keyval_sep: WSSep{
                 ws1: " ", ws2: " "
               },
-              val: Value::Float("3.14E+5")
+              val: Rc::new(Value::Float("3.14E+5"))
             },
             kv_sep: WSSep{
               ws1: "", ws2: " "
@@ -611,7 +616,7 @@ mod test {
               key: "\"Key2\"", keyval_sep: WSSep{
                 ws1: " ", ws2: " "
               },
-              val: Value::String("New\nLine", StrType::MLLiteral)
+              val: Rc::new(Value::String("New\nLine", StrType::MLLiteral))
             },
             kv_sep: WSSep{
               ws1: " ", ws2: "\t"

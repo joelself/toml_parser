@@ -1,9 +1,8 @@
 use std::fs;
-use std::fs::{DirEntry,File};
+use std::fs::File;
 extern crate tomllib;
 use tomllib::parser::Parser;
-use std::io::{Read, Result, BufReader};
-use std::io::Error;
+use std::io::{Read, BufReader};
 
 fn verify(input: String) -> (bool, Option<(String, String)>) {
     let input_copy = input.clone();
@@ -15,9 +14,6 @@ fn verify(input: String) -> (bool, Option<(String, String)>) {
     } else {
         return (true, None);
     }
-}
-
-fn do_nothing(_unused: Error) {
 }
 
 #[test]

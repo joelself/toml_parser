@@ -1,8 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::collections::{HashMap, LinkedList};
+use std::collections::HashMap;
 use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode,
-                   Array, HashValue, TableType, format_keys};
+                   HashValue, TableType, format_keys};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount, ParseError};
 use parser::{Parser, count_lines};
 use nomplusplus;
@@ -27,66 +27,102 @@ fn insert_keyval_into_map<'a>(key: &'a str, val: Rc<Value<'a>>,
   last_table: &Option<Rc<TableType>>,
   map: &RefCell<HashMap<String, HashValue<'a>>>,
   errors: &RefCell<Vec<ParseError<'a>>>) {
-  // If the last table is None
-  //  If the key exists
-  //    If the value is empty insert the value
-  //    If the value in non-empty add the key/val to the error list
-  //  If the key doesn't exist, insert it
-  let full_key = key.to_string();
+  let mut remove = false;
+  let mut insert = false;
+  let mut error = false;
+  let key = key.to_string();
+  let full_key: String;
   match last_table {
+    // If the last table is None
+    //  If the key exists
+    //    If the value is empty insert the value
+    //    If the value in non-empty add the key/val to the error list
+    //  If the key doesn't exist, insert it
     &None => {
-      if (*map.borrow()).contains_key(&full_key) {
-        match map.borrow().get(&full_key).unwrap().value {
-          None => {
-            map.borrow_mut().remove(&full_key);
-            map.borrow_mut().insert(full_key.clone(), HashValue{
-              value: Some(val), subkeys: RefCell::new(LinkedList::new())
-            });
-          },
-          Some(_) => {
-            errors.borrow_mut().push(ParseError::DuplicateKeyName(
-              full_key.clone(), val.clone()
-            ));
-          },
+      full_key = format!("{}", key);
+      if (*map.borrow()).contains_key(&key) {
+        match map.borrow().get(&key).unwrap().value {
+          None => {remove = true; insert = true;},
+          Some(_) => error = true,
         }
       } else {
-        map.borrow_mut().insert(full_key.clone(), HashValue{
-          value: Some(val), subkeys: RefCell::new(LinkedList::new())
-        });
+        insert = true;
       }
     },
+
+      // If the last table was a StandardTable or ArrayTable:
+      //  If the key exists
+      //    If the value is empty, insert the value
+      //    If the value is non-empty add the key/val pair to the error list
+      //    If the key is for an ArrayOfTables add the key/val to the error list
+      //  If the key doesn't exist add the key/value pair to the hash table
     &Some(ref ttype) => {
       match **ttype {
-        // If the last table was a StandardTable:
-        //  If the key exists
-        //    If the value is empty, insert the value
-        //    If the value is non-empty add the key/val pair to the error list
-        //    If the key is for an ArrayOfTables add the key/val to the error list
-        //  If the key doesn't exist add the key/value pair to the hash table
         TableType::Standard(ref t) => {
-          let full_key = format!("{}.{}", format_keys(&t.keys), full_key);
+          full_key = format!("{}.{}", format_keys(&t), key);
           if !map.borrow().contains_key(&full_key) {
-            map.borrow_mut().insert(full_key.clone(), HashValue{
-              value: Some(val), subkeys: RefCell::new(LinkedList::new())
-            });
+            insert = true;
           } else {
-
-            unimplemented!();
+            match map.borrow().get(&full_key).unwrap().value {
+              None => {remove = true; insert = true;},
+              Some(_) => error = true,
+            }
           }
         },
-        _ => (),
+        TableType::Array(ref t) => {
+          full_key = "".to_string();
+          let array_key = format_keys(&t);
+          if !map.borrow().contains_key(&array_key) {
+            let mut table = HashMap::new();
+            table.insert(key.clone(), val.clone());
+            map.borrow_mut().insert(array_key, HashValue::new(Rc::new(Value::ArrayOfTables(
+              RefCell::new(vec![RefCell::new(table)])
+            ))));
+          } else {
+            match map.borrow().get(&array_key).unwrap().value {
+              None => {
+                let mut table = HashMap::new();
+                table.insert(key.clone(), val.clone());
+                let mut map_borrow = map.borrow_mut();
+                let mut entry = map_borrow.entry(array_key).or_insert(
+                  HashValue::none()
+                );
+                entry.value = Some(Rc::new(Value::ArrayOfTables(RefCell::new(vec![RefCell::new(table)]))));
+              },
+              Some(ref value) => {
+                match **value {
+                  Value::ArrayOfTables(ref array) => {
+                    let array = array.borrow_mut();
+                    let mut table = array[array.len()-1].borrow_mut();
+                    if !table.contains_key(&key) {
+                      table.insert(key.to_string(), val.clone());
+                    } else {
+                      errors.borrow_mut().push(ParseError::DuplicateArrayOfTableKey(
+                        array_key.clone(), key.clone(), val.clone()
+                      ));
+                    }
+                  },
+                  ref other =>
+                    panic!("Last table was an array of tables, but value in the map was different: {}", other),
+                }
+              }
+            }
+          }
+        },
       }
     }
   }
 
-  // If the last table was an ArrayOfTables:
-  //  Get the last table in the vector
-  //  If the key exists
-  //    If the value is empty insert the value
-  //    if the value is non-empty add the ArrayTable key/value pair to the error list
-  //  If the key doesn't exist add the key/value pair to the table
-  //  (New ArrayOfTables declarations should add an empty HashMap to the end of the vector for that
-
+  if error {
+    errors.borrow_mut().push(ParseError::DuplicateKey(
+      full_key.clone(), val.clone()
+    ));
+  } else if remove && insert {
+    map.borrow_mut().remove(&full_key);
+    map.borrow_mut().insert(full_key.clone(), HashValue::new(val.clone()));
+  } else if insert {
+    map.borrow_mut().insert(full_key.clone(), HashValue::new(val.clone()));
+  }
 }
 
 impl<'a> Parser<'a> {
@@ -300,7 +336,15 @@ impl<'a> Parser<'a> {
         let res = KeyVal{
           key: key, keyval_sep: ws, val: val
         };
-        insert_keyval_into_map(key, res.val.clone(), &self.last_table, &self.map, &self.errors);
+        if self.array_error.get() {
+          //let mut err = self.errors.borrow_mut().pop().unwrap();
+          // if let ParseError::InvalidTable(_, ref map) = err {
+          //   //  map.borrow_mut().insert(res.key.to_string(), res.val.clone());
+          // }
+          //self.errors.borrow_mut().push(err);
+        } else {
+          //insert_keyval_into_map(key, res.val.clone(), &self.last_table, &self.map, &self.errors);
+        }
         res
       }
     )
@@ -315,6 +359,7 @@ mod test {
                      CommentOrNewLines};
   use ::types::{DateTime, TimeOffsetAmount, TimeOffset};
   use parser::Parser;
+  use std::rc::Rc;
 
   #[test]
   fn test_integer() {
@@ -331,58 +376,58 @@ mod test {
   #[test]
   fn test_basic_string() {
     let p = Parser::new();
-    assert_eq!(p.basic_string("\"Tλïƨ ïƨ á βáƨïç ƨƭřïñϱ.\"").1, Done("", "Tλïƨ ïƨ á βáƨïç ƨƭřïñϱ."));
+    assert_eq!(p.basic_string("\"TÎ»Ã¯Æ¨ Ã¯Æ¨ Ã¡ Î²Ã¡Æ¨Ã¯Ã§ Æ¨Æ­Å™Ã¯Ã±Ï±.\"").1, Done("", "TÎ»Ã¯Æ¨ Ã¯Æ¨ Ã¡ Î²Ã¡Æ¨Ã¯Ã§ Æ¨Æ­Å™Ã¯Ã±Ï±."));
   }
 
   #[test]
   fn test_ml_basic_string() {
     let p = Parser::new();
-    assert_eq!(p.ml_basic_string("\"\"\"£ïñè Óñè
-£ïñè Tωô
-£ïñè Tλřèè\"\"\"").1, Done("", r#"£ïñè Óñè
-£ïñè Tωô
-£ïñè Tλřèè"# ));
+    assert_eq!(p.ml_basic_string("\"\"\"Â£Ã¯Ã±Ã¨ Ã“Ã±Ã¨
+Â£Ã¯Ã±Ã¨ TÏ‰Ã´
+Â£Ã¯Ã±Ã¨ TÎ»Å™Ã¨Ã¨\"\"\"").1, Done("", r#"Â£Ã¯Ã±Ã¨ Ã“Ã±Ã¨
+Â£Ã¯Ã±Ã¨ TÏ‰Ã´
+Â£Ã¯Ã±Ã¨ TÎ»Å™Ã¨Ã¨"# ));
   }
 
   #[test]
   fn test_literal_string() {
     let p = Parser::new();
-    assert_eq!(p.literal_string("'Abc џ'").1, Done("", "Abc џ")); 
+    assert_eq!(p.literal_string("'Abc ÑŸ'").1, Done("", "Abc ÑŸ")); 
   }
 
   #[test]
   fn test_ml_literal_string() {
     let p = Parser::new();
     assert_eq!(p.ml_literal_string(r#"'''
-                                    Abc џ
+                                    Abc ÑŸ
                                     '''"#).1,
       Done("", r#"
-                                    Abc џ
+                                    Abc ÑŸ
                                     "#));
   }
 
   #[test]
   fn test_string() {
     let mut p = Parser::new();
-    assert_eq!(p.string("\"βáƨïç_ƨƭřïñϱ\"").1, Done("", Value::String("βáƨïç_ƨƭřïñϱ", StrType::Basic)));
+    assert_eq!(p.string("\"Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±\"").1, Done("", Value::String("Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±", StrType::Basic)));
     p = Parser::new();
-    assert_eq!(p.string(r#""""₥ℓ_βáƨïç_ƨƭřïñϱ
-ñú₥βèř_ƭωô
-NÛMßÉR-THRÉÉ
-""""#).1, Done("", Value::String(r#"₥ℓ_βáƨïç_ƨƭřïñϱ
-ñú₥βèř_ƭωô
-NÛMßÉR-THRÉÉ
+    assert_eq!(p.string(r#""""â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
+Ã±Ãºâ‚¥Î²Ã¨Å™_Æ­Ï‰Ã´
+NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
+""""#).1, Done("", Value::String(r#"â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
+Ã±Ãºâ‚¥Î²Ã¨Å™_Æ­Ï‰Ã´
+NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
 "#, StrType::MLBasic)));
     p = Parser::new();
-    assert_eq!(p.string("'£ÌTÉRÂ£§TRïNG'").1, Done("", Value::String("£ÌTÉRÂ£§TRïNG", StrType::Literal)));
+    assert_eq!(p.string("'Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG'").1, Done("", Value::String("Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG", StrType::Literal)));
     p = Parser::new();
-    assert_eq!(p.string(r#"'''§ƥřïƭè
-Çôƙè
-Þèƥƨï
+    assert_eq!(p.string(r#"'''Â§Æ¥Å™Ã¯Æ­Ã¨
+Ã‡Ã´Æ™Ã¨
+ÃžÃ¨Æ¥Æ¨Ã¯
 '''"#).1,
-      Done("", Value::String(r#"§ƥřïƭè
-Çôƙè
-Þèƥƨï
+      Done("", Value::String(r#"Â§Æ¥Å™Ã¯Æ­Ã¨
+Ã‡Ã´Æ™Ã¨
+ÃžÃ¨Æ¥Æ¨Ã¯
 "#, StrType::MLLiteral)));
 
   }
@@ -461,7 +506,7 @@ NÛMßÉR-THRÉÉ
 
   #[test]
   fn test_date_time() {
-    let mut p = Parser::new();
+    let      p = Parser::new();
     assert_eq!(p.date_time("1999-03-21T20:15:44.5-07:00").1,
       Done("", DateTime{
         year: "1999", month: "03", day: "21",
@@ -484,13 +529,13 @@ NÛMßÉR-THRÉÉ
   #[test]
   fn test_quoted_key() {
     let p = Parser::new();
-    assert_eq!(p.quoted_key("\"QúôƭèδKè¥\"").1, Done("", "\"QúôƭèδKè¥\""));
+    assert_eq!(p.quoted_key("\"QÃºÃ´Æ­Ã¨Î´KÃ¨Â¥\"").1, Done("", "\"QÃºÃ´Æ­Ã¨Î´KÃ¨Â¥\""));
   }
 
   #[test]
   fn test_key() {
     let mut p = Parser::new();
-    assert_eq!(p.key("\"Gřáƥèƒřúïƭ\"").1, Done("", "\"Gřáƥèƒřúïƭ\""));
+    assert_eq!(p.key("\"GÅ™Ã¡Æ¥Ã¨Æ’Å™ÃºÃ¯Æ­\"").1, Done("", "\"GÅ™Ã¡Æ¥Ã¨Æ’Å™ÃºÃ¯Æ­\""));
     p = Parser::new();
     assert_eq!(p.key("_is-key").1, Done("", "_is-key"));
   }
@@ -505,32 +550,32 @@ NÛMßÉR-THRÉÉ
   fn test_val() {
     let mut p = Parser::new();
     assert_eq!(p.val("[4,9]").1, Done("",
-      Value::Array(Box::new(Array{
+      Rc::new(Value::Array(Rc::new(Array{
         values: vec![
           ArrayValue{
-            val: Value::Integer("4"), array_sep: Some(WSSep{
+            val: Rc::new(Value::Integer("4")), array_sep: Some(WSSep{
               ws1: "", ws2: ""
             }),
             comment_nls: vec![CommentOrNewLines::NewLines("")]
           },
           ArrayValue{
-            val: Value::Integer("9"), array_sep: None,
+            val: Rc::new(Value::Integer("9")), array_sep: None,
             comment_nls: vec![CommentOrNewLines::NewLines("")]
           },
         ],
         comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
       }
-    ))));
+    )))));
     p = Parser::new();
-    assert_eq!(p.val("{\"§ô₥è Þïϱ\"='Táƨƭ¥ Þôřƙ'}").1, Done("",
-      Value::InlineTable(Box::new(InlineTable{
+    assert_eq!(p.val("{\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"='TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™'}").1, Done("",
+      Rc::new(Value::InlineTable(Rc::new(InlineTable{
         keyvals: Some(vec![
           TableKeyVal{
             keyval: KeyVal{
-              key: "\"§ô₥è Þïϱ\"", keyval_sep: WSSep{
+              key: "\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"", keyval_sep: WSSep{
                 ws1: "", ws2: ""
               },
-              val: Value::String("Táƨƭ¥ Þôřƙ", StrType::Literal)
+              val: Rc::new(Value::String("TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™", StrType::Literal))
             },
             kv_sep: WSSep{ws1: "", ws2: ""}
           }
@@ -538,25 +583,25 @@ NÛMßÉR-THRÉÉ
         ws: WSSep{
           ws1: "", ws2: ""
         }
-    }))));
+    })))));
     p = Parser::new();
-    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Value::DateTime(DateTime{
+    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Rc::new(Value::DateTime(DateTime{
                               year: "2112", month: "09", day: "30",
                               hour: "12", minute: "33", second: "01", fraction: Some("345"),
                               offset: TimeOffset::Time(TimeOffsetAmount{
                                 pos_neg: "-", hour: "11", minute: "30"
                               })
-                            })));
+                            }))));
     p = Parser::new();
-    assert_eq!(p.val("3487.3289E+22").1, Done("", Value::Float("3487.3289E+22")));
+    assert_eq!(p.val("3487.3289E+22").1, Done("", Rc::new(Value::Float("3487.3289E+22"))));
     p = Parser::new();
-    assert_eq!(p.val("8932838").1, Done("", Value::Integer("8932838")));
+    assert_eq!(p.val("8932838").1, Done("", Rc::new(Value::Integer("8932838"))));
     p = Parser::new();
-    assert_eq!(p.val("false").1, Done("", Value::Boolean("false")));
+    assert_eq!(p.val("false").1, Done("", Rc::new(Value::Boolean("false"))));
     p = Parser::new();
-    assert_eq!(p.val("true").1, Done("", Value::Boolean("true")));
+    assert_eq!(p.val("true").1, Done("", Rc::new(Value::Boolean("true"))));
     p = Parser::new();
-    assert_eq!(p.val("'§ô₥è §ƭřïñϱ'").1, Done("", Value::String("§ô₥è §ƭřïñϱ", StrType::Literal)));
+    assert_eq!(p.val("'Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±'").1, Done("", Rc::new(Value::String("Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±", StrType::Literal))));
   }
 
   #[test]
@@ -566,7 +611,7 @@ NÛMßÉR-THRÉÉ
       key: "Boolean", keyval_sep: WSSep{
         ws1: " ", ws2: " "
       },
-      val: Value::Float("84.67")
+      val: Rc::new(Value::Float("84.67"))
     }));
   }
 }

@@ -1,15 +1,16 @@
-use ast::structs::{Array, InlineTable};
 use ast::structs::Value;
-use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
+use std::hash::Hasher;
 use std::rc::Rc;
 use std::cell::RefCell;
 
 
 pub enum ParseResult<'a> {
-	Success(&'a str),
-	SuccessComplete(&'a str, &'a str),
-	Error(Vec<ParseError<'a>>),
-	Failure,
+	Full,
+	Partial(&'a str),
+	FullError(Vec<ParseError<'a>>),
+	PartialError(&'a str, Vec<ParseError<'a>>),
+	Failure(u64, u64),
 }
 
 #[derive(Debug, Eq, Clone, Copy)]
@@ -40,5 +41,7 @@ pub struct DateTime<'a> {
 
 pub enum ParseError<'a> {
 	MixedArray(Vec<Rc<Value<'a>>>),
-	DuplicateKeyName(String, Rc<Value<'a>>),
+	DuplicateKey(String, Rc<Value<'a>>),
+	DuplicateArrayOfTableKey(String, String, Rc<Value<'a>>),
+	InvalidTable(String, RefCell<HashMap<String, Rc<Value<'a>>>>)
 }

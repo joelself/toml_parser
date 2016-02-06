@@ -4,7 +4,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::{HashMap, LinkedList};
 use std::option::Option;
-use nomplusplus::IResult;
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
 
 /// Compares two Options that contain comparable structs
@@ -21,18 +20,6 @@ pub enum ErrorCode {
 	MLBasicString = 1,
 	LiteralString = 2,
 	MLLiteralString = 3,
-}
-
-pub struct MyResult<'a>(pub IResult<&'a str, Toml<'a>>);
-
-impl<'a> Display for MyResult<'a> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		let MyResult(ref res) = *self;
-		match res {
-			&IResult::Done( _, ref o) => write!(f, "{}", o),
-			ref a => write!(f, "{:?}", a),
-		}
-	}
 }
 
 #[derive(Debug, Eq)]
@@ -128,7 +115,7 @@ pub enum Value<'a> {
 	Array(Rc<Array<'a>>),
 	String(&'a str, StrType),
 	InlineTable(Rc<InlineTable<'a>>),
-	ArrayOfTables(Vec<HashMap<String, HashValue<'a>>>),
+	ArrayOfTables(RefCell<Vec<RefCell<HashMap<String, Rc<Value<'a>>>>>>),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -150,9 +137,15 @@ pub struct HashValue<'a> {
 }
 
 impl<'a> HashValue<'a> {
-	pub fn new(value: Value<'a>) -> HashValue<'a> {
+	pub fn new(value: Rc<Value<'a>>) -> HashValue<'a> {
 		HashValue {
-			value: Some(Rc::new(value)),
+			value: Some(value),
+			subkeys: RefCell::new(LinkedList::new()),
+		}
+	}
+	pub fn none() -> HashValue<'a> {
+		HashValue {
+			value: None,
 			subkeys: RefCell::new(LinkedList::new()),
 		}
 	}
@@ -172,7 +165,7 @@ impl<'a> PartialEq for Value<'a> {
 			(&Value::Boolean(ref i), &Value::Boolean(ref j)) if i == j => true,
 			(&Value::DateTime(ref i), &Value::DateTime(ref j)) if i == j => true,
 			(&Value::Array(ref i), &Value::Array(ref j)) if i == j => true,
-			(&Value::String(ref i, ref t), &Value::String(ref j, ref s)) if i == j => true,
+			(&Value::String(ref i, _), &Value::String(ref j, _)) if i == j => true,
 			(&Value::InlineTable(ref i), &Value::InlineTable(ref j)) if i == j => true,
 			_ => false
 		}
@@ -196,7 +189,7 @@ impl<'a> Display for Value<'a> {
 				}
 			},
 			&Value::InlineTable(ref i) => write!(f, "{}", i),
-			&Value::ArrayOfTables(ref i) => unimplemented!(),
+			&Value::ArrayOfTables(_) => unimplemented!(),
 		}
    }
 }
@@ -318,14 +311,34 @@ impl<'a> Display for WSKeySep<'a> {
     }
 }
 
-pub fn format_keys(keys: &Vec<WSKeySep>) -> String {
+pub fn format_keys(t: &Table) -> String {
 	let mut s = String::new();
-	for i in 0..keys.len() - 1 {
-		s.push_str(keys[i].key);
-		s.push('.');
+	s.push_str(t.key);
+	if t.subkeys.len() > 0 {
+		for i in 0..t.subkeys.len() - 1 {
+			s.push_str(t.subkeys[i].key);
+			s.push('.');
+		}
+		s.push_str(t.subkeys[t.subkeys.len() - 1].key);
 	}
-	s.push_str(keys[keys.len() - 1].key);
 	s
+}
+
+pub fn format_tt_keys(tabletype: &TableType) -> String {
+	match tabletype {
+		&TableType::Standard(ref t) | &TableType::Array(ref t) => {
+			let mut s = String::new();
+			s.push_str(t.key);
+			if t.subkeys.len() > 0 {
+				for i in 0..t.subkeys.len() - 1 {
+					s.push_str(t.subkeys[i].key);
+					s.push('.');
+				}
+				s.push_str(t.subkeys[t.subkeys.len() - 1].key);
+			}
+			s
+		}
+	}
 }
 
 // Standard: [<ws.ws1><key><subkeys*><ws.ws2>]
@@ -333,24 +346,45 @@ pub fn format_keys(keys: &Vec<WSKeySep>) -> String {
 #[derive(Debug, Eq)]
 pub struct Table<'a> {
 	pub ws: WSSep<'a>, // opening whitespace and closing whitespace
-	pub keys: Vec<WSKeySep<'a>>,
+	pub key: &'a str,
+	pub subkeys: Vec<WSKeySep<'a>>,
 }
 
 impl<'a> PartialEq for Table<'a> {
 	fn eq(&self, other: &Table<'a>) -> bool {
 		self.ws == other.ws &&
-		self.keys == other.keys
+		self.key == other.key &&
+		self.subkeys == other.subkeys
 	}
 }
 
 impl<'a> Display for Table<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	try!(write!(f, "{}", self.ws.ws1));
-    	for key in &self.keys {
+    	try!(write!(f, "{}{}", self.ws.ws1, self.key));
+    	for key in &self.subkeys {
     		try!(write!(f, "{}", key));
     	}
     	write!(f, "{}", self.ws.ws2)
     }
+}
+
+impl<'a> TableType<'a> {
+	pub fn is_subtable_of(&self, prev: &TableType<'a>) -> bool {
+		match self { 
+			&TableType::Standard(ref t) | &TableType::Array(ref t) => {
+				match prev {
+					&TableType::Standard(ref prev_table) | &TableType::Array(ref prev_table) => {
+						let prev_key = format_keys(&prev_table);
+						let key = format_keys(t);
+						if let Some(i) = key.find(&prev_key) {
+							return i == 0;
+						}
+					}
+				}
+			}
+		}
+		false
+	}
 }
 
 // <hour>:<minute>:<second>(.<fraction>)?

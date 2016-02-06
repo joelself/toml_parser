@@ -4,8 +4,8 @@ use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::collections::HashMap;
 use nomplusplus::IResult;
-use ast::structs::{Toml, ArrayType, Array, HashValue, TableType};
-use types::ParseError;
+use ast::structs::{Toml, ArrayType, HashValue, TableType};
+use types::{ParseError, ParseResult};
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
 named!(all_lines<&str, Vec<&str> >, many0!(full_line));
@@ -22,11 +22,14 @@ pub struct Parser<'a> {
 	pub root: RefCell<Toml<'a>>,
 	pub map: RefCell<HashMap<String, HashValue<'a>>>,
 	pub errors: RefCell<Vec<ParseError<'a>>>,
-	pub leftover: RefCell<&'a str>,
+	pub leftover: &'a str,
 	pub line_count: Cell<u64>,
+	pub last_array_tables: RefCell<Vec<Rc<TableType<'a>>>>,
 	pub last_table: Option<Rc<TableType<'a>>>,
 	pub last_array_type: RefCell<Vec<ArrayType>>,
+	pub array_error: Cell<bool>,
 	pub mixed_array: Cell<bool>,
+	pub failure: Cell<bool>,
 }
 
 impl<'a> Default for Parser<'a> {
@@ -35,11 +38,14 @@ impl<'a> Default for Parser<'a> {
     	root: RefCell::new(Toml{exprs: vec![]}),
     	map: RefCell::new(HashMap::new()),
     	errors: RefCell::new(vec![]),
-    	leftover: RefCell::new(""),
+    	leftover: "",
     	line_count: Cell::new(0u64),
+    	last_array_tables: RefCell::new(vec![]),
     	last_table: None,
     	last_array_type: RefCell::new(vec![]),
+    	array_error: Cell::new(false),
     	mixed_array: Cell::new(false),
+    	failure: Cell::new(false),
     }
   }
 }
@@ -48,9 +54,11 @@ impl<'a> Default for Parser<'a> {
 impl<'a> Parser<'a> {
 	pub fn new<'b>() -> Parser<'a> {
 		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: RefCell::new(HashMap::new()),
-						errors: RefCell::new(vec![]), leftover: RefCell::new(""),
-						line_count: Cell::new(0), last_table: None,
-						last_array_type: RefCell::new(vec![]), mixed_array: Cell::new(false),}
+						errors: RefCell::new(vec![]), leftover: "",
+						line_count: Cell::new(0), last_array_tables: RefCell::new(vec![]),
+						last_table: None,
+						last_array_type: RefCell::new(vec![]), array_error: Cell::new(false),
+						mixed_array: Cell::new(false), failure: Cell::new(false)}
 	}
 
 	pub fn parse(mut self: Parser<'a>, input: &'a str) -> Parser<'a> {
@@ -60,11 +68,34 @@ impl<'a> Parser<'a> {
 		match res {
 			IResult::Done(i, o) => {
 				*self.root.borrow_mut() = o;
-				*self.leftover.borrow_mut() = i;
+				self.leftover = i;
 			},
-			_ => (),
+			_ => self.failure.set(true),
 		};
 		self
+	}
+
+	pub fn get_result(self: &Parser<'a>) -> ParseResult<'a> {
+		if self.failure.get() == true {
+			return ParseResult::Failure(0, 0);
+		}
+		if self.leftover.len() > 0 {
+			if self.errors.borrow().len() > 0 {
+				return ParseResult::PartialError(self.leftover, self.get_errors());
+			} else {
+				return ParseResult::Partial(self.leftover)
+			}
+		} else {
+			if self.errors.borrow().len() > 0 {
+				return ParseResult::FullError(self.get_errors());
+			} else {
+				return ParseResult::Full;
+			}
+		}
+	}
+
+	fn get_errors(self: &Parser<'a>) -> Vec<ParseError<'a>> {
+		unimplemented!{}
 	}
 }
 
