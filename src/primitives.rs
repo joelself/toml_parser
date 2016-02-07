@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode,
                    HashValue, TableType, format_keys};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount, ParseError};
@@ -25,8 +26,9 @@ fn is_keychar(chr: char) -> bool {
 
 fn insert_keyval_into_map<'a>(key: &'a str, val: Rc<Value<'a>>,
   last_table: &Option<Rc<TableType>>,
-  map: &RefCell<HashMap<String, HashValue<'a>>>,
+  map: &mut HashMap<String, HashValue<'a>>,
   errors: &RefCell<Vec<ParseError<'a>>>) {
+  let map = RefCell::new(map);
   let mut remove = false;
   let mut insert = false;
   let mut error = false;
@@ -60,7 +62,8 @@ fn insert_keyval_into_map<'a>(key: &'a str, val: Rc<Value<'a>>,
       match **ttype {
         TableType::Standard(ref t) => {
           full_key = format!("{}.{}", format_keys(&t), key);
-          if !map.borrow().contains_key(&full_key) {
+          let contains_key = map.borrow().contains_key(&full_key);
+          if !contains_key {
             insert = true;
           } else {
             match map.borrow().get(&full_key).unwrap().value {
@@ -72,39 +75,36 @@ fn insert_keyval_into_map<'a>(key: &'a str, val: Rc<Value<'a>>,
         TableType::Array(ref t) => {
           full_key = "".to_string();
           let array_key = format_keys(&t);
-          if !map.borrow().contains_key(&array_key) {
+          let contains_key = map.borrow().contains_key(&array_key);
+          if !contains_key {
             let mut table = HashMap::new();
             table.insert(key.clone(), val.clone());
             map.borrow_mut().insert(array_key, HashValue::new(Rc::new(Value::ArrayOfTables(
               RefCell::new(vec![RefCell::new(table)])
             ))));
           } else {
-            match map.borrow().get(&array_key).unwrap().value {
-              None => {
+            if let Entry::Occupied(mut entry) = map.borrow_mut().entry(array_key.clone()) {
+              let mut some = false;
+              if let Some(_) = entry.get_mut().value {
+                some = true;
+              }
+              if some {
+                let value = entry.get_mut().value.as_ref().unwrap();
+                if let Value::ArrayOfTables(ref array) = **value {
+                  let array = array.borrow_mut();
+                  let mut table = array[array.len()-1].borrow_mut();
+                  if !table.contains_key(&key) {
+                    table.insert(key.to_string(), val.clone());
+                  } else {
+                    errors.borrow_mut().push(ParseError::DuplicateArrayOfTableKey(
+                      array_key.clone(), key.clone(), val.clone()
+                    ));
+                  }
+                }
+              } else {
                 let mut table = HashMap::new();
                 table.insert(key.clone(), val.clone());
-                let mut map_borrow = map.borrow_mut();
-                let mut entry = map_borrow.entry(array_key).or_insert(
-                  HashValue::none()
-                );
-                entry.value = Some(Rc::new(Value::ArrayOfTables(RefCell::new(vec![RefCell::new(table)]))));
-              },
-              Some(ref value) => {
-                match **value {
-                  Value::ArrayOfTables(ref array) => {
-                    let array = array.borrow_mut();
-                    let mut table = array[array.len()-1].borrow_mut();
-                    if !table.contains_key(&key) {
-                      table.insert(key.to_string(), val.clone());
-                    } else {
-                      errors.borrow_mut().push(ParseError::DuplicateArrayOfTableKey(
-                        array_key.clone(), key.clone(), val.clone()
-                      ));
-                    }
-                  },
-                  ref other =>
-                    panic!("Last table was an array of tables, but value in the map was different: {}", other),
-                }
+                entry.get_mut().value = Some(Rc::new(Value::ArrayOfTables(RefCell::new(vec![RefCell::new(table)]))));
               }
             }
           }
@@ -337,13 +337,13 @@ impl<'a> Parser<'a> {
           key: key, keyval_sep: ws, val: val
         };
         if self.array_error.get() {
-          //let mut err = self.errors.borrow_mut().pop().unwrap();
-          // if let ParseError::InvalidTable(_, ref map) = err {
-          //   //  map.borrow_mut().insert(res.key.to_string(), res.val.clone());
-          // }
-          //self.errors.borrow_mut().push(err);
+          let err = self.errors.borrow_mut().pop().unwrap();
+          if let ParseError::InvalidTable(_, ref map) = err {
+            map.borrow_mut().insert(res.key.to_string(), res.val.clone());
+          }
+          self.errors.borrow_mut().push(err);
         } else {
-          //insert_keyval_into_map(key, res.val.clone(), &self.last_table, &self.map, &self.errors);
+            insert_keyval_into_map(key, res.val.clone(), &self.last_table, &mut self.map, &self.errors);
         }
         res
       }

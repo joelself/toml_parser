@@ -5,7 +5,7 @@ use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
 use parser::Parser;
 use types::ParseError;
 use std::cell::RefCell;
-use std::collections::{HashMap, LinkedList};
+use std::collections::HashMap;
 use std::rc::Rc;
 use nomplusplus::IResult;
 
@@ -79,10 +79,8 @@ impl<'a> Parser<'a> {
             self.array_error.set(false);
           }
           let full_key = format_tt_keys(&res);
-          if !self.map.borrow().contains_key(&full_key) {
-            self.map.borrow_mut().insert(full_key, HashValue{
-              value: None, subkeys: RefCell::new(LinkedList::new())
-            });
+          if !self.map.contains_key(&full_key) {
+            self.map.insert(full_key, HashValue::none());
           }
           self.last_table = Some(res.clone());
         }
@@ -91,7 +89,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  // Array Table
+  //Array Table
   method!(array_table<Parser<'a>, &'a str, Rc<TableType> >, mut self,
     chain!(
            tag_s!("[[")   ~
@@ -122,11 +120,18 @@ impl<'a> Parser<'a> {
         }else {
           self.last_array_tables.borrow_mut().push(res.clone());
         }
+        let full_key = format_tt_keys(&*res);
+        let contains_key = self.map.contains_key(&full_key);
+        if !contains_key {
+          self.map.insert(full_key, HashValue::none());
+        }
         self.last_table = Some(res.clone());
         res
       }
     )
   );
+
+
 
   // Array
   method!(array_sep<Parser<'a>, &'a str, WSSep>, mut self,

@@ -20,7 +20,7 @@ pub fn count_lines(s: &str) -> u64 {
 
 pub struct Parser<'a> {
 	pub root: RefCell<Toml<'a>>,
-	pub map: RefCell<HashMap<String, HashValue<'a>>>,
+	pub map: HashMap<String, HashValue<'a>>,
 	pub errors: RefCell<Vec<ParseError<'a>>>,
 	pub leftover: &'a str,
 	pub line_count: Cell<u64>,
@@ -36,7 +36,7 @@ impl<'a> Default for Parser<'a> {
   fn default () -> Parser<'a> {
     Parser{
     	root: RefCell::new(Toml{exprs: vec![]}),
-    	map: RefCell::new(HashMap::new()),
+    	map: HashMap::new(),
     	errors: RefCell::new(vec![]),
     	leftover: "",
     	line_count: Cell::new(0u64),
@@ -53,7 +53,7 @@ impl<'a> Default for Parser<'a> {
 // TODO change this to return a parser result
 impl<'a> Parser<'a> {
 	pub fn new<'b>() -> Parser<'a> {
-		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: RefCell::new(HashMap::new()),
+		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: HashMap::new(),
 						errors: RefCell::new(vec![]), leftover: "",
 						line_count: Cell::new(0), last_array_tables: RefCell::new(vec![]),
 						last_table: None,

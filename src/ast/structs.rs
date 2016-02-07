@@ -39,7 +39,7 @@ impl<'a> Display for Toml<'a> {
     		try!(write!(f, "{}", self.exprs[i]));
     	}
 		write!(f, "{}", self.exprs[self.exprs.len()-1])
-    }
+   }
 }
 
 #[derive(Debug, Eq)]
