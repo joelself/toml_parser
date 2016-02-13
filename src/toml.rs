@@ -82,9 +82,9 @@ mod test {
   use nomplusplus::IResult::Done;
   use parser::Parser;
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
-                     TableType, Value, NLExpression, StrType, ArrayValue, Toml,
+                     TableType, Value, NLExpression, ArrayValue, Toml,
                      Array, CommentOrNewLines};
-  use types::{TimeOffsetAmount, DateTime, TimeOffset};
+  use types::{TimeOffsetAmount, DateTime, TimeOffset, StrType};
   use std::rc::Rc;
   
 
@@ -105,119 +105,116 @@ server = "192.168.1.1"
 ports = [ 8001, 8001, 8002 ]
 connection_max = 5000
 enabled = true"#).1, Done("",
-      Toml { exprs: vec![
-        NLExpression {
-          nl: "", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: None, comment: Some(Comment {
-              text: " Tλïƨ ïƨ á TÓM£ δôçú₥èñƭ."
-            })
-          }
+      Toml::new(vec![
+        NLExpression::new_str(
+          "", Expression::new(
+            WSSep::new_str("", ""), None, None, Some(Comment::new_str(
+              " Tλïƨ ïƨ á TÓM£ δôçú₥èñƭ."
+            ))
+          )
+        ),
+        NLExpression::new(
+          "\n", Expression::new(
+            WSSep::new_str("", ""), None, None, None
+          )
+        ),
+        NLExpression::new(
+          "\n", Expression::new(
+            WSSep::new_str("", ""), Some(KeyVal::new_str(
+              "title", WSSep::new_str(" ", " "),
+              Rc::new(Value::String(Str::Str("TÓM£ Éжá₥ƥℓè"), StrType::Basic))
+            )),
+            None, None
+          )
+        ),
+        NLExpression::new_str("\n", Expression::new(
+            WSSep::new_str("", ""), None, None, None
+          )
+        ),
+        NLExpression::new_str(
+          "\n", Expression::new(
+            WSSep::new_str("", ""), None, Some(Rc::new(TableType::Standard(Table::new_str(
+              WSSep::new_str("", ""), "owner", vec![]
+            )))), None
+          )
+        ),
+        NLExpression::new_str(
+          "\n", Expression::new(
+            WSSep::new_str("", ""), Some(KeyVal::new_str(
+              "name", WSSep::new_str(" ", " "), Rc::new(Value::String(Str::Str("Tô₥ Þřèƨƭôñ-Wèřñèř"), StrType::Basic))
+            )), None, None
+          )
+        ),
+        NLExpression::new_str(
+          "\n", Expression::new(
+            WSSep::new_str("", " "), Some(KeyVal::new_str(
+              "dob", WSSep::new_str(" ", " "), Rc::new(Value::DateTime(DateTime::new(
+                Str::Str("1979"), Str::Str("05"), Str::Str("27"), Str::Str("07"), Str::Str("32"), Str::Str("00"), fraction: None, TimeOffset::Time(TimeOffsetAmount::new_str(
+                  "-", "08", "00"
+                ))
+              )))
+            )),
+            None, Some(Comment::new_str(" Fïřƨƭ çℓáƨƨ δáƭèƨ"))
+          )
         },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: None, comment: None
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
-              key: "title", keyval_sep: WSSep { ws1: " ", ws2: " " },
-              val: Rc::new(Value::String("TÓM£ Éжá₥ƥℓè", StrType::Basic))
-            }),
-            table: None, comment: None
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: None, comment: None
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: Some(Rc::new(TableType::Standard(Table {
-              ws: WSSep { ws1: "", ws2: "" }, key: "owner", subkeys: vec![]
-            }))), comment: None
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
-              key: "name", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Rc::new(Value::String("Tô₥ Þřèƨƭôñ-Wèřñèř", StrType::Basic))
-            }), table: None, comment: None
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: " " }, keyval: Some(KeyVal {
-              key: "dob", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Rc::new(Value::DateTime(DateTime {
-                year: "1979", month: "05", day: "27", hour: "07", minute: "32", second: "00", fraction: None, offset: TimeOffset::Time(TimeOffsetAmount {
-                  pos_neg: "-", hour: "08", minute: "00"
-                })
-              }))
-            }),
-            table: None, comment: Some(Comment {
-              text: " Fïřƨƭ çℓáƨƨ δáƭèƨ"
-            })
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: None, comment: None
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: None, table: Some(Rc::new(TableType::Standard(Table {
-              ws: WSSep { ws1: "", ws2: "" }, key: "database", subkeys:vec![]
-            }))), comment: None
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
-              key: "server", keyval_sep: WSSep { ws1: " ", ws2: " "}, val: Rc::new(Value::String("192.168.1.1", StrType::Basic))
-            }),
-            table: None, comment: None
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
-              key: "ports", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Rc::new(Value::Array(Rc::new(Array {
-                values: vec![
-                  ArrayValue {
-                    val: Rc::new(Value::Integer("8001")), array_sep: Some(WSSep { ws1: "", ws2: " " }), comment_nls: vec![CommentOrNewLines::NewLines("")]
-                  },
-                  ArrayValue {
-                    val: Rc::new(Value::Integer("8001")), array_sep: Some(WSSep { ws1: "", ws2: " " }), comment_nls: vec![CommentOrNewLines::NewLines("")]
-                  },
-                  ArrayValue {
-                    val: Rc::new(Value::Integer("8002")), array_sep: None, comment_nls: vec![CommentOrNewLines::NewLines(" ")]
-                  }
+        NLExpression::new_str(
+          "\n", Expression::new(
+            WSSep::new_str("", ""), None, None, None
+          )
+        ),
+        NLExpression::new_str(
+          "\n", Expression::new(
+            WSSep::new_str("", ""), None, Some(Rc::new(TableType::Standard(Table::new_str(
+              WSSep::new_str("", ws2: "" }, key: "database", subkeys:vec![]
+            )))), comment: None
+          )
+        ),
+        NLExpression::new_str(
+          "\n", Expression::new(
+            WSSep::new_str("", ""), Some(KeyVal::new_str(
+              "server", WSSep::new_str(" ", " "), Rc::new(Value::String(Str::Str("192.168.1.1"), StrType::Basic))
+            ),
+            None, None
+          )
+        ),
+        NLExpression::new_str(
+          "\n", Expression::new(
+            WSSep::new_str("", ""), Some(KeyVal::new_str(
+              "ports", WSSep::new_str(" ", " "), Rc::new(Value::Array(Rc::new(Array::new(
+                vec![
+                  ArrayValue::new(
+                    Rc::new(Value::Integer(Str::Str("8001"))), Some(WSSep::new_str("", " " )), vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                  ),
+                  ArrayValue::new(
+                    Rc::new(Value::Integer(Str::Str("8001"))), Some(WSSep::new_str("", " ")), comment_nls: vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                  ),
+                  ArrayValue::new(
+                    Rc::new(Value::Integer(Str::Str("8002"))), None, vec![CommentOrNewLines::NewLines(Str::Str(" "))]
+                  )
                 ],
-                comment_nls1: vec![CommentOrNewLines::NewLines(" ")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
-              })))
-            }),
-            table: None, comment: None
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
-              key: "connection_max", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Rc::new(Value::Integer("5000"))
-            }),
-            table: None, comment: None
-          }
-        },
-        NLExpression {
-          nl: "\n", expr: Expression {
-            ws: WSSep { ws1: "", ws2: "" }, keyval: Some(KeyVal {
-              key: "enabled", keyval_sep: WSSep { ws1: " ", ws2: " " }, val: Rc::new(Value::Boolean("true"))
-            }),
-            table: None, comment: None
-          }
-        }
-      ]} 
+                vec![CommentOrNewLines::NewLines(Str::Str(" "))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+              ))))
+            )),
+            None, None
+          )
+        ),
+        NLExpression::new_str(
+          "\n", Expression::new(
+            WSSep::new_str("", ""), Some(KeyVal::new_str(
+              "connection_max", WSSep::new_str(" ", " "), Rc::new(Value::Integer(Str::Str("5000")))
+            )),
+            None, None
+          )
+        ),
+        NLExpression::new_str(
+          "\n", Expression::new(
+            WSSep::new_str("", ""), Some(KeyVal::new_str(
+              "enabled", WSSep::new_str(" ", " "), Rc::new(Value::Boolean(Bool::True))
+            )),
+            None, None
+          )
+        )
+      ]) 
     ));
   }
 
@@ -226,48 +223,37 @@ enabled = true"#).1, Done("",
     let mut p = Parser::new();
     // allow for zero expressions
     assert_eq!(p.nl_expressions("aoeunth £ôřè₥ ïƥƨú₥ doℓôř ƨïƭ amet, çônƨèçƭeƭuř áδïƥïscïñϱ èℓïƭ").1,
-      Done(
-        "aoeunth £ôřè₥ ïƥƨú₥ doℓôř ƨïƭ amet, çônƨèçƭeƭuř áδïƥïscïñϱ èℓïƭ", vec![]
-      )
+      Done("aoeunth £ôřè₥ ïƥƨú₥ doℓôř ƨïƭ amet, çônƨèçƭeƭuř áδïƥïscïñϱ èℓïƭ", vec![])
     );
     p = Parser::new();
     assert_eq!(p.nl_expressions("\n[\"δřá\"]#Mèƨsaϱè\r\nkey=\"value\"#wλïƭeƨƥáçè\n").1,
       Done(
         "", vec![
-          NLExpression{
-            nl: "\n", expr: Expression{
-              ws: WSSep{ws1: "", ws2: ""},
-              keyval: None,
-              table: Some(Rc::new(TableType::Standard(Table{ ws: WSSep { ws1: "", ws2: "" }, key: "\"δřá\"", subkeys: vec![] }))),
-              comment: Some(Comment{text: "Mèƨsaϱè"})
-            }
-          },
-          NLExpression{
-            nl: "\r\n", expr: Expression{
-              ws: WSSep{ws1: "", ws2: ""},
-              table: None,
-              keyval: Some(KeyVal{
-                key: "key", keyval_sep: WSSep{
-                  ws1: "", ws2: ""
-                },
-                val: Rc::new(Value::String("value", StrType::Basic))
-              }),
-              comment: Some(Comment{text: "wλïƭeƨƥáçè"})
-            }
-          },
+          NLExpression::new_str(
+            "\n", Expression::new(
+              WSSep::new_str("", ""), None, Some(Rc::new(TableType::Standard(Table::new_str(
+                WSSep::new_str("", ""), "\"δřá\"", vec![] )))),
+              Some(Comment::new_str("Mèƨsaϱè"))
+            )
+          ),
+          NLExpression::new_str(
+            "\r\n", Expression::new(
+              WSSep::new_str("", ""), None, Some(KeyVal::new_str(
+                "key", WSSep::new_str("", ""), Rc::new(Value::String(Str::Str("value"), StrType::Basic))
+              )),
+              Some(Comment::new_str("wλïƭeƨƥáçè"))
+            )
+          ),
           // A whitespace expression only requires a newline, and a newline is required to terminate the comment
           // of the previous expression so expressions ending in comments always end up with an extra whitespace
           // expression at the end of the list
           // The exceptions are for characters that end comments, but are not "newlines". It's something that
           // needs to be fixed in the ABNF
-          NLExpression { 
-            nl: "\n", expr: Expression { 
-              ws: WSSep { 
-                ws1: "", ws2: ""
-              },
-              keyval: None, table: None, comment: None
-            }
-          }
+          NLExpression::new_str( 
+            "\n", Expression::new( 
+              WSSep::new_str("", ""), None, None, None
+            )
+          )
         ]
       )
     );
@@ -275,17 +261,14 @@ enabled = true"#).1, Done("",
     assert_eq!(p.nl_expressions("\n[[NODOTNET.\"NÓJÂVÂ\"]]").1,
       Done(
         "", vec![
-          NLExpression{
-            nl: "\n", expr: Expression{
-              ws: WSSep{ws1: "", ws2: ""},
-              keyval: None,
-              table: Some(Rc::new(TableType::Array(Table{
-                ws: WSSep{ws1: "", ws2: ""}, key: "NODOTNET", subkeys: vec![
-                    WSKeySep{ws: WSSep{ws1: "", ws2: ""}, key: "\"NÓJÂVÂ\""}],
-              }))),
-              comment: None
-            }
-          }
+          NLExpression::new_str(
+            "\n", Expression::new(
+              WSSep::new_str("", ""), None, Some(Rc::new(TableType::Array(Table::new_str(
+                WSSep::new_str("", ""), "NODOTNET", vec![
+                  WSKeySep::new_str(WSSep::new_str("", ""), "\"NÓJÂVÂ\"")],
+              )))), None
+            )
+          )
         ]
       )
     );
@@ -295,19 +278,14 @@ enabled = true"#).1, Done("",
   fn test_nl_expression() {
     let p = Parser::new();
     assert_eq!(p.nl_expression("\r\n   SimpleKey = 1_2_3_4_5     #  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£\r\n").1,
-      Done("\r\n", NLExpression{
-        nl: "\r\n", expr: Expression{
-          ws: WSSep{ws1: "   ", ws2: "     "},
-          table: None,
-          keyval: Some(KeyVal{
-            key: "SimpleKey", keyval_sep: WSSep{
-              ws1: " ", ws2: " "
-            },
-            val: Rc::new(Value::Integer("1_2_3_4_5"))
-          }),
-          comment: Some(Comment{text: "  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£"})
-        } 
-      })
+      Done("\r\n", NLExpression::new_str(
+        "\r\n", Expression::new(
+         WSSep::new_str("   ", "     "), None, Some(KeyVal::new_str(
+            "SimpleKey", WSSep::new_str(" ", " "), Rc::new(Value::Integer(Str::Str("1_2_3_4_5")))
+          )),
+          Some(Comment::new_str("  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£"))
+        )
+      ))
     );
   }
 
@@ -316,33 +294,27 @@ enabled = true"#).1, Done("",
     let mut p = Parser::new();
     assert_eq!(p.expression(" \t[\"δřáƒƭ\".THISKEY  . \tkeythethird] \t#Mèƨƨáϱè Rèƥℓïèδ\n").1,
       Done("\n",
-        Expression{
-          ws: WSSep{ws1: " \t", ws2: " \t"},
-          keyval: None,
-          table: Some(Rc::new(TableType::Standard(Table{
-            ws: WSSep{ws1: "", ws2: ""}, key: "\"δřáƒƭ\"", subkeys: vec![
-              WSKeySep{ws: WSSep{ws1: "", ws2: ""}, key: "THISKEY"},
-              WSKeySep{ws: WSSep{ws1: "  ", ws2: " \t"}, key: "keythethird"}
+        Expression::new(
+          WSSep::new_str(" \t", " \t"), None, Some(Rc::new(TableType::Standard(Table::new_str(
+            WSSep::new_str("", ""), "\"δřáƒƭ\"", vec![
+              WSKeySep::new_str(WSSep::new_str("", ""), "THISKEY"),
+              WSKeySep::new_str(WSSep::new_str("  ", " \t"}, "keythethird")
             ]
-          }))),
-          comment: Some(Comment{text: "Mèƨƨáϱè Rèƥℓïèδ"})
-        }
+          ))))),
+          Some(Comment::new_str("Mèƨƨáϱè Rèƥℓïèδ"))
+        )
     ));
     p = Parser::new();
     assert_eq!(p.expression("\t\t\t\"řúññïñϱôúƭôƒωôřδƨ\" = 0.1  #Â₥èřïçáñ Éжƥřèƨƨ\n").1,
       Done("\n",
-        Expression{
-          ws: WSSep{ws1: "\t\t\t", ws2: "  "},
-          table: None,
-          keyval: Some(KeyVal{
-            key: "\"řúññïñϱôúƭôƒωôřδƨ\"", keyval_sep: WSSep{
-              ws1: " ", ws2: " "
-            },
-            val: Rc::new(Value::Float("0.1"))
-          }),
-          comment: Some(Comment{text: "Â₥èřïçáñ Éжƥřèƨƨ"})
-        }
+        Expression::new(
+          WSSep::new_str("\t\t\t", "  "), None, Some(KeyVal::new_str(
+            "\"řúññïñϱôúƭôƒωôřδƨ\"", WSSep::new_str(" ", " "), Rc::new(Value::Float(Str::Str("0.1")))
+          )),
+          Some(Comment::new_str("Â₥èřïçáñ Éжƥřèƨƨ"))
+        )
       ));
+    /************************************* START HERE ***************************************/
     p = Parser::new();
     assert_eq!(p.expression("\t \t #Þℓèáƨè Ʋèřïƒ¥ Your áççôúñƭ\n").1, Done("\n",
       Expression{

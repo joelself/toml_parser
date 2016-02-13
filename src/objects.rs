@@ -290,8 +290,8 @@ mod test {
   use nomplusplus::IResult::Done;
   use ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
                      KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table,
-                     TableType, Value, StrType};
-  use ::types::{DateTime, TimeOffset, TimeOffsetAmount};
+                     TableType, Value};
+  use ::types::{DateTime, TimeOffset, TimeOffsetAmount, StrType};
   use parser::Parser;
   use std::rc::Rc;
 

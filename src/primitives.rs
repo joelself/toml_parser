@@ -323,9 +323,9 @@ impl<'a> Parser<'a> {
 mod test {
   use nomplusplus::IResult::Done;
   use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal,
-                     InlineTable, TableKeyVal, Value, StrType,
+                     InlineTable, TableKeyVal, Value,
                      CommentOrNewLines};
-  use ::types::{DateTime, TimeOffsetAmount, TimeOffset};
+  use ::types::{DateTime, TimeOffsetAmount, TimeOffset, StrType};
   use parser::Parser;
   use std::rc::Rc;
 
