@@ -18,8 +18,6 @@ fn map_val_to_array_type(val: &Value) -> ArrayType {
     &Value::DateTime(_)       => ArrayType::DateTime,
     &Value::Array(_)          => ArrayType::Array,
     &Value::String(_,_)       => ArrayType::String,
-    &Value::InlineTable(_)    => ArrayType::InlineTable,
-    _                         => ArrayType::None, // unreachable
   }
 }
 
@@ -82,8 +80,8 @@ impl<'a> Parser<'a> {
           if !self.map.contains_key(&full_key) {
             self.map.insert(full_key, HashValue::none());
           }
-          self.last_table = Some(res.clone());
         }
+        self.last_table = Some(res.clone());
         res
       }
     )
@@ -110,15 +108,25 @@ impl<'a> Parser<'a> {
         let len = self.last_array_tables.borrow().len();
         if len > 0 {
           let len = self.last_array_tables.borrow().len();
-          let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
-          if subtable {
-            self.last_array_tables.borrow_mut().push(res.clone());
+          let last_key = format_tt_keys(&self.last_array_tables.borrow()[len - 1]);
+          if format_tt_keys(&*res) == last_key {
+            let last_index = self.last_array_tables_index.borrow()[len - 1];
+            self.last_array_tables_index.borrow_mut()[len - 1] = last_index + 1;
           } else {
-            self.last_array_tables.borrow_mut().clear();
-            self.last_array_tables.borrow_mut().push(res.clone());
+            let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
+            if subtable {
+              self.last_array_tables.borrow_mut().push(res.clone());
+              self.last_array_tables_index.borrow_mut().push(0);
+            } else {
+              self.last_array_tables.borrow_mut().clear();
+              self.last_array_tables.borrow_mut().push(res.clone());
+              self.last_array_tables_index.borrow_mut().clear();
+              self.last_array_tables_index.borrow_mut().push(0);
+            }
           }
         }else {
           self.last_array_tables.borrow_mut().push(res.clone());
+          self.last_array_tables_index.borrow_mut().push(0);
         }
         let full_key = format_tt_keys(&*res);
         let contains_key = self.map.contains_key(&full_key);

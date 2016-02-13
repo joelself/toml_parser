@@ -1,9 +1,10 @@
 extern crate tomllib;
 use tomllib::parser::Parser;
+use tomllib::types::{StrType, TOMLValue};
 
 fn main() {
 	let parser = Parser::new();
-	let parser = parser.parse(r#"# This is a TOML document.
+	let mut parser = parser.parse(r#"# This is a TOML document.
 
 title = "TOML Example"
 
@@ -27,7 +28,18 @@ enabled = true
   [servers.beta]
   ip = "10.0.0.2"
   dc = "eqdc10"
-
+[[flower]]
+color = "blue"
+type = "rose"
+[[flower]]
+color = "red"
+type = "carnation"
+  [flower.props]
+    stuff = true
+    junk = 4.35
+  [[flower.power]]
+  foo = "bar"
+  
 [clients]
 data = [ ["gamma", "delta"], [1, 2] ]
 
@@ -36,5 +48,13 @@ hosts = [
   "alpha",
   "omega"
 ]"#);
-	println!("{}", parser);
+
+  // let mut new_owner = String::new();
+  // new_owner.push_str("Joel Self");
+	println!("{}", parser.get_value("database.server".to_string()).unwrap());
+  // let (tmp, new_str) = parser.add_string(new_owner);
+  // let parser = tmp;
+  //parser.set_value("owner.name".to_string(),
+    //TOMLValue::String(new_str, StrType::Basic));
+  println!("{}", parser.get_value("owner.name".to_string()).unwrap());
  }

@@ -18,7 +18,7 @@ fn verify(input: String) -> (bool, Option<(String, String)>) {
 
 #[test]
 fn test_all_assets() {
-	let paths = fs::read_dir("./assets/").unwrap();
+	let paths = fs::read_dir("./assets/valid/").unwrap();
     let mut failed: Vec<(String, Option<(String, String)>)> = vec![];
 
     for path in paths {

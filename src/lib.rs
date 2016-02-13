@@ -6,5 +6,5 @@ mod toml;
 mod util;
 mod objects;
 mod primitives;
-mod types;
+pub mod types;
 pub mod parser;

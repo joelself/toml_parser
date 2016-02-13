@@ -2,9 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, StrType, ErrorCode,
-                   HashValue, TableType, format_keys};
-use ::types::{DateTime, TimeOffset, TimeOffsetAmount, ParseError};
+use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, ErrorCode,
+                   HashValue, TableType, format_keys, get_last_key};
+use ::types::{DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
+            Str};
 use parser::{Parser, count_lines};
 use nomplusplus;
 use nomplusplus::{IResult, InputLength};
@@ -21,111 +22,90 @@ fn is_keychar(chr: char) -> bool {
   uchr == 0x2D || uchr == 0x5f    // "-", "_"
 }
 
-#[inline(always)]
+
+fn get_array_table_key<'a>(tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>) -> String {
+  let mut full_key: String = String::new();
+  for i in 0..tables_index.borrow().len() {
+    if let &TableType::Array(ref t) = &*tables.borrow()[i] {
+      let key = get_last_key(t);
+      full_key.push_str(&key);
+      let index = tables_index.borrow()[i];
+      full_key.push_str(&format!("[{}].", index));
+    }
+  }
+  full_key
+}
 
 
-fn insert_keyval_into_map<'a>(key: &'a str, val: Rc<Value<'a>>,
-  last_table: &Option<Rc<TableType>>,
-  map: &mut HashMap<String, HashValue<'a>>,
-  errors: &RefCell<Vec<ParseError<'a>>>) {
-  let map = RefCell::new(map);
-  let mut remove = false;
-  let mut insert = false;
-  let mut error = false;
-  let key = key.to_string();
-  let full_key: String;
-  match last_table {
-    // If the last table is None
-    //  If the key exists
-    //    If the value is empty insert the value
-    //    If the value in non-empty add the key/val to the error list
-    //  If the key doesn't exist, insert it
-    &None => {
-      full_key = format!("{}", key);
-      if (*map.borrow()).contains_key(&key) {
-        match map.borrow().get(&key).unwrap().value {
-          None => {remove = true; insert = true;},
-          Some(_) => error = true,
-        }
-      } else {
-        insert = true;
-      }
-    },
 
-      // If the last table was a StandardTable or ArrayTable:
+
+impl<'a> Parser<'a> {
+
+  fn insert_keyval_into_map(&mut self, key: &'a str, val: Rc<Value<'a>>) {
+    let map = RefCell::new(&mut self.map);
+    let mut remove = false;
+    let mut insert = false;
+    let mut error = false;
+    let key = key.to_string();
+    let mut full_key: String;
+    match &self.last_table {
+      // If the last table is None
       //  If the key exists
-      //    If the value is empty, insert the value
-      //    If the value is non-empty add the key/val pair to the error list
-      //    If the key is for an ArrayOfTables add the key/val to the error list
-      //  If the key doesn't exist add the key/value pair to the hash table
-    &Some(ref ttype) => {
-      match **ttype {
-        TableType::Standard(ref t) => {
-          full_key = format!("{}.{}", format_keys(&t), key);
-          let contains_key = map.borrow().contains_key(&full_key);
-          if !contains_key {
-            insert = true;
-          } else {
-            match map.borrow().get(&full_key).unwrap().value {
-              None => {remove = true; insert = true;},
-              Some(_) => error = true,
+      //    If the value is empty insert the value
+      //    If the value in non-empty add the key/val to the error list
+      //  If the key doesn't exist, insert it
+      &None => {
+        full_key = format!("{}", key);
+        if (*map.borrow()).contains_key(&key) {
+          error = true;
+        } else {
+          insert = true;
+        }
+      },
+
+        // If the last table was a StandardTable or ArrayTable:
+        //  If the key exists
+        //    If the value is empty, insert the value
+        //    If the value is non-empty add the key/val pair to the error list
+        //    If the key is for an ArrayOfTables add the key/val to the error list
+        //  If the key doesn't exist add the key/value pair to the hash table
+      &Some(ref ttype) => {
+        match **ttype {
+          TableType::Standard(ref t) => {
+            self.last_array_tables.borrow_mut().push(ttype.clone());
+            full_key = get_array_table_key(&self.last_array_tables, &self.last_array_tables_index);
+            self.last_array_tables.borrow_mut().pop();
+            full_key.push_str(&format!("{}.{}", format_keys(t), key));
+            let contains_key = map.borrow().contains_key(&full_key);
+            if !contains_key {
+              insert = true;
+            } else {
+              error = true;
             }
-          }
-        },
-        TableType::Array(ref t) => {
-          full_key = "".to_string();
-          let array_key = format_keys(&t);
-          let contains_key = map.borrow().contains_key(&array_key);
-          if !contains_key {
-            let mut table = HashMap::new();
-            table.insert(key.clone(), val.clone());
-            map.borrow_mut().insert(array_key, HashValue::new(Rc::new(Value::ArrayOfTables(
-              RefCell::new(vec![RefCell::new(table)])
-            ))));
-          } else {
-            if let Entry::Occupied(mut entry) = map.borrow_mut().entry(array_key.clone()) {
-              let mut some = false;
-              if let Some(_) = entry.get_mut().value {
-                some = true;
-              }
-              if some {
-                let value = entry.get_mut().value.as_ref().unwrap();
-                if let Value::ArrayOfTables(ref array) = **value {
-                  let array = array.borrow_mut();
-                  let mut table = array[array.len()-1].borrow_mut();
-                  if !table.contains_key(&key) {
-                    table.insert(key.to_string(), val.clone());
-                  } else {
-                    errors.borrow_mut().push(ParseError::DuplicateArrayOfTableKey(
-                      array_key.clone(), key.clone(), val.clone()
-                    ));
-                  }
-                }
-              } else {
-                let mut table = HashMap::new();
-                table.insert(key.clone(), val.clone());
-                entry.get_mut().value = Some(Rc::new(Value::ArrayOfTables(RefCell::new(vec![RefCell::new(table)]))));
-              }
+          },
+          TableType::Array(ref t) => {
+            full_key = get_array_table_key(&self.last_array_tables, &self.last_array_tables_index);
+            full_key.push_str(&key);
+            let contains_key = map.borrow().contains_key(&full_key);
+            if !contains_key {
+              insert = true;
+            } else {
+              error = true;
             }
-          }
-        },
+          },
+        }
       }
+    }
+
+    if error {
+      self.errors.borrow_mut().push(ParseError::DuplicateKey(
+        full_key, val.clone()
+      ));
+    } else if insert {
+      map.borrow_mut().insert(full_key, HashValue::new(val.clone()));
     }
   }
 
-  if error {
-    errors.borrow_mut().push(ParseError::DuplicateKey(
-      full_key.clone(), val.clone()
-    ));
-  } else if remove && insert {
-    map.borrow_mut().remove(&full_key);
-    map.borrow_mut().insert(full_key.clone(), HashValue::new(val.clone()));
-  } else if insert {
-    map.borrow_mut().insert(full_key.clone(), HashValue::new(val.clone()));
-  }
-}
-
-impl<'a> Parser<'a> {
   // Integer
   method!(integer<Parser<'a>, &'a str, &'a str>, self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
 
@@ -240,7 +220,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(time_offset_amount<Parser<'a>, &'a str, TimeOffsetAmount>, self,
+  method!(time_offset_amount<Parser<'a>, &'a str, TimeOffsetAmount >, self,
     chain!(
   pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
      hour: re_find!("^[0-9]{2}")                                  ~
@@ -248,7 +228,7 @@ impl<'a> Parser<'a> {
   minute: re_find!("^[0-9]{2}")                                   ,
       ||{
         TimeOffsetAmount{
-          pos_neg: pos_neg, hour: hour, minute: minute
+          pos_neg: Str::Str(pos_neg), hour: Str::Str(hour), minute: Str::Str(minute)
         }
       }
     )
@@ -298,8 +278,8 @@ impl<'a> Parser<'a> {
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
   method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(
-    complete!(call_m!(self.quoted_key))   |
-    complete!(call_m!(self.unquoted_key))
+    complete!(call_m!(self.quoted_key))   =>  {|k| {self.last_key = k; k}}|
+    complete!(call_m!(self.unquoted_key)) =>  {|k| {self.last_key = k; k}}
   ));
 
   method!(keyval_sep<Parser<'a>, &'a str, WSSep>, mut self,
@@ -318,7 +298,6 @@ impl<'a> Parser<'a> {
   method!(pub val<Parser<'a>, &'a str, Rc<Value> >, mut self,
     alt!(
       complete!(call_m!(self.array))        => {|arr|   Rc::new(Value::Array(arr))}               |
-      complete!(call_m!(self.inline_table)) => {|it|    Rc::new(Value::InlineTable(Rc::new(it)))}  |
       complete!(call_m!(self.date_time))    => {|dt|    Rc::new(Value::DateTime(dt))}              |
       complete!(call_m!(self.float))        => {|flt|   Rc::new(Value::Float(flt))}                |
       complete!(call_m!(self.integer))      => {|int|   Rc::new(Value::Integer(int))}              |
@@ -343,7 +322,7 @@ impl<'a> Parser<'a> {
           }
           self.errors.borrow_mut().push(err);
         } else {
-            insert_keyval_into_map(key, res.val.clone(), &self.last_table, &mut self.map, &self.errors);
+            self.insert_keyval_into_map(key, res.val.clone());
         }
         res
       }

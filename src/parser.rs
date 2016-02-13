@@ -4,8 +4,9 @@ use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::collections::HashMap;
 use nomplusplus::IResult;
-use ast::structs::{Toml, ArrayType, HashValue, TableType};
-use types::{ParseError, ParseResult};
+use ast::structs::{Toml, ArrayType, HashValue, TableType, Value, Array};
+use types::{ParseError, ParseResult, TOMLValue};
+use std::collections::hash_map::Entry;
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
 named!(all_lines<&str, Vec<&str> >, many0!(full_line));
@@ -25,40 +26,27 @@ pub struct Parser<'a> {
 	pub leftover: &'a str,
 	pub line_count: Cell<u64>,
 	pub last_array_tables: RefCell<Vec<Rc<TableType<'a>>>>,
+	pub last_array_tables_index: RefCell<Vec<usize>>,
 	pub last_table: Option<Rc<TableType<'a>>>,
 	pub last_array_type: RefCell<Vec<ArrayType>>,
+	pub last_key: &'a str,
 	pub array_error: Cell<bool>,
 	pub mixed_array: Cell<bool>,
 	pub failure: Cell<bool>,
-}
-
-impl<'a> Default for Parser<'a> {
-  fn default () -> Parser<'a> {
-    Parser{
-    	root: RefCell::new(Toml{exprs: vec![]}),
-    	map: HashMap::new(),
-    	errors: RefCell::new(vec![]),
-    	leftover: "",
-    	line_count: Cell::new(0u64),
-    	last_array_tables: RefCell::new(vec![]),
-    	last_table: None,
-    	last_array_type: RefCell::new(vec![]),
-    	array_error: Cell::new(false),
-    	mixed_array: Cell::new(false),
-    	failure: Cell::new(false),
-    }
-  }
+	pub string: String,
 }
 
 // TODO change this to return a parser result
 impl<'a> Parser<'a> {
-	pub fn new<'b>() -> Parser<'a> {
+	pub fn new() -> Parser<'a> {
 		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: HashMap::new(),
 						errors: RefCell::new(vec![]), leftover: "",
 						line_count: Cell::new(0), last_array_tables: RefCell::new(vec![]),
-						last_table: None,
-						last_array_type: RefCell::new(vec![]), array_error: Cell::new(false),
-						mixed_array: Cell::new(false), failure: Cell::new(false)}
+						last_array_tables_index: RefCell::new(vec![]),
+						last_table: None, last_array_type: RefCell::new(vec![]),
+						last_key: "", 
+						array_error: Cell::new(false), mixed_array: Cell::new(false),
+						failure: Cell::new(false), string: String::new()}
 	}
 
 	pub fn parse(mut self: Parser<'a>, input: &'a str) -> Parser<'a> {
@@ -72,6 +60,11 @@ impl<'a> Parser<'a> {
 			},
 			_ => self.failure.set(true),
 		};
+		// BEGIN DEBUG STATEMENTS
+		for (k, v) in self.map.iter() {
+			println!("key: {} : value: {}", k, v);
+		}
+		// END DEBUG STATEMENTS
 		self
 	}
 
@@ -94,7 +87,67 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	fn get_errors(self: &Parser<'a>) -> Vec<ParseError<'a>> {
+	pub fn get_value(self: &mut Parser<'a>, key: String) -> Option<TOMLValue<'a>> {
+		if self.map.contains_key(&key) {
+			let hashval = self.map.get(&key).unwrap();
+			let clone = hashval.clone();
+			if let Some(val) = clone.value {
+				match &*val {
+					&Value::Integer(v) => Some(TOMLValue::Integer(v)),
+					&Value::Float(v) => Some(TOMLValue::Float(v)),
+					&Value::Boolean(v) => Some(TOMLValue::Boolean(v)),
+					&Value::DateTime(ref v) => Some(TOMLValue::DateTime(v.clone())),
+					&Value::Array(ref arr) => Some(Parser::sanitize_array(arr.clone())),
+					&Value::String(s, t) => Some(TOMLValue::String(s, t.clone())),
+				}
+			} else {
+				None
+			}
+		} else {
+			None
+		}
+	}
+
+	pub fn set_value(self: &mut Parser<'a>, key: String, val: TOMLValue<'a>) -> bool {
+		if self.map.contains_key(&key) {
+			let mut entry = self.map.entry(key);
+			if let Entry::Occupied(mut o) = entry {
+				let map_val = match val {
+					TOMLValue::Integer(v) 		=> Value::Integer(v),
+					TOMLValue::Float(v)				=> Value::Float(v),
+					TOMLValue::Boolean(v) 		=> Value::Boolean(v),
+					TOMLValue::DateTime(v)		=> Value::DateTime(v.clone()),
+					TOMLValue::Array(arr)			=> Parser::reconstruct_array(arr),
+					TOMLValue::String(s, t)		=> Value::String(s, t),
+				};
+				o.insert(HashValue::new(Rc::new(map_val)));
+				return true;
+			}
+		}
+		false
+	}
+
+	fn reconstruct_array(arr: Rc<Vec<TOMLValue<'a>>>) -> Value<'a> {
+		// TODO: Implement this
+		return Value::Integer("1");
+	}
+
+	fn sanitize_array(arr: Rc<Array<'a>>) -> TOMLValue<'a> {
+		let mut result: Vec<TOMLValue> = vec![];
+		for av in arr.values.iter() {
+			match *av.val {
+				Value::Integer(v) => result.push(TOMLValue::Integer(v)),
+				Value::Float(v) => result.push(TOMLValue::Float(v)),
+				Value::Boolean(v) => result.push(TOMLValue::Boolean(v)),
+				Value::DateTime(ref v) => result.push(TOMLValue::DateTime(v.clone())),
+				Value::Array(ref arr) => result.push(Parser::sanitize_array(arr.clone())),
+				Value::String(s, t) => result.push(TOMLValue::String(s, t.clone())),
+			}
+		}
+		TOMLValue::Array(Rc::new(result))
+	}
+
+	pub fn get_errors(self: &Parser<'a>) -> Vec<ParseError<'a>> {
 		unimplemented!{}
 	}
 }
