@@ -7,7 +7,7 @@ impl<'a> Parser<'a> {
       expr: call_m!(self.expression)    ~
   nl_exprs: call_m!(self.nl_expressions),
       ||{
-        let mut tmp = vec![NLExpression{ nl: "", expr: expr}];
+        let mut tmp = vec![NLExpression::new_str("", expr)];
         tmp.extend(nl_exprs); Toml{ exprs: tmp}
       }
     )
@@ -20,9 +20,7 @@ impl<'a> Parser<'a> {
        nl: call_m!(self.newline)    ~
      expr: call_m!(self.expression) ,
       ||{
-        NLExpression{
-          nl: nl, expr: expr,
-        }
+        NLExpression::new_str(nl, expr)
       }
     )
   );
@@ -40,13 +38,7 @@ impl<'a> Parser<'a> {
     chain!(
       ws: call_m!(self.ws),
       ||{
-        Expression{
-          ws: WSSep{
-            ws1: ws,
-            ws2: "",
-          },
-          keyval: None, table: None, comment: None,
-        }
+        Expression::new(WSSep::new_str(ws, ""), None, None, None)
       }
     ));
 
@@ -57,13 +49,7 @@ impl<'a> Parser<'a> {
       ws2: call_m!(self.ws)                 ~
   comment: complete!(call_m!(self.comment))?,
       ||{
-        Expression{
-          ws: WSSep{
-            ws1: ws1,
-            ws2: ws2,
-          },
-          keyval: None, table: Some(table), comment: comment,
-        }
+        Expression::new(WSSep::new_str(ws1, ws2), None, Some(table), comment)
       }
     )
   );
@@ -75,13 +61,7 @@ impl<'a> Parser<'a> {
       ws2: call_m!(self.ws)       ~
   comment: complete!(call_m!(self.comment)) ? ,
       ||{
-        Expression{
-          ws: WSSep{
-            ws1: ws1,
-            ws2: ws2,
-          },
-          keyval: Some(keyval), table: None, comment: comment,
-        }
+        Expression::new(WSSep::new_str(ws1, ws2,), Some(keyval), None, comment)
       }
     )
   );
@@ -91,13 +71,7 @@ impl<'a> Parser<'a> {
        ws: call_m!(self.ws)     ~
   comment: call_m!(self.comment),
       ||{
-        Expression{
-          ws: WSSep{
-            ws1: ws,
-            ws2: "",
-          },
-          keyval: None, table: None, comment: Some(comment),
-        }
+        Expression::new(WSSep::new_str(ws, "",), None, None, Some(comment))
       }
     )
   );

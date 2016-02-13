@@ -4,7 +4,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::collections::{HashMap, LinkedList};
 use std::option::Option;
-use ::types::{DateTime, TimeOffset, TimeOffsetAmount, StrType, Str};
+use ::types::{DateTime, TimeOffset, TimeOffsetAmount, StrType, Str, Bool};
+
 
 /// Compares two Options that contain comparable structs
 pub fn comp_opt<T: Eq>(left: &Option<T>, right: &Option<T>) -> bool {
@@ -121,12 +122,12 @@ impl<'a> Expression<'a> {
 
 #[derive(Debug, Eq)]
 pub enum Value<'a> {
-	Integer(&'a str),
-	Float(&'a str),
-	Boolean(&'a str),
+	Integer(Str<'a>),
+	Float(Str<'a>),
+	Boolean(Bool),
 	DateTime(DateTime<'a>),
 	Array(Rc<Array<'a>>),
-	String(&'a str, StrType),
+	String(Str<'a>, StrType),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -367,22 +368,23 @@ impl<'a> WSKeySep<'a> {
 
 pub fn get_last_key(t: &Table) -> String {
 	if t.subkeys.len() == 0 {
-		return String::from(t.key);
+		return string!(t.key);
 	} else {
-		return String::from(t.subkeys[t.subkeys.len()-1].key);
+		return string!(t.subkeys[t.subkeys.len()-1].key);
 	}
 }
 
 pub fn format_keys(t: &Table) -> String {
 	let mut s = String::new();
-	s.push_str(t.key);
+	let key: &str = str!(t.key);
+	s.push_str(key);
 	if t.subkeys.len() > 0 {
 		s.push('.');
 		for i in 0..t.subkeys.len() - 1 {
-			s.push_str(t.subkeys[i].key);
+			s.push_str(str!(t.subkeys[i].key));
 			s.push('.');
 		}
-		s.push_str(t.subkeys[t.subkeys.len() - 1].key);
+		s.push_str(str!(t.subkeys[t.subkeys.len() - 1].key));
 	}
 	s
 }
@@ -391,14 +393,14 @@ pub fn format_tt_keys(tabletype: &TableType) -> String {
 	match tabletype {
 		&TableType::Standard(ref t) | &TableType::Array(ref t) => {
 			let mut s = String::new();
-			s.push_str(t.key);
+			s.push_str(str!(t.key));
 			if t.subkeys.len() > 0 {
 				s.push('.');
 				for i in 0..t.subkeys.len() - 1 {
-					s.push_str(t.subkeys[i].key);
+					s.push_str(str!(t.subkeys[i].key));
 					s.push('.');
 				}
-				s.push_str(t.subkeys[t.subkeys.len() - 1].key);
+				s.push_str(str!(t.subkeys[t.subkeys.len() - 1].key));
 			}
 			s
 		}
@@ -481,8 +483,8 @@ impl<'a> PartialEq for Time<'a> {
 impl<'a> Display for Time<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
   	match self.fraction {
-  		Some(frac) 	=> write!(f, "{}:{}:{}.{}", self.hour, self.minute, self.second, frac),
-  		None				=> write!(f, "{}:{}:{}", self.hour, self.minute, self.second),
+  		Some(ref frac) 	=> write!(f, "{}:{}:{}.{}", self.hour, self.minute, self.second, frac),
+  		None						=> write!(f, "{}:{}:{}", self.hour, self.minute, self.second),
   	}
   }
 }

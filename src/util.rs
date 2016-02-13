@@ -23,9 +23,7 @@ impl<'a> Parser<'a> {
                tag_s!("#")            ~
   comment_txt: take_while_s!(not_eol) ,
       ||{
-        Comment{
-          text: comment_txt
-        }
+        Comment::new_str(comment_txt)
       }
     )
   );

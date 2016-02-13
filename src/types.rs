@@ -10,9 +10,9 @@ use std::ops::{Index, IndexMut, Range};
 
 pub enum ParseResult<'a> {
 	Full,
-	Partial(&'a str),
+	Partial(Str<'a>),
 	FullError(Vec<ParseError<'a>>),
-	PartialError(&'a str, Vec<ParseError<'a>>),
+	PartialError(Str<'a>, Vec<ParseError<'a>>),
 	Failure(u64, u64),
 }
 
@@ -24,21 +24,38 @@ pub enum StrType {
 	MLLiteral,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum Bool {
+	False,
+	True,
+}
+
+impl Display for Bool {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		if let &Bool::False = self {
+			write!(f, "false")
+		} else {
+			write!(f, "true")
+		}
+	}
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum TOMLValue<'a> {
-	Integer(&'a str),
-	Float(&'a str),
-	Boolean(&'a str),
+	Integer(Str<'a>),
+	Float(Str<'a>),
+	Boolean(Bool),
 	DateTime(DateTime<'a>),
 	Array(Rc<Vec<TOMLValue<'a>>>),
-	String(&'a str, StrType),
+	String(Str<'a>, StrType),
 }
 
 impl<'a> Display for TOMLValue<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			&TOMLValue::Integer(v) | &TOMLValue::Float(v) | &TOMLValue::Boolean(v) =>
+			&TOMLValue::Integer(ref v) | &TOMLValue::Float(ref v) =>
 				write!(f, "{}", v),
+			&TOMLValue::Boolean(ref b) => write!(f, "{}", b),
 			&TOMLValue::DateTime(ref v) => write!(f, "{}", v),
 			&TOMLValue::Array(ref arr) => {
 				try!(write!(f, "["));
@@ -50,7 +67,7 @@ impl<'a> Display for TOMLValue<'a> {
 				}
 				write!(f, "]")
 			},
-			&TOMLValue::String(s, ref t) => {
+			&TOMLValue::String(ref s, ref t) => {
 				match t {
 					&StrType::Basic => write!(f, "\"{}\"", s),
 					&StrType::MLBasic => write!(f, "\"\"\"{}\"\"\"", s),
@@ -64,13 +81,13 @@ impl<'a> Display for TOMLValue<'a> {
 
 #[derive(Debug, Eq, Clone)]
 pub struct DateTime<'a> {
-	pub year: &'a str,
-	pub month: &'a str,
-	pub day: &'a str,
-	pub hour: &'a str,
-	pub minute: &'a str,
-	pub second: &'a str,
-	pub fraction: Option<&'a str>,
+	pub year: Str<'a>,
+	pub month: Str<'a>,
+	pub day: Str<'a>,
+	pub hour: Str<'a>,
+	pub minute: Str<'a>,
+	pub second: Str<'a>,
+	pub fraction: Option<Str<'a>>,
 	pub offset: TimeOffset<'a>,
 }
 
@@ -123,9 +140,18 @@ impl<'a> PartialEq for TimeOffsetAmount<'a> {
 }
 
 impl<'a> Display for TimeOffsetAmount<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	write!(f, "{}{}:{}", self.pos_neg, self.hour, self.minute)
-    }
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  	write!(f, "{}{}:{}", self.pos_neg, self.hour, self.minute)
+  }
+}
+
+impl<'a> TimeOffsetAmount<'a> {
+  pub fn new_str(pos_neg: &'a str, hour: &'a str, minute: &'a str) -> TimeOffsetAmount<'a> {
+  	TimeOffsetAmount{pos_neg: Str::Str(pos_neg), hour: Str::Str(hour), minute: Str::Str(minute)}
+  }
+  pub fn new_string(pos_neg: String, hour: String, minute: String) -> TimeOffsetAmount<'a> {
+  	TimeOffsetAmount{pos_neg: Str::String(pos_neg), hour: Str::String(hour), minute: Str::String(minute)}
+  }
 }
 
 impl<'a> PartialEq for DateTime<'a> {
@@ -142,18 +168,26 @@ impl<'a> PartialEq for DateTime<'a> {
 }
 
 impl<'a> Display for DateTime<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	match self.fraction {
-    		Some(frac) => write!(f, "{}-{}-{}T{}:{}:{}.{}{}",
-						    		self.year, self.month, self.day,
-						    		self.hour, self.minute, self.second, frac,
-						    		self.offset),
-    		None 		=> write!(f, "{}-{}-{}T{}:{}:{}{}",
-						    		self.year, self.month, self.day,
-						    		self.hour, self.minute, self.second,
-						    		self.offset),
-    	}
-    }
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  	match self.fraction {
+  		Some(ref frac) => write!(f, "{}-{}-{}T{}:{}:{}.{}{}",
+					    		self.year, self.month, self.day,
+					    		self.hour, self.minute, self.second, frac,
+					    		self.offset),
+  		None 		=> write!(f, "{}-{}-{}T{}:{}:{}{}",
+					    		self.year, self.month, self.day,
+					    		self.hour, self.minute, self.second,
+					    		self.offset),
+  	}
+  }
+}
+
+impl<'a> DateTime<'a> {
+	pub fn new(year: Str<'a>, month: Str<'a>, day: Str<'a>, hour: Str<'a>, minute: Str<'a>,
+		second: Str<'a>, fraction: Option<Str<'a>>, offset: TimeOffset<'a>) -> DateTime<'a> {
+		DateTime{year: year, month: month, day: day, hour: hour, minute: minute, second: second,
+			fraction: fraction, offset: offset}
+	}
 }
 
 pub enum ParseError<'a> {

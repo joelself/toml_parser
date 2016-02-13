@@ -5,7 +5,7 @@ use std::cell::{RefCell, Cell};
 use std::collections::HashMap;
 use nomplusplus::IResult;
 use ast::structs::{Toml, ArrayType, HashValue, TableType, Value, Array};
-use types::{ParseError, ParseResult, TOMLValue};
+use types::{ParseError, ParseResult, TOMLValue, Str};
 use std::collections::hash_map::Entry;
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
@@ -74,9 +74,9 @@ impl<'a> Parser<'a> {
 		}
 		if self.leftover.len() > 0 {
 			if self.errors.borrow().len() > 0 {
-				return ParseResult::PartialError(self.leftover, self.get_errors());
+				return ParseResult::PartialError(Str::Str(self.leftover), self.get_errors());
 			} else {
-				return ParseResult::Partial(self.leftover)
+				return ParseResult::Partial(Str::Str(self.leftover))
 			}
 		} else {
 			if self.errors.borrow().len() > 0 {
@@ -93,12 +93,12 @@ impl<'a> Parser<'a> {
 			let clone = hashval.clone();
 			if let Some(val) = clone.value {
 				match &*val {
-					&Value::Integer(v) => Some(TOMLValue::Integer(v)),
-					&Value::Float(v) => Some(TOMLValue::Float(v)),
+					&Value::Integer(ref v) => Some(TOMLValue::Integer(v.clone())),
+					&Value::Float(ref v) => Some(TOMLValue::Float(v.clone())),
 					&Value::Boolean(v) => Some(TOMLValue::Boolean(v)),
 					&Value::DateTime(ref v) => Some(TOMLValue::DateTime(v.clone())),
 					&Value::Array(ref arr) => Some(Parser::sanitize_array(arr.clone())),
-					&Value::String(s, t) => Some(TOMLValue::String(s, t.clone())),
+					&Value::String(ref s, t) => Some(TOMLValue::String(s.clone(), t.clone())),
 				}
 			} else {
 				None
@@ -113,12 +113,12 @@ impl<'a> Parser<'a> {
 			let mut entry = self.map.entry(key);
 			if let Entry::Occupied(mut o) = entry {
 				let map_val = match val {
-					TOMLValue::Integer(v) 		=> Value::Integer(v),
-					TOMLValue::Float(v)				=> Value::Float(v),
+					TOMLValue::Integer(ref v) 		=> Value::Integer(v.clone()),
+					TOMLValue::Float(ref v)				=> Value::Float(v.clone()),
 					TOMLValue::Boolean(v) 		=> Value::Boolean(v),
 					TOMLValue::DateTime(v)		=> Value::DateTime(v.clone()),
 					TOMLValue::Array(arr)			=> Parser::reconstruct_array(arr),
-					TOMLValue::String(s, t)		=> Value::String(s, t),
+					TOMLValue::String(ref s, t)		=> Value::String(s.clone(), t),
 				};
 				o.insert(HashValue::new(Rc::new(map_val)));
 				return true;
@@ -129,19 +129,19 @@ impl<'a> Parser<'a> {
 
 	fn reconstruct_array(arr: Rc<Vec<TOMLValue<'a>>>) -> Value<'a> {
 		// TODO: Implement this
-		return Value::Integer("1");
+		return Value::Integer(Str::Str("1"));
 	}
 
 	fn sanitize_array(arr: Rc<Array<'a>>) -> TOMLValue<'a> {
 		let mut result: Vec<TOMLValue> = vec![];
 		for av in arr.values.iter() {
 			match *av.val {
-				Value::Integer(v) => result.push(TOMLValue::Integer(v)),
-				Value::Float(v) => result.push(TOMLValue::Float(v)),
+				Value::Integer(ref v) => result.push(TOMLValue::Integer(v.clone())),
+				Value::Float(ref v) => result.push(TOMLValue::Float(v.clone())),
 				Value::Boolean(v) => result.push(TOMLValue::Boolean(v)),
 				Value::DateTime(ref v) => result.push(TOMLValue::DateTime(v.clone())),
 				Value::Array(ref arr) => result.push(Parser::sanitize_array(arr.clone())),
-				Value::String(s, t) => result.push(TOMLValue::String(s, t.clone())),
+				Value::String(ref s, t) => result.push(TOMLValue::String(s.clone(), t.clone())),
 			}
 		}
 		TOMLValue::Array(Rc::new(result))

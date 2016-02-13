@@ -3,7 +3,7 @@ use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    InlineTable, WSSep, TableKeyVal, ArrayType,
                    HashValue, format_tt_keys};
 use parser::Parser;
-use types::ParseError;
+use types::{ParseError, Str};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -39,12 +39,7 @@ impl<'a> Parser<'a> {
       ws2: call_m!(self.ws)         ~
       key: call_m!(self.key)        ,
       ||{
-        WSKeySep{
-          ws: WSSep{
-            ws1: ws1, ws2: ws2
-          },
-          key: key
-        }
+        WSKeySep::new_str(WSSep::new_str(ws1, ws2), key)
       } 
     )
   );
@@ -58,13 +53,9 @@ impl<'a> Parser<'a> {
       ws2: call_m!(self.ws)             ~
            tag_s!("]")    ,
       ||{
-        let res = Rc::new(TableType::Standard(Table{
-          ws: WSSep{
-            ws1: ws1, ws2: ws2
-          },
-          key: key,
-          subkeys: subkeys,
-        }));
+        let res = Rc::new(TableType::Standard(Table::new_str(
+          WSSep::new_str(ws1, ws2), key, subkeys
+        )));
         if self.last_array_tables.borrow().len() > 0 {
           let last_table = &*self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1];
           if !res.is_subtable_of(last_table) ||
@@ -97,13 +88,9 @@ impl<'a> Parser<'a> {
       ws2: call_m!(self.ws)             ~
            tag_s!("]]")   ,
       ||{
-        let res = Rc::new(TableType::Array(Table{
-          ws: WSSep{
-            ws1: ws1, ws2: ws2
-          },
-          key: key,
-          subkeys: subkeys
-        }));
+        let res = Rc::new(TableType::Array(Table::new_str(
+          WSSep::new_str(ws1, ws2), key, subkeys
+        )));
         self.array_error.set(false);
         let len = self.last_array_tables.borrow().len();
         if len > 0 {
@@ -148,8 +135,7 @@ impl<'a> Parser<'a> {
            tag_s!(",")~
       ws2: call_m!(self.ws)         ,
       ||{
-        WSSep{ws1: ws1, ws2: ws2
-        }
+        WSSep::new_str(ws1, ws2)
       }
     )
   );
@@ -162,9 +148,7 @@ impl<'a> Parser<'a> {
    comment: call_m!(self.comment)     ~
   newlines: call_m!(self.ws_newline) ,
       ||{
-        CommentNewLines{
-          pre_ws_nl: prewsnl, comment: comment, newlines: newlines
-        }
+        CommentNewLines::new_str(prewsnl, comment, newlines)
       }
     )
   );
@@ -172,7 +156,7 @@ impl<'a> Parser<'a> {
   method!(comment_or_nl<Parser<'a>, &'a str, CommentOrNewLines>, mut self,
     alt!(
       complete!(call_m!(self.comment_nl))   => {|com| CommentOrNewLines::Comment(com)} |
-      complete!(call_m!(self.ws_newline))  => {|nl|  CommentOrNewLines::NewLines(nl)}
+      complete!(call_m!(self.ws_newline))  => {|nl|  CommentOrNewLines::NewLines(Str::Str(nl))}
     )
   );
 
@@ -280,10 +264,7 @@ impl<'a> Parser<'a> {
        keyval: call_m!(self.keyval) ~
           ws2: call_m!(self.ws)     ,
           ||{
-            TableKeyVal{
-              keyval: keyval,
-              kv_sep: WSSep{ws1: ws1, ws2: ws2}
-            }
+            TableKeyVal::new(keyval, WSSep::new_str(ws1, ws2))
           }
         )
   );
@@ -298,10 +279,7 @@ impl<'a> Parser<'a> {
       ws2: call_m!(self.ws)                                         ~
            tag_s!("}")                                ,
           ||{
-            InlineTable{
-              keyvals: keyvals,
-              ws: WSSep{ws1: ws1, ws2: ws2}
-            }
+            InlineTable::new(keyvals, WSSep::new_str(ws1, ws2))
           }
     )
   );

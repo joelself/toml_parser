@@ -5,7 +5,7 @@ use std::collections::hash_map::Entry;
 use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, ErrorCode,
                    HashValue, TableType, format_keys, get_last_key};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
-            Str};
+             Str, Bool};
 use parser::{Parser, count_lines};
 use nomplusplus;
 use nomplusplus::{IResult, InputLength};
@@ -184,16 +184,17 @@ impl<'a> Parser<'a> {
 
   method!(string<Parser<'a>, &'a str, Value>, mut self,
     alt!(
-      complete!(call_m!(self.ml_literal_string))  => {|ml| Value::String(ml, StrType::MLLiteral)}  |
-      complete!(call_m!(self.ml_basic_string))    => {|mb| Value::String(mb, StrType::MLBasic)}  |
-      complete!(call_m!(self.basic_string))       => {|b| Value::String(b, StrType::Basic)}    |
-      complete!(call_m!(self.literal_string))     => {|l| Value::String(l, StrType::Literal)}
+      complete!(call_m!(self.ml_literal_string))  => {|ml| Value::String(Str::Str(ml), StrType::MLLiteral)}  |
+      complete!(call_m!(self.ml_basic_string))    => {|mb| Value::String(Str::Str(mb), StrType::MLBasic)}  |
+      complete!(call_m!(self.basic_string))       => {|b| Value::String(Str::Str(b), StrType::Basic)}    |
+      complete!(call_m!(self.literal_string))     => {|l| Value::String(Str::Str(l), StrType::Literal)}
     )
   );
 
-
+  // TODO: Allow alternate casing, but report it as an error
   // Boolean
-  method!(boolean<Parser<'a>, &'a str, &'a str>, self, alt!(complete!(tag_s!("false")) | complete!(tag_s!("true"))));
+  method!(boolean<Parser<'a>, &'a str, Bool>, self, alt!(complete!(tag_s!("false")) => {|_| Bool::False} |
+                                                         complete!(tag_s!("true"))  => {|_| Bool::True}));
 
 
   // Datetime
@@ -210,12 +211,11 @@ impl<'a> Parser<'a> {
     second: re_find!("^[0-9]{2}")   ~
    fraction: complete!(call_m!(self.fractional)) ? ,
       ||{
-        Time{
-          hour: hour, minute: minute, second: second, fraction: match fraction {
+        Time::new_str(hour, minute, second, match fraction {
             Some(ref x) => Some(x[1]),
             None        => None,
           }
-        }
+        )
       }
     )
   );
@@ -227,9 +227,7 @@ impl<'a> Parser<'a> {
            tag_s!(":")                                            ~
   minute: re_find!("^[0-9]{2}")                                   ,
       ||{
-        TimeOffsetAmount{
-          pos_neg: Str::Str(pos_neg), hour: Str::Str(hour), minute: Str::Str(minute)
-        }
+        TimeOffsetAmount::new_str(pos_neg, hour, minute)
       }
     )
   );
@@ -249,9 +247,7 @@ impl<'a> Parser<'a> {
            tag_s!("-") ~
       day: re_find!("^([0-9]{2})"),
       ||{
-        FullDate{
-          year: year, month: month, day: day
-        }
+        FullDate::new_str(year, month, day)
       }
     )
   );
@@ -263,12 +259,9 @@ impl<'a> Parser<'a> {
      time: call_m!(self.time)       ~
    offset: call_m!(self.time_offset),
         ||{
-        DateTime{
-          year: date.year, month: date.month, day: date.day,
-          hour: time.hour, minute: time.minute, second: time.second,
-          fraction: time.fraction, offset: offset
+          DateTime::new(date.year.clone(), date.month.clone(), date.day.clone(), time.hour.clone(),
+            time.minute.clone(), time.second.clone(), time.fraction.clone(), offset)
         }
-      }
     )
   );
 
@@ -288,9 +281,7 @@ impl<'a> Parser<'a> {
            tag_s!("=")      ~
       ws2: call_m!(self.ws) ,
       ||{
-        WSSep{
-          ws1: ws1, ws2: ws2
-        }
+        WSSep::new_str(ws1, ws2)
       }     
     )
   );
@@ -299,8 +290,8 @@ impl<'a> Parser<'a> {
     alt!(
       complete!(call_m!(self.array))        => {|arr|   Rc::new(Value::Array(arr))}               |
       complete!(call_m!(self.date_time))    => {|dt|    Rc::new(Value::DateTime(dt))}              |
-      complete!(call_m!(self.float))        => {|flt|   Rc::new(Value::Float(flt))}                |
-      complete!(call_m!(self.integer))      => {|int|   Rc::new(Value::Integer(int))}              |
+      complete!(call_m!(self.float))        => {|flt|   Rc::new(Value::Float(Str::Str(flt)))}                |
+      complete!(call_m!(self.integer))      => {|int|   Rc::new(Value::Integer(Str::Str(int)))}              |
       complete!(call_m!(self.boolean))      => {|b|     Rc::new(Value::Boolean(b))}                |
       complete!(call_m!(self.string))       => {|s|     Rc::new(s)}
     )
@@ -312,9 +303,7 @@ impl<'a> Parser<'a> {
        ws: call_m!(self.keyval_sep) ~
       val: call_m!(self.val)        ,
       || {
-        let res = KeyVal{
-          key: key, keyval_sep: ws, val: val
-        };
+        let res = KeyVal::new_str(key, ws, val);
         if self.array_error.get() {
           let err = self.errors.borrow_mut().pop().unwrap();
           if let ParseError::InvalidTable(_, ref map) = err {
