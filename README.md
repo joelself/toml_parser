@@ -53,4 +53,4 @@ multirust override beta
 You can always go back to stable or beta with ```multirust override (beta|stable)```.
 To make changes fork the repository, then clone it, make changes, and issue a pull request. If you have any problems enter an issue in the issue tracker.
 
-**I would love to hear your feedback. If there's something you would like this project to do then feel free to write up an issue about it.** If you're not comfortable writing an issue out in the open you can email me at <joel@dislocal.com>.
+**I would love to hear your feedback. If there's something you would like this project to do then feel free to write up an issue about it.** If you're not comfortable writing an issue out in the open you can email me at <self@jself.io>.
