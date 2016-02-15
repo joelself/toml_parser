@@ -314,38 +314,24 @@ enabled = true"#).1, Done("",
           Some(Comment::new_str("Â₥èřïçáñ Éжƥřèƨƨ"))
         )
       ));
-    /************************************* START HERE ***************************************/
     p = Parser::new();
     assert_eq!(p.expression("\t \t #Þℓèáƨè Ʋèřïƒ¥ Your áççôúñƭ\n").1, Done("\n",
-      Expression{
-        ws: WSSep{ws1: "\t \t ", ws2: ""},
-        keyval: None,
-        table: None,
-        comment: Some(Comment{text: "Þℓèáƨè Ʋèřïƒ¥ Your áççôúñƭ"})
-      }
+      Expression::new(
+        WSSep::new_str("\t \t ", ""), None, None, Some(Comment::new_str("Þℓèáƨè Ʋèřïƒ¥ Your áççôúñƭ"))
+      )
     ));
     p = Parser::new();
     assert_eq!(p.expression("\t  \t  \t\n").1, Done("\n",
-      Expression{
-        ws: WSSep{
-          ws1: "\t  \t  \t",
-          ws2: "",
-        },
-        keyval: None, table: None, comment: None,
-      }));
+      Expression::new(
+        WSSep::new_str("\t  \t  \t", ""), None, None, None,
+      )));
   }
 
   #[test]
   fn test_ws_expr() {
     let p = Parser::new();
     assert_eq!(p.ws_expr("  \t \t \n").1, Done("\n", 
-      Expression{
-        ws: WSSep{
-          ws1: "  \t \t ",
-          ws2: "",
-        },
-        keyval: None, table: None, comment: None,
-      }
+      Expression::new_str(WSSep::new_str("  \t \t ", ""), None, None, None)
     ));
   }
 
@@ -354,16 +340,13 @@ enabled = true"#).1, Done("",
     let p = Parser::new();
     assert_eq!(p.table_comment(" [table.\"ƭáβℓè\"] #úñïçôřñřôβôƭ\n").1,
       Done("\n",
-        Expression{
-          ws: WSSep{ws1: " ", ws2: " "},
-          keyval: None,
-          table: Some(Rc::new(TableType::Standard(Table{
-            ws: WSSep{ws1: "", ws2: ""}, key: "table", subkeys: vec![
-              WSKeySep{ws: WSSep{ws1: "", ws2: ""}, key: "\"ƭáβℓè\""}
+        Expression::new(WSSep::new_str(" ", " "), None, Some(Rc::new(TableType::Standard(Table::new_str(
+            WSSep::new_str("", ""), "table", vec![
+              WSKeySep::new_str(WSSep::new_str("", ""), "\"ƭáβℓè\"")
             ]
-          }))),
-          comment: Some(Comment{text: "úñïçôřñřôβôƭ"})
-        }
+          )))),
+          Some(Comment::new_str("úñïçôřñřôβôƭ"))
+        )
     ));
   }
 
@@ -372,17 +355,11 @@ enabled = true"#).1, Done("",
     let p = Parser::new();
     assert_eq!(p.keyval_comment(" \"Tôƭáℓℓ¥\" = true\t#λèřè ïƨ ₥¥ çô₥₥èñƭ\n").1,
       Done("\n",
-        Expression{
-          ws: WSSep{ws1: " ", ws2: "\t"},
-          table: None,
-          keyval: Some(KeyVal{
-            key: "\"Tôƭáℓℓ¥\"", keyval_sep: WSSep{
-              ws1: " ", ws2: " "
-            },
-            val: Rc::new(Value::Boolean("true"))
-          }),
-          comment: Some(Comment{text: "λèřè ïƨ ₥¥ çô₥₥èñƭ"})
-        }
+        Expression::new(WSSep::new_str(" ", "\t"), None, Some(KeyVal::new_str(
+            "\"Tôƭáℓℓ¥\"", WSSep::new_str(" ", " "), Rc::new(Value::Boolean(Bool::True))
+          )),
+          Some(Comment::new_str("λèřè ïƨ ₥¥ çô₥₥èñƭ"))
+        )
     ));
   }
 
@@ -390,12 +367,8 @@ enabled = true"#).1, Done("",
   fn test_ws_comment() {
     let p = Parser::new();
     assert_eq!(p.ws_comment(" \t #This is RÂNÐÓM §TRÌNG\n").1, Done("\n",
-      Expression{
-        ws: WSSep{ws1: " \t ", ws2: ""},
-        keyval: None,
-        table: None,
-        comment: Some(Comment{text: "This is RÂNÐÓM §TRÌNG"})
-      }
+      Expression::new(WSSep::new_str(" \t ", ""), None, None, Some(Comment::new_str(text: "This is RÂNÐÓM §TRÌNG"))
+      )
     ));
   }
 }
