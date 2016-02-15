@@ -1,5 +1,3 @@
-use ::types::Str;
-
 #[macro_export]
 macro_rules! str (
     ($s:expr) => (

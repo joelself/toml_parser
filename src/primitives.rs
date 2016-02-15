@@ -1,7 +1,5 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, ErrorCode,
                    HashValue, TableType, format_keys, get_last_key};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
@@ -43,7 +41,6 @@ impl<'a> Parser<'a> {
 
   fn insert_keyval_into_map(&mut self, key: &'a str, val: Rc<Value<'a>>) {
     let map = RefCell::new(&mut self.map);
-    let mut remove = false;
     let mut insert = false;
     let mut error = false;
     let key = key.to_string();
@@ -83,7 +80,7 @@ impl<'a> Parser<'a> {
               error = true;
             }
           },
-          TableType::Array(ref t) => {
+          TableType::Array(_) => {
             full_key = get_array_table_key(&self.last_array_tables, &self.last_array_tables_index);
             full_key.push_str(&key);
             let contains_key = map.borrow().contains_key(&full_key);
@@ -288,11 +285,12 @@ impl<'a> Parser<'a> {
 
   method!(pub val<Parser<'a>, &'a str, Rc<Value> >, mut self,
     alt!(
-      complete!(call_m!(self.array))        => {|arr|   Rc::new(Value::Array(arr))}               |
-      complete!(call_m!(self.date_time))    => {|dt|    Rc::new(Value::DateTime(dt))}              |
-      complete!(call_m!(self.float))        => {|flt|   Rc::new(Value::Float(Str::Str(flt)))}                |
-      complete!(call_m!(self.integer))      => {|int|   Rc::new(Value::Integer(Str::Str(int)))}              |
-      complete!(call_m!(self.boolean))      => {|b|     Rc::new(Value::Boolean(b))}                |
+      complete!(call_m!(self.array))        => {|arr|   Rc::new(Value::Array(arr))}             |
+      complete!(call_m!(self.inline_table)) => {|it|    Rc::new(Value::InlineTable(it))}        |
+      complete!(call_m!(self.date_time))    => {|dt|    Rc::new(Value::DateTime(dt))}           |
+      complete!(call_m!(self.float))        => {|flt|   Rc::new(Value::Float(Str::Str(flt)))}   |
+      complete!(call_m!(self.integer))      => {|int|   Rc::new(Value::Integer(Str::Str(int)))} |
+      complete!(call_m!(self.boolean))      => {|b|     Rc::new(Value::Boolean(b))}             |
       complete!(call_m!(self.string))       => {|s|     Rc::new(s)}
     )
   );
@@ -325,7 +323,7 @@ mod test {
   use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal,
                      InlineTable, TableKeyVal, Value,
                      CommentOrNewLines};
-  use ::types::{DateTime, TimeOffsetAmount, TimeOffset, StrType, Bool};
+  use ::types::{DateTime, TimeOffsetAmount, TimeOffset, StrType, Bool, Str};
   use parser::Parser;
   use std::rc::Rc;
 
@@ -456,8 +454,8 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
   fn test_date_time() {
     let      p = Parser::new();
     assert_eq!(p.date_time("1999-03-21T20:15:44.5-07:00").1,
-      Done("", DateTime::new_str("1999", "03", "21", "20", "15", "44", Some(Str::Str("5")),
-        offset: TimeOffset::Time(TimeOffsetAmount::new_str("-", "07", "00"))
+      Done("", DateTime::new_str("1999", "03", "21", "20", "15", "44", Some("5"),
+        TimeOffset::Time(TimeOffsetAmount::new_str("-", "07", "00"))
       ))
     );
   }
@@ -509,7 +507,7 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
     p = Parser::new();
     assert_eq!(p.val("{\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"='TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™'}").1, Done("",
       Rc::new(Value::InlineTable(Rc::new(InlineTable::new(
-        Some(vec![
+        vec![
           TableKeyVal::new(
             KeyVal::new_str(
               "\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"", WSSep::new_str("", ""),
@@ -517,12 +515,12 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
             ),
             WSSep::new_str("", "")
           )
-        ]),
+        ],
         WSSep::new_str("", "")
     ))))));
     p = Parser::new();
     assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Rc::new(Value::DateTime(DateTime::new_str(
-      "2112", "09", "30", "12", "33", "01", Some(Str::Str("345")), TimeOffset::Time(TimeOffsetAmount::new_str(
+      "2112", "09", "30", "12", "33", "01", Some("345"), TimeOffset::Time(TimeOffsetAmount::new_str(
         "-", "11", "30"
       ))
     )))));

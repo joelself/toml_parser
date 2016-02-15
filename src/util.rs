@@ -53,6 +53,6 @@ mod test {
   fn test_comment() {
     let p = Parser::new();
     assert_eq!(p.comment("# Hèřè'ƨ ₥¥ çô₥₥èñƭ. -?#word").1,
-      Done("", Comment{text: " Hèřè'ƨ ₥¥ çô₥₥èñƭ. -?#word"}));
+      Done("", Comment::new_str(" Hèřè'ƨ ₥¥ çô₥₥èñƭ. -?#word")));
   }
 }

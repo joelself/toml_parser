@@ -2,9 +2,9 @@ use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::collections::{HashMap, LinkedList};
+use std::collections::LinkedList;
 use std::option::Option;
-use ::types::{DateTime, TimeOffset, TimeOffsetAmount, StrType, Str, Bool};
+use ::types::{DateTime, TimeOffset, StrType, Str, Bool};
 
 
 /// Compares two Options that contain comparable structs
@@ -128,6 +128,7 @@ pub enum Value<'a> {
 	DateTime(DateTime<'a>),
 	Array(Rc<Array<'a>>),
 	String(Str<'a>, StrType),
+	InlineTable(Rc<InlineTable<'a>>),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -188,6 +189,7 @@ impl<'a> PartialEq for Value<'a> {
 			(&Value::DateTime(ref i), &Value::DateTime(ref j)) if i == j => true,
 			(&Value::Array(ref i), &Value::Array(ref j)) if i == j => true,
 			(&Value::String(ref i, _), &Value::String(ref j, _)) if i == j => true,
+			(&Value::InlineTable(ref i), &Value::InlineTable(ref j)) if i == j => true,
 			_ => false
 		}
 	}
@@ -201,6 +203,7 @@ impl<'a> Display for Value<'a> {
 			&Value::Boolean(ref i) => write!(f, "{}", i),
 			&Value::DateTime(ref i) => write!(f, "{}", i),
 			&Value::Array(ref i) => write!(f, "{}", i),
+			&Value::InlineTable(ref i) => write!(f, "{}", i),
 			&Value::String(ref i, ref t) =>  {
 				match t {
 					&StrType::Basic => write!(f, "\"{}\"", i),
@@ -707,36 +710,32 @@ impl<'a> TableKeyVal<'a> {
 // {<ws.ws1><keyvals><ws.ws2>}
 #[derive(Debug, Eq)]
 pub struct InlineTable<'a> {
-	pub keyvals: Option<Vec<TableKeyVal<'a>>>,
+	pub keyvals: Vec<TableKeyVal<'a>>,
 	pub ws: WSSep<'a>,
 }
 
 impl<'a> PartialEq for InlineTable<'a> {
 	fn eq(&self, other: &InlineTable<'a>) -> bool {
-		comp_opt(&self.keyvals, &other.keyvals) &&
+		self.keyvals == other.keyvals &&
 		self.ws == other.ws
 	}
 }
 
-fn write_table_vector<'a>(kvs: &Vec<TableKeyVal<'a>>, ws: &WSSep<'a>, f: &mut fmt::Formatter) -> fmt::Result {
-	try!(write!(f, "{{{}", ws.ws1));
-	for i in 0..kvs.len() - 1 {
-		try!(write!(f, "{},", kvs[i]));
-	}
-	write!(f, "{}{}}}", kvs[kvs.len() - 1], ws.ws2)
-}
-
 impl<'a> Display for InlineTable<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-  	match &self.keyvals {
-  		&Some(ref k)	=> write_table_vector(k, &self.ws, f),
-  		&None			=> write!(f, "{{{}{}}}", self.ws.ws1, self.ws.ws2),
-  	}
+  	try!(write!(f, "{{{}", self.ws.ws1));
+		for i in 0..self.keyvals.len() - 1 {
+			try!(write!(f, "{},", self.keyvals[i]));
+		}
+		if self.keyvals.len() > 0 {
+			try!(write!(f, "{},", self.keyvals[self.keyvals.len() - 1]));
+		}
+		write!(f, "{}}}", self.ws.ws2)
   }
 }
 
 impl<'a> InlineTable<'a> {
-	pub fn new(keyvals: Option<Vec<TableKeyVal<'a>>>, ws: WSSep<'a>) -> InlineTable<'a> {
+	pub fn new(keyvals: Vec<TableKeyVal<'a>>, ws: WSSep<'a>) -> InlineTable<'a> {
 		InlineTable{keyvals: keyvals, ws: ws}
 	}
 }

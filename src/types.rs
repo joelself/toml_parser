@@ -1,11 +1,10 @@
 use ast::structs::Value;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::hash::Hasher;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt;
 use std::fmt::Display;
-use std::ops::{Index, IndexMut, Range};
 
 
 pub enum ParseResult<'a> {
@@ -48,6 +47,7 @@ pub enum TOMLValue<'a> {
 	DateTime(DateTime<'a>),
 	Array(Rc<Vec<TOMLValue<'a>>>),
 	String(Str<'a>, StrType),
+	InlineTable(Rc<Vec<(Str<'a>, TOMLValue<'a>)>>)
 }
 
 impl<'a> Display for TOMLValue<'a> {
@@ -74,6 +74,16 @@ impl<'a> Display for TOMLValue<'a> {
 					&StrType::Literal => write!(f, "'{}'", s),
 					&StrType::MLLiteral =>  write!(f, "'''{}'''", s),
 				}
+			},
+			&TOMLValue::InlineTable(ref it) => {
+				try!(write!(f, "{{"));
+				for i in 0..it.len() - 1 {
+					try!(write!(f, "{} = {}, ", it[i].0, it[i].1));
+				}
+				if it.len() > 0 {
+					try!(write!(f, "{} = {}", it[it.len()-1].0, it[it.len()-1].1));
+				}
+				write!(f, "}}")
 			}
 		}
 	}
@@ -187,6 +197,28 @@ impl<'a> DateTime<'a> {
 		second: Str<'a>, fraction: Option<Str<'a>>, offset: TimeOffset<'a>) -> DateTime<'a> {
 		DateTime{year: year, month: month, day: day, hour: hour, minute: minute, second: second,
 			fraction: fraction, offset: offset}
+	}
+	pub fn new_str(year: &'a str, month: &'a str, day: &'a str, hour: &'a str, minute: &'a str,
+		second: &'a str, fraction: Option<&'a str>, offset: TimeOffset<'a>) -> DateTime<'a> {
+		match fraction {
+			Some(f) => DateTime{year: Str::Str(year), month: Str::Str(month), day: Str::Str(day),
+				hour: Str::Str(hour), minute: Str::Str(minute), second: Str::Str(second),
+				fraction: Some(Str::Str(f)), offset: offset},
+			None 		=> DateTime{year: Str::Str(year), month: Str::Str(month), day: Str::Str(day),
+				hour: Str::Str(hour), minute: Str::Str(minute), second: Str::Str(second),
+				fraction: None, offset: offset},
+		}
+	}
+	pub fn new_string(year: String, month: String, day: String, hour: String, minute: String,
+		second: String, fraction: Option<String>, offset: TimeOffset<'a>) -> DateTime<'a> {
+		match fraction {
+			Some(f) => DateTime{year: Str::String(year), month: Str::String(month), day: Str::String(day),
+				hour: Str::String(hour), minute: Str::String(minute), second: Str::String(second),
+				fraction: Some(Str::String(f)), offset: offset},
+			None 		=> DateTime{year: Str::String(year), month: Str::String(month), day: Str::String(day),
+				hour: Str::String(hour), minute: Str::String(minute), second: Str::String(second),
+				fraction: None, offset: offset},
+		}
 	}
 }
 

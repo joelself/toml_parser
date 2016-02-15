@@ -84,7 +84,7 @@ mod test {
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
                      TableType, Value, NLExpression, ArrayValue, Toml,
                      Array, CommentOrNewLines};
-  use types::{TimeOffsetAmount, DateTime, TimeOffset, StrType};
+  use types::{TimeOffsetAmount, DateTime, TimeOffset, StrType, Str, Bool};
   use std::rc::Rc;
   
 
@@ -113,12 +113,12 @@ enabled = true"#).1, Done("",
             ))
           )
         ),
-        NLExpression::new(
+        NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), None, None, None
           )
         ),
-        NLExpression::new(
+        NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
               "title", WSSep::new_str(" ", " "),
@@ -148,8 +148,8 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", " "), Some(KeyVal::new_str(
-              "dob", WSSep::new_str(" ", " "), Rc::new(Value::DateTime(DateTime::new(
-                Str::Str("1979"), Str::Str("05"), Str::Str("27"), Str::Str("07"), Str::Str("32"), Str::Str("00"), fraction: None, TimeOffset::Time(TimeOffsetAmount::new_str(
+              "dob", WSSep::new_str(" ", " "), Rc::new(Value::DateTime(DateTime::new_str(
+                "1979", "05", "27", "07", "32", "00", None, TimeOffset::Time(TimeOffsetAmount::new_str(
                   "-", "08", "00"
                 ))
               )))
@@ -238,10 +238,10 @@ enabled = true"#).1, Done("",
           ),
           NLExpression::new_str(
             "\r\n", Expression::new(
-              WSSep::new_str("", ""), None, Some(KeyVal::new_str(
+              WSSep::new_str("", ""), Some(KeyVal::new_str(
                 "key", WSSep::new_str("", ""), Rc::new(Value::String(Str::Str("value"), StrType::Basic))
               )),
-              Some(Comment::new_str("wλïƭeƨƥáçè"))
+              None, Some(Comment::new_str("wλïƭeƨƥáçè"))
             )
           ),
           // A whitespace expression only requires a newline, and a newline is required to terminate the comment
@@ -280,10 +280,10 @@ enabled = true"#).1, Done("",
     assert_eq!(p.nl_expression("\r\n   SimpleKey = 1_2_3_4_5     #  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£\r\n").1,
       Done("\r\n", NLExpression::new_str(
         "\r\n", Expression::new(
-         WSSep::new_str("   ", "     "), None, Some(KeyVal::new_str(
+         WSSep::new_str("   ", "     "), Some(KeyVal::new_str(
             "SimpleKey", WSSep::new_str(" ", " "), Rc::new(Value::Integer(Str::Str("1_2_3_4_5")))
           )),
-          Some(Comment::new_str("  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£"))
+         None, Some(Comment::new_str("  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£"))
         )
       ))
     );
@@ -300,18 +300,18 @@ enabled = true"#).1, Done("",
               WSKeySep::new_str(WSSep::new_str("", ""), "THISKEY"),
               WSKeySep::new_str(WSSep::new_str("  ", " \t"), "keythethird")
             ]
-          ))),
+          )))),
           Some(Comment::new_str("Mèƨƨáϱè Rèƥℓïèδ"))
         )
-    )));
+    ));
     p = Parser::new();
     assert_eq!(p.expression("\t\t\t\"řúññïñϱôúƭôƒωôřδƨ\" = 0.1  #Â₥èřïçáñ Éжƥřèƨƨ\n").1,
       Done("\n",
         Expression::new(
-          WSSep::new_str("\t\t\t", "  "), None, Some(KeyVal::new_str(
+          WSSep::new_str("\t\t\t", "  "), Some(KeyVal::new_str(
             "\"řúññïñϱôúƭôƒωôřδƨ\"", WSSep::new_str(" ", " "), Rc::new(Value::Float(Str::Str("0.1")))
           )),
-          Some(Comment::new_str("Â₥èřïçáñ Éжƥřèƨƨ"))
+          None, Some(Comment::new_str("Â₥èřïçáñ Éжƥřèƨƨ"))
         )
       ));
     p = Parser::new();
@@ -331,7 +331,7 @@ enabled = true"#).1, Done("",
   fn test_ws_expr() {
     let p = Parser::new();
     assert_eq!(p.ws_expr("  \t \t \n").1, Done("\n", 
-      Expression::new_str(WSSep::new_str("  \t \t ", ""), None, None, None)
+      Expression::new(WSSep::new_str("  \t \t ", ""), None, None, None)
     ));
   }
 
@@ -355,10 +355,10 @@ enabled = true"#).1, Done("",
     let p = Parser::new();
     assert_eq!(p.keyval_comment(" \"Tôƭáℓℓ¥\" = true\t#λèřè ïƨ ₥¥ çô₥₥èñƭ\n").1,
       Done("\n",
-        Expression::new(WSSep::new_str(" ", "\t"), None, Some(KeyVal::new_str(
+        Expression::new(WSSep::new_str(" ", "\t"), Some(KeyVal::new_str(
             "\"Tôƭáℓℓ¥\"", WSSep::new_str(" ", " "), Rc::new(Value::Boolean(Bool::True))
           )),
-          Some(Comment::new_str("λèřè ïƨ ₥¥ çô₥₥èñƭ"))
+          None, Some(Comment::new_str("λèřè ïƨ ₥¥ çô₥₥èñƭ"))
         )
     ));
   }
@@ -367,7 +367,7 @@ enabled = true"#).1, Done("",
   fn test_ws_comment() {
     let p = Parser::new();
     assert_eq!(p.ws_comment(" \t #This is RÂNÐÓM §TRÌNG\n").1, Done("\n",
-      Expression::new(WSSep::new_str(" \t ", ""), None, None, Some(Comment::new_str(text: "This is RÂNÐÓM §TRÌNG"))
+      Expression::new(WSSep::new_str(" \t ", ""), None, None, Some(Comment::new_str("This is RÂNÐÓM §TRÌNG"))
       )
     ));
   }

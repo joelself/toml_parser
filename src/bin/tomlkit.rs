@@ -1,6 +1,5 @@
 extern crate tomllib;
 use tomllib::parser::Parser;
-use tomllib::types::{StrType, TOMLValue};
 
 fn main() {
 	let parser = Parser::new();

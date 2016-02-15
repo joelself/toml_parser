@@ -18,6 +18,7 @@ fn map_val_to_array_type(val: &Value) -> ArrayType {
     &Value::DateTime(_)       => ArrayType::DateTime,
     &Value::Array(_)          => ArrayType::Array,
     &Value::String(_,_)       => ArrayType::String,
+    &Value::InlineTable(_)    => ArrayType::InlineTable,
   }
 }
 
@@ -259,7 +260,7 @@ impl<'a> Parser<'a> {
 
   method!(inline_table_keyvals_non_empty<Parser<'a>, &'a str, Vec<TableKeyVal> >, mut self, separated_list!(tag_s!(","), call_m!(self.table_keyval)));
 
-  method!(pub inline_table<Parser<'a>, &'a str, InlineTable>, mut self,
+  method!(pub inline_table<Parser<'a>, &'a str, Rc<InlineTable> >, mut self,
     chain!(
            tag_s!("{")                                ~
       ws1: call_m!(self.ws)                                         ~
@@ -267,7 +268,11 @@ impl<'a> Parser<'a> {
       ws2: call_m!(self.ws)                                         ~
            tag_s!("}")                                ,
           ||{
-            InlineTable::new(keyvals, WSSep::new_str(ws1, ws2))
+            if let Some(_) = keyvals {
+              Rc::new(InlineTable::new(keyvals.unwrap(), WSSep::new_str(ws1, ws2)))
+            } else {
+              Rc::new(InlineTable::new(vec![], WSSep::new_str(ws1, ws2)))
+            }
           }
     )
   );
@@ -279,7 +284,7 @@ mod test {
   use ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
                      KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table,
                      TableType, Value};
-  use ::types::{DateTime, TimeOffset, TimeOffsetAmount, StrType};
+  use ::types::{DateTime, TimeOffset, TimeOffsetAmount, StrType, Str};
   use parser::Parser;
   use std::rc::Rc;
 
@@ -406,7 +411,7 @@ mod test {
     );
     p = Parser::new();
     assert_eq!(p.array_value("44_9 , ").1,
-      Done("",ArrayValue::new_str(
+      Done("",ArrayValue::new(
         Rc::new(Value::Integer(Str::Str("44_9"))), Some(WSSep::new_str(" ", " ")),
         vec![CommentOrNewLines::NewLines(Str::Str(""))]
       ))
@@ -419,9 +424,9 @@ mod test {
     assert_eq!(p.array_values("1, 2, 3").1, Done("", vec![
       ArrayValue::new(Rc::new(Value::Integer(Str::Str("1"))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines(Str::Str(""))]),
-      ArrayValue::new_str(Rc::new(Value::Integer(Str::Str("2"))), Some(WSSep::new_str("", " ")),
+      ArrayValue::new(Rc::new(Value::Integer(Str::Str("2"))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines(Str::Str(""))]),
-      ArrayValue::new(Rc::new(Value::Integer(Str::Str("3"))), None, vec![CommentOrNewLines::NewLines(Str::Str(Str::Str("")))])
+      ArrayValue::new(Rc::new(Value::Integer(Str::Str("3"))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))])
     ]));
     p = Parser::new();
     assert_eq!(p.array_values("1, 2, #çô₥₥èñƭ\n3, ").1, Done("", vec![
@@ -440,14 +445,14 @@ mod test {
     assert_eq!(p.array("[2010-10-10T10:10:10.33Z, 1950-03-30T21:04:14.123+05:00]").1,
       Done("", Rc::new(Array::new(
         vec![ArrayValue::new(
-          Rc::new(Value::DateTime(DateTime::new_str("2010", "10", "10", "10", "10", "10", Some(Str::Str("33")),
+          Rc::new(Value::DateTime(DateTime::new_str("2010", "10", "10", "10", "10", "10", Some("33"),
             TimeOffset::Z
           ))),
           Some(WSSep::new_str("", " ")),
           vec![CommentOrNewLines::NewLines(Str::Str(""))]
         ),
         ArrayValue::new(
-          Rc::new(Value::DateTime(DateTime::new_str("1950", "03", "30", "21", "04", "14", Some(Str::Str("123")),
+          Rc::new(Value::DateTime(DateTime::new_str("1950", "03", "30", "21", "04", "14", Some("123"),
             TimeOffset::Time(TimeOffsetAmount::new_str("+", "05", "00"))
           ))),
           None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
@@ -474,16 +479,16 @@ mod test {
                   Rc::new(Value::Integer(Str::Str("4"))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
                 )
               ],
-              vec![CommentOrNewLines::NewLines(Str::(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+              vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
             )))),
             Some(WSSep::new_str("", " ")),
-            vec![CommentOrNewLines::NewLines(Str::Str(Str::Str("")))]
+            vec![CommentOrNewLines::NewLines(Str::Str(""))]
           ),
           ArrayValue::new(
             Rc::new(Value::Array(Rc::new(Array::new(
               vec![
                 ArrayValue::new(
-                  Rc::new(Value::Integer(Str::Str("4")))), Some(WSSep::new_str("", ""),
+                  Rc::new(Value::Integer(Str::Str("4"))), Some(WSSep::new_str("", "")),
                   vec![CommentOrNewLines::NewLines(Str::Str(""))]
                 ),
                 ArrayValue::new(
@@ -517,7 +522,7 @@ mod test {
     let p = Parser::new();
     assert_eq!(p.table_keyval("\"Ì WúƲ Húϱƨ!\"\t=\t'Mè ƭôô!' ").1, Done("", TableKeyVal::new(
       KeyVal::new_str(
-        "\"Ì WúƲ Húϱƨ!\"", Rc::new(Value::String(Str::Str("Mè ƭôô!"), StrType::Literal)), WSSep::new_str("\t", "\t")
+        "\"Ì WúƲ Húϱƨ!\"", WSSep::new_str("\t", "\t"), Rc::new(Value::String(Str::Str("Mè ƭôô!"), StrType::Literal))
       ),
       WSSep::new_str("", " "),
     )));
@@ -531,7 +536,7 @@ mod test {
         TableKeyVal::new(
           KeyVal::new_str(
             "Key", WSSep::new_str(" ", "\t"),
-            Rc::new(Value::Integer("54"))
+            Rc::new(Value::Integer(Str::Str("54")))
           ),
           WSSep::new_str(" ", "")
         ),
@@ -550,8 +555,8 @@ mod test {
   fn test_inline_table() {
     let p = Parser::new();
     assert_eq!(p.inline_table("{\tKey = 3.14E+5 , \"Key2\" = '''New\nLine'''\t}").1,
-      Done("", InlineTable::new(
-        Some(vec![
+      Done("", Rc::new(InlineTable::new(
+        vec![
           TableKeyVal::new(
             KeyVal::new_str(
               "Key", WSSep::new_str(" ", " "),
@@ -565,9 +570,9 @@ mod test {
             ),
             WSSep::new_str(" ", "\t")
           )
-        ]),
+        ],
         WSSep::new_str("\t", "")
-      ))
+      )))
     );
   }
 }
