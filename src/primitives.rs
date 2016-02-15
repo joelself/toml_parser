@@ -325,7 +325,7 @@ mod test {
   use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal,
                      InlineTable, TableKeyVal, Value,
                      CommentOrNewLines};
-  use ::types::{DateTime, TimeOffsetAmount, TimeOffset, StrType};
+  use ::types::{DateTime, TimeOffsetAmount, TimeOffset, StrType, Bool};
   use parser::Parser;
   use std::rc::Rc;
 
@@ -377,35 +377,34 @@ mod test {
   #[test]
   fn test_string() {
     let mut p = Parser::new();
-    assert_eq!(p.string("\"Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±\"").1, Done("", Value::String("Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±", StrType::Basic)));
+    assert_eq!(p.string("\"Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±\"").1, Done("", Value::String(Str::Str("Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±"), StrType::Basic)));
     p = Parser::new();
     assert_eq!(p.string(r#""""â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
 Ã±Ãºâ‚¥Î²Ã¨Å™_Æ­Ï‰Ã´
 NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
-""""#).1, Done("", Value::String(r#"â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
+""""#).1, Done("", Value::String(Str::Str(r#"â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
 Ã±Ãºâ‚¥Î²Ã¨Å™_Æ­Ï‰Ã´
 NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
-"#, StrType::MLBasic)));
+"#), StrType::MLBasic)));
     p = Parser::new();
-    assert_eq!(p.string("'Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG'").1, Done("", Value::String("Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG", StrType::Literal)));
+    assert_eq!(p.string("'Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG'").1, Done("", Value::String(Str::Str("Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG"), StrType::Literal)));
     p = Parser::new();
     assert_eq!(p.string(r#"'''Â§Æ¥Å™Ã¯Æ­Ã¨
 Ã‡Ã´Æ™Ã¨
 ÃžÃ¨Æ¥Æ¨Ã¯
 '''"#).1,
-      Done("", Value::String(r#"Â§Æ¥Å™Ã¯Æ­Ã¨
+      Done("", Value::String(Str::Str(r#"Â§Æ¥Å™Ã¯Æ­Ã¨
 Ã‡Ã´Æ™Ã¨
 ÃžÃ¨Æ¥Æ¨Ã¯
-"#, StrType::MLLiteral)));
-
+"#), StrType::MLLiteral)));
   }
 
   #[test]
   fn test_boolean() {
     let mut p = Parser::new();
-    assert_eq!(p.boolean("true").1, Done("", "true"));
+    assert_eq!(p.boolean("true").1, Done("", Bool::True));
     p = Parser::new();
-    assert_eq!(p.boolean("false").1, Done("", "false"));
+    assert_eq!(p.boolean("false").1, Done("", Bool::False));
   }
 
   #[test]
@@ -418,21 +417,12 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
   fn test_time() {
     let mut p = Parser::new();
     assert_eq!(p.time("11:22:33.456").1,
-      Done("", Time{
-        hour: "11",
-        minute: "22",
-        second: "33",
-        fraction: Some("456")
-      })
+      Done("", Time::new_str("11", "22", "33", Some("456")
+      ))
     );
     p = Parser::new();
     assert_eq!(p.time("04:05:06").1,
-      Done("", Time{
-        hour: "04",
-        minute: "05",
-        second: "06",
-        fraction: None
-      })
+      Done("", Time::new_str("04", "05", "06", None))
     );
   }
 
@@ -440,11 +430,7 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
   fn test_time_offset_amount() {
     let p = Parser::new();
     assert_eq!(p.time_offset_amount("+12:34").1,
-      Done("", TimeOffsetAmount{
-        pos_neg: "+",
-        hour: "12",
-        minute: "34"
-      })
+      Done("", TimeOffsetAmount::new_str("+", "12", "34"))
     );
   }
 
@@ -452,11 +438,7 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
   fn test_time_offset() {
     let mut p = Parser::new();
     assert_eq!(p.time_offset("+12:34").1,
-      Done("", TimeOffset::Time(TimeOffsetAmount{
-        pos_neg: "+",
-        hour: "12",
-        minute: "34"
-      }))
+      Done("", TimeOffset::Time(TimeOffsetAmount::new_str("+", "12", "34")))
     );
     p = Parser::new();
     assert_eq!(p.time_offset("Z").1, Done("", TimeOffset::Z));
@@ -466,9 +448,7 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
   fn test_full_date() {
     let p = Parser::new();
     assert_eq!(p.full_date("1942-12-07").1,
-      Done("", FullDate{
-        year: "1942", month: "12", day: "07"
-      })
+      Done("", FullDate::new_str("1942", "12", "07"))
     );
   }
 
@@ -476,15 +456,9 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
   fn test_date_time() {
     let      p = Parser::new();
     assert_eq!(p.date_time("1999-03-21T20:15:44.5-07:00").1,
-      Done("", DateTime{
-        year: "1999", month: "03", day: "21",
-        hour: "20", minute: "15", second: "44", fraction: Some("5"),
-        offset: TimeOffset::Time(TimeOffsetAmount{
-          pos_neg: "-",
-          hour: "07",
-          minute: "00"
-        })
-      })
+      Done("", DateTime::new_str("1999", "03", "21", "20", "15", "44", Some(Str::Str("5")),
+        offset: TimeOffset::Time(TimeOffsetAmount::new_str("-", "07", "00"))
+      ))
     );
   }
 
@@ -511,75 +485,65 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
   #[test]
   fn test_keyval_sep() {
     let p = Parser::new();
-    assert_eq!(p.keyval_sep("\t \t= \t").1, Done("", WSSep{ws1: "\t \t", ws2: " \t"}));
+    assert_eq!(p.keyval_sep("\t \t= \t").1, Done("", WSSep::new_str("\t \t", " \t")));
   }
 
   #[test]
   fn test_val() {
     let mut p = Parser::new();
     assert_eq!(p.val("[4,9]").1, Done("",
-      Rc::new(Value::Array(Rc::new(Array{
-        values: vec![
-          ArrayValue{
-            val: Rc::new(Value::Integer("4")), array_sep: Some(WSSep{
-              ws1: "", ws2: ""
-            }),
-            comment_nls: vec![CommentOrNewLines::NewLines("")]
-          },
-          ArrayValue{
-            val: Rc::new(Value::Integer("9")), array_sep: None,
-            comment_nls: vec![CommentOrNewLines::NewLines("")]
-          },
+      Rc::new(Value::Array(Rc::new(Array::new(
+        vec![
+          ArrayValue::new(
+            Rc::new(Value::Integer(Str::Str("4"))), Some(WSSep::new_str("", "")),
+            vec![CommentOrNewLines::NewLines(Str::Str(""))]
+          ),
+          ArrayValue::new(
+            Rc::new(Value::Integer(Str::Str("9"))), None,
+            vec![CommentOrNewLines::NewLines(Str::Str(""))]
+          ),
         ],
-        comment_nls1: vec![CommentOrNewLines::NewLines("")], comment_nls2: vec![CommentOrNewLines::NewLines("")]
-      }
+        vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+      )
     )))));
     p = Parser::new();
     assert_eq!(p.val("{\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"='TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™'}").1, Done("",
-      Rc::new(Value::InlineTable(Rc::new(InlineTable{
-        keyvals: Some(vec![
-          TableKeyVal{
-            keyval: KeyVal{
-              key: "\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"", keyval_sep: WSSep{
-                ws1: "", ws2: ""
-              },
-              val: Rc::new(Value::String("TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™", StrType::Literal))
-            },
-            kv_sep: WSSep{ws1: "", ws2: ""}
-          }
+      Rc::new(Value::InlineTable(Rc::new(InlineTable::new(
+        Some(vec![
+          TableKeyVal::new(
+            KeyVal::new_str(
+              "\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"", WSSep::new_str("", ""),
+              Rc::new(Value::String(Str::Str("TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™"), StrType::Literal))
+            ),
+            WSSep::new_str("", "")
+          )
         ]),
-        ws: WSSep{
-          ws1: "", ws2: ""
-        }
-    })))));
+        WSSep::new_str("", "")
+    ))))));
     p = Parser::new();
-    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Rc::new(Value::DateTime(DateTime{
-                              year: "2112", month: "09", day: "30",
-                              hour: "12", minute: "33", second: "01", fraction: Some("345"),
-                              offset: TimeOffset::Time(TimeOffsetAmount{
-                                pos_neg: "-", hour: "11", minute: "30"
-                              })
-                            }))));
+    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Rc::new(Value::DateTime(DateTime::new_str(
+      "2112", "09", "30", "12", "33", "01", Some(Str::Str("345")), TimeOffset::Time(TimeOffsetAmount::new_str(
+        "-", "11", "30"
+      ))
+    )))));
     p = Parser::new();
-    assert_eq!(p.val("3487.3289E+22").1, Done("", Rc::new(Value::Float("3487.3289E+22"))));
+    assert_eq!(p.val("3487.3289E+22").1, Done("", Rc::new(Value::Float(Str::Str("3487.3289E+22")))));
     p = Parser::new();
-    assert_eq!(p.val("8932838").1, Done("", Rc::new(Value::Integer("8932838"))));
+    assert_eq!(p.val("8932838").1, Done("", Rc::new(Value::Integer(Str::Str("8932838")))));
     p = Parser::new();
-    assert_eq!(p.val("false").1, Done("", Rc::new(Value::Boolean("false"))));
+    assert_eq!(p.val("false").1, Done("", Rc::new(Value::Boolean(Bool::False))));
     p = Parser::new();
-    assert_eq!(p.val("true").1, Done("", Rc::new(Value::Boolean("true"))));
+    assert_eq!(p.val("true").1, Done("", Rc::new(Value::Boolean(Bool::True))));
     p = Parser::new();
-    assert_eq!(p.val("'Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±'").1, Done("", Rc::new(Value::String("Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±", StrType::Literal))));
+    assert_eq!(p.val("'Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±'").1, Done("", Rc::new(Value::String(Str::Str("Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±"), StrType::Literal))));
   }
 
   #[test]
   fn test_keyval() {
     let p = Parser::new();
-    assert_eq!(p.keyval("Boolean = 84.67").1, Done("", KeyVal{
-      key: "Boolean", keyval_sep: WSSep{
-        ws1: " ", ws2: " "
-      },
-      val: Rc::new(Value::Float("84.67"))
-    }));
+    assert_eq!(p.keyval("Boolean = 84.67").1, Done("", KeyVal::new_str(
+      "Boolean", WSSep::new_str(" ", " "),
+      Rc::new(Value::Float(Str::Str("84.67")))
+    )));
   }
 }

@@ -10,7 +10,7 @@ use std::rc::Rc;
 use nomplusplus::IResult;
 
 #[inline(always)]
-fn map_val_to_array_type(&Value) -> ArrayType {
+fn map_val_to_array_type(val: &Value) -> ArrayType {
   match val {
     &Value::Integer(_)        => ArrayType::Integer,
     &Value::Float(_)          => ArrayType::Float,
@@ -36,7 +36,7 @@ impl<'a> Parser<'a> {
     chain!(
       ws1: call_m!(self.ws)         ~
            tag_s!(".")~
-      call_m!(self.ws)         ~
+      ws2: call_m!(self.ws)         ~
       key: call_m!(self.key)        ,
       ||{
         WSKeySep::new_str(WSSep::new_str(ws1, ws2), key)
@@ -50,7 +50,7 @@ impl<'a> Parser<'a> {
       ws1: call_m!(self.ws)             ~
       key: call_m!(self.key)            ~
   subkeys: call_m!(self.table_subkeys)  ~
-      call_m!(self.ws)             ~
+      ws2: call_m!(self.ws)             ~
            tag_s!("]")    ,
       ||{
         let res = Rc::new(TableType::Standard(Table::new_str(
@@ -85,7 +85,7 @@ impl<'a> Parser<'a> {
       ws1: call_m!(self.ws)             ~
       key: call_m!(self.key)            ~
   subkeys: call_m!(self.table_subkeys)  ~
-      call_m!(self.ws)             ~
+      ws2: call_m!(self.ws)             ~
            tag_s!("]]")   ,
       ||{
         let res = Rc::new(TableType::Array(Table::new_str(
@@ -133,7 +133,7 @@ impl<'a> Parser<'a> {
     chain!(
       ws1: call_m!(self.ws)         ~
            tag_s!(",")~
-      call_m!(self.ws)         ,
+      ws2: call_m!(self.ws)         ,
       ||{
         WSSep::new_str(ws1, ws2)
       }
@@ -156,7 +156,7 @@ impl<'a> Parser<'a> {
   method!(comment_or_nl<Parser<'a>, &'a str, CommentOrNewLines>, mut self,
     alt!(
       complete!(call_m!(self.comment_nl))   => {|com| CommentOrNewLines::Comment(com)} |
-      complete!(call_m!(self.ws_newline))  => {|nl|  CommentOrNewLines::NewLines(Str::Str(Str::Str(nl))}
+      complete!(call_m!(self.ws_newline))  => {|nl|  CommentOrNewLines::NewLines(Str::Str(nl))}
     )
   );
 
@@ -168,9 +168,9 @@ impl<'a> Parser<'a> {
     alt!(
       complete!(
         chain!(
-          call_m!(self.val)                        ~
-    call_m!(self.array_sep)                  ~
-   complete!(call_m!(self.comment_or_nls))   ,
+          val: call_m!(self.val)                        ~
+    array_sep: call_m!(self.array_sep)                  ~
+  comment_nls: complete!(call_m!(self.comment_or_nls))  ,
           ||{
             let t = map_val_to_array_type(&val);
             let len = self.last_array_type.borrow().len();
@@ -180,18 +180,14 @@ impl<'a> Parser<'a> {
             }
             self.last_array_type.borrow_mut().pop();
             self.last_array_type.borrow_mut().push(t);
-            ArrayValue{
-              val,
-              Some(array_sep),
-              comment_nls,
-            }
+            ArrayValue::new(val, Some(array_sep),comment_nls)
           }
         )
       ) |
       complete!(
         chain!(
-          call_m!(self.val)                       ~
-  complete!(call_m!(self.comment_or_nls)) ,
+          val: call_m!(self.val)                       ~
+  comment_nls: complete!(call_m!(self.comment_or_nls)) ,
           ||{
             let t = map_val_to_array_type(&val);
             let len = self.last_array_type.borrow().len();
@@ -201,11 +197,7 @@ impl<'a> Parser<'a> {
             }
             self.last_array_type.borrow_mut().pop();
             self.last_array_type.borrow_mut().push(t);
-            ArrayValue{
-              val,
-              None,
-              comment_nls,
-            }
+            ArrayValue::new(val, None, comment_nls)
           }
         )
       )
@@ -240,11 +232,7 @@ impl<'a> Parser<'a> {
          cn2: call_m!(self.comment_or_nls)  ~
               tag_s!("]")                   ,
       ||{
-       let array_result = Rc::new(Array{
-          array_vals,
-          comment_nls1: cn1,
-          comment_nls2: cn2,
-        });
+       let array_result = Rc::new(Array::new(array_vals, cn1, cn2));
         if self.mixed_array.get() {
           self.mixed_array.set(false);
           let mut vals: Vec<Rc<Value<'a>>> = vec![]; 
@@ -261,8 +249,8 @@ impl<'a> Parser<'a> {
   method!(table_keyval<Parser<'a>, &'a str, TableKeyVal>, mut self,
         chain!(
           ws1: call_m!(self.ws)     ~
-       keycall_m!(self.keyval) ~
-          call_m!(self.ws)     ,
+       keyval: call_m!(self.keyval) ~
+          ws2: call_m!(self.ws)     ,
           ||{
             TableKeyVal::new(keyval, WSSep::new_str(ws1, ws2))
           }
@@ -276,7 +264,7 @@ impl<'a> Parser<'a> {
            tag_s!("{")                                ~
       ws1: call_m!(self.ws)                                         ~
   keyvals: complete!(call_m!(self.inline_table_keyvals_non_empty))? ~
-      call_m!(self.ws)                                         ~
+      ws2: call_m!(self.ws)                                         ~
            tag_s!("}")                                ,
           ||{
             InlineTable::new(keyvals, WSSep::new_str(ws1, ws2))
@@ -396,7 +384,7 @@ mod test {
       ))
     ));
     p = Parser::new();
-    assert_eq!(p.comment_or_nl("\n\t\r\n ").1, Done("", CommentOrNewLines::NewLines(Str::Str(Str::Str("\n\t\r\n "))));
+    assert_eq!(p.comment_or_nl("\n\t\r\n ").1, Done("", CommentOrNewLines::NewLines(Str::Str("\n\t\r\n "))));
   }
 
   #[test]
@@ -413,14 +401,14 @@ mod test {
     p = Parser::new();
     assert_eq!(p.array_value("\"ƨƥáϱλèƭƭï\"").1,
       Done("",ArrayValue::new(
-        Rc::new(Value::String(Str::Str("ƨƥáϱλèƭƭï"), StrType::Basic)), None, vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]
+        Rc::new(Value::String(Str::Str("ƨƥáϱλèƭƭï"), StrType::Basic)), None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
       ))
     );
     p = Parser::new();
     assert_eq!(p.array_value("44_9 , ").1,
       Done("",ArrayValue::new_str(
         Rc::new(Value::Integer(Str::Str("44_9"))), Some(WSSep::new_str(" ", " ")),
-        vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]
+        vec![CommentOrNewLines::NewLines(Str::Str(""))]
       ))
     );
   }
@@ -430,19 +418,19 @@ mod test {
     let mut p = Parser::new();
     assert_eq!(p.array_values("1, 2, 3").1, Done("", vec![
       ArrayValue::new(Rc::new(Value::Integer(Str::Str("1"))), Some(WSSep::new_str("", " ")),
-      vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]),
+      vec![CommentOrNewLines::NewLines(Str::Str(""))]),
       ArrayValue::new_str(Rc::new(Value::Integer(Str::Str("2"))), Some(WSSep::new_str("", " ")),
-      vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]),
-      ArrayValue::new(Rc::new(Value::Integer(Str::Str("3"))), None, vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))])
+      vec![CommentOrNewLines::NewLines(Str::Str(""))]),
+      ArrayValue::new(Rc::new(Value::Integer(Str::Str("3"))), None, vec![CommentOrNewLines::NewLines(Str::Str(Str::Str("")))])
     ]));
     p = Parser::new();
     assert_eq!(p.array_values("1, 2, #çô₥₥èñƭ\n3, ").1, Done("", vec![
       ArrayValue::new(Rc::new(Value::Integer(Str::Str("1"))), Some(WSSep::new_str("", " ")),
-      vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]),
+      vec![CommentOrNewLines::NewLines(Str::Str(""))]),
       ArrayValue::new(Rc::new(Value::Integer(Str::Str("2"))), Some(WSSep::new_str("", " ")),
         vec![CommentOrNewLines::Comment(CommentNewLines::new_str("", Comment::new_str("çô₥₥èñƭ"), "\n"))]),
       ArrayValue::new(Rc::new(Value::Integer(Str::Str("3"))), Some(WSSep::new_str("", " ")),
-      vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))])
+      vec![CommentOrNewLines::NewLines(Str::Str(""))])
     ]));
   }
 
@@ -456,15 +444,15 @@ mod test {
             TimeOffset::Z
           ))),
           Some(WSSep::new_str("", " ")),
-          vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]
+          vec![CommentOrNewLines::NewLines(Str::Str(""))]
         ),
         ArrayValue::new(
           Rc::new(Value::DateTime(DateTime::new_str("1950", "03", "30", "21", "04", "14", Some(Str::Str("123")),
             TimeOffset::Time(TimeOffsetAmount::new_str("+", "05", "00"))
           ))),
-          None, vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]
+          None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
         )],
-        vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]
+        vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
       )))
     );
   }
@@ -480,47 +468,47 @@ mod test {
               vec![
                 ArrayValue::new(
                   Rc::new(Value::Integer(Str::Str("3"))), Some(WSSep::new_str("", "")),
-                  vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]
+                  vec![CommentOrNewLines::NewLines(Str::Str(""))]
                 ),
                 ArrayValue::new(
-                  Rc::new(Value::Integer(Str::Str("4"))), None, vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]
+                  Rc::new(Value::Integer(Str::Str("4"))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
                 )
               ],
-              vec![CommentOrNewLines::NewLines(Str::Str(Str::(""))], vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]
+              vec![CommentOrNewLines::NewLines(Str::(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
             )))),
             Some(WSSep::new_str("", " ")),
-            vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]
-          },
+            vec![CommentOrNewLines::NewLines(Str::Str(Str::Str("")))]
+          ),
           ArrayValue::new(
             Rc::new(Value::Array(Rc::new(Array::new(
               vec![
                 ArrayValue::new(
                   Rc::new(Value::Integer(Str::Str("4")))), Some(WSSep::new_str("", ""),
-                  vec![CommentOrNewLines::NewLines(Str::Str(Str::Str(""))]
+                  vec![CommentOrNewLines::NewLines(Str::Str(""))]
                 ),
                 ArrayValue::new(
                     Rc::new(Value::Integer(Str::Str("5"))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
                 )
               ],
-              comment_nls1: vec![CommentOrNewLines::NewLines(Str::Str(""))], comment_nls2: vec![CommentOrNewLines::NewLines(Str::Str(""))]
-            }))),
+              vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+            )))),
             Some(WSSep::new_str("", " ")),
             vec![CommentOrNewLines::NewLines(Str::Str(""))]
-          },
+          ),
           ArrayValue::new(
             Rc::new(Value::Array(Rc::new(Array::new(
               vec![
                 ArrayValue::new(
                   Rc::new(Value::Integer(Str::Str("6"))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
-                }
+                )
               ],
              vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
             )))),
             None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
-          }
+          )
         ],
         vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
-      }))
+      )))
     );
   }
 
@@ -529,14 +517,10 @@ mod test {
     let p = Parser::new();
     assert_eq!(p.table_keyval("\"Ì WúƲ Húϱƨ!\"\t=\t'Mè ƭôô!' ").1, Done("", TableKeyVal::new(
       KeyVal::new_str(
-        key: "\"Ì WúƲ Húϱƨ!\"", Rc::new(Value::String("Mè ƭôô!", StrType::Literal)), keyval_sep: WSSep::new_str(
-          ws1: "\t", "\t"
-        }
-      },
-      kv_sep: WSSep::new_str(
-        ws1: "", " "
-      },
-    }));
+        "\"Ì WúƲ Húϱƨ!\"", Rc::new(Value::String(Str::Str("Mè ƭôô!"), StrType::Literal)), WSSep::new_str("\t", "\t")
+      ),
+      WSSep::new_str("", " "),
+    )));
   }
 
   #[test]
@@ -549,7 +533,7 @@ mod test {
             "Key", WSSep::new_str(" ", "\t"),
             Rc::new(Value::Integer("54"))
           ),
-          WSSep::new_str{" ", "")
+          WSSep::new_str(" ", "")
         ),
         TableKeyVal::new(
           KeyVal::new_str(

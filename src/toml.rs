@@ -156,7 +156,7 @@ enabled = true"#).1, Done("",
             )),
             None, Some(Comment::new_str(" Fïřƨƭ çℓáƨƨ δáƭèƨ"))
           )
-        },
+        ),
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), None, None, None
@@ -165,15 +165,15 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), None, Some(Rc::new(TableType::Standard(Table::new_str(
-              WSSep::new_str("", ws2: "" }, key: "database", subkeys:vec![]
-            )))), comment: None
+              WSSep::new_str("", ""), "database", vec![]
+            )))), None
           )
         ),
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
               "server", WSSep::new_str(" ", " "), Rc::new(Value::String(Str::Str("192.168.1.1"), StrType::Basic))
-            ),
+            )),
             None, None
           )
         ),
@@ -186,7 +186,7 @@ enabled = true"#).1, Done("",
                     Rc::new(Value::Integer(Str::Str("8001"))), Some(WSSep::new_str("", " " )), vec![CommentOrNewLines::NewLines(Str::Str(""))]
                   ),
                   ArrayValue::new(
-                    Rc::new(Value::Integer(Str::Str("8001"))), Some(WSSep::new_str("", " ")), comment_nls: vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                    Rc::new(Value::Integer(Str::Str("8001"))), Some(WSSep::new_str("", " ")), vec![CommentOrNewLines::NewLines(Str::Str(""))]
                   ),
                   ArrayValue::new(
                     Rc::new(Value::Integer(Str::Str("8002"))), None, vec![CommentOrNewLines::NewLines(Str::Str(" "))]
@@ -298,12 +298,12 @@ enabled = true"#).1, Done("",
           WSSep::new_str(" \t", " \t"), None, Some(Rc::new(TableType::Standard(Table::new_str(
             WSSep::new_str("", ""), "\"δřáƒƭ\"", vec![
               WSKeySep::new_str(WSSep::new_str("", ""), "THISKEY"),
-              WSKeySep::new_str(WSSep::new_str("  ", " \t"}, "keythethird")
+              WSKeySep::new_str(WSSep::new_str("  ", " \t"), "keythethird")
             ]
-          ))))),
+          ))),
           Some(Comment::new_str("Mèƨƨáϱè Rèƥℓïèδ"))
         )
-    ));
+    )));
     p = Parser::new();
     assert_eq!(p.expression("\t\t\t\"řúññïñϱôúƭôƒωôřδƨ\" = 0.1  #Â₥èřïçáñ Éжƥřèƨƨ\n").1,
       Done("\n",
