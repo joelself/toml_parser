@@ -120,15 +120,15 @@ impl<'a> Expression<'a> {
 	}
 }
 
-#[derive(Debug, Eq)]
+#[derive(Debug, Eq, Clone)]
 pub enum Value<'a> {
 	Integer(Str<'a>),
 	Float(Str<'a>),
 	Boolean(Bool),
 	DateTime(DateTime<'a>),
-	Array(Rc<Array<'a>>),
+	Array(Rc<RefCell<Array<'a>>>),
 	String(Str<'a>, StrType),
-	InlineTable(Rc<InlineTable<'a>>),
+	InlineTable(Rc<RefCell<InlineTable<'a>>>),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -145,14 +145,14 @@ pub enum ArrayType {
 
 #[derive(Debug, Eq, Clone)]
 pub struct HashValue<'a> {
-	pub value: Option<Rc<Value<'a>>>, 
+	pub value: Option<Rc<RefCell<Value<'a>>>>, 
 	pub subkeys: RefCell<LinkedList<String>>,
 }
 
 impl<'a> Display for HashValue<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		if let Some(ref v) = self.value {
-			write!(f, "{}", **v)
+			write!(f, "{}", *v.borrow())
 		} else {
 			write!(f, "")
 		}
@@ -160,7 +160,7 @@ impl<'a> Display for HashValue<'a> {
 }
 
 impl<'a> HashValue<'a> {
-	pub fn new(value: Rc<Value<'a>>) -> HashValue<'a> {
+	pub fn new(value: Rc<RefCell<Value<'a>>>) -> HashValue<'a> {
 		HashValue {
 			value: Some(value),
 			subkeys: RefCell::new(LinkedList::new()),
@@ -202,8 +202,8 @@ impl<'a> Display for Value<'a> {
 			&Value::Float(ref i) => write!(f, "{}", i),
 			&Value::Boolean(ref i) => write!(f, "{}", i),
 			&Value::DateTime(ref i) => write!(f, "{}", i),
-			&Value::Array(ref i) => write!(f, "{}", i),
-			&Value::InlineTable(ref i) => write!(f, "{}", i),
+			&Value::Array(ref i) => write!(f, "{}", *i.borrow()),
+			&Value::InlineTable(ref i) => write!(f, "{}", *i.borrow()),
 			&Value::String(ref i, ref t) =>  {
 				match t {
 					&StrType::Basic => write!(f, "\"{}\"", i),
@@ -314,7 +314,7 @@ impl<'a> WSSep<'a> {
 pub struct KeyVal<'a> {
 	pub key: Str<'a>,
 	pub keyval_sep: WSSep<'a>,
-	pub val: Rc<Value<'a>>,
+	pub val: Rc<RefCell<Value<'a>>>,
 }
 
 impl<'a> PartialEq for KeyVal<'a> {
@@ -327,15 +327,15 @@ impl<'a> PartialEq for KeyVal<'a> {
 
 impl<'a> Display for KeyVal<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	write!(f, "{}{}={}{}", self.key, self.keyval_sep.ws1, self.keyval_sep.ws2, self.val)
+    	write!(f, "{}{}={}{}", self.key, self.keyval_sep.ws1, self.keyval_sep.ws2, *self.val.borrow())
     }
 }
 
 impl<'a> KeyVal<'a> {
-    pub fn new_str(key: &'a str, keyval_sep: WSSep<'a>, val: Rc<Value<'a>>) -> KeyVal<'a> {
+    pub fn new_str(key: &'a str, keyval_sep: WSSep<'a>, val: Rc<RefCell<Value<'a>>>) -> KeyVal<'a> {
     	KeyVal{key: Str::Str(key), keyval_sep: keyval_sep, val: val}
     }
-    pub fn new_string(key: String, keyval_sep: WSSep<'a>, val: Rc<Value<'a>>) -> KeyVal<'a> {
+    pub fn new_string(key: String, keyval_sep: WSSep<'a>, val: Rc<RefCell<Value<'a>>>) -> KeyVal<'a> {
     	KeyVal{key: Str::String(key), keyval_sep: keyval_sep, val: val}
     }
 }
@@ -609,7 +609,7 @@ impl<'a> Display for CommentOrNewLines<'a> {
 // <val><<array_sep.ws1>,<array_sep.ws2>?><comment_nl?><array_vals?>
 #[derive(Debug, Eq)]
 pub struct ArrayValue<'a> {
-	pub val: Rc<Value<'a>>,
+	pub val: Rc<RefCell<Value<'a>>>,
 	pub array_sep: Option<WSSep<'a>>,
 	pub comment_nls: Vec<CommentOrNewLines<'a>>,
 }
@@ -625,8 +625,8 @@ impl<'a> PartialEq for ArrayValue<'a> {
 impl<'a> Display for ArrayValue<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
   	match self.array_sep {
-  		Some(ref s) => try!(write!(f, "{}{},{}", self.val, s.ws1, s.ws2)),
-  		None => try!(write!(f, "{}", self.val)),
+  		Some(ref s) => try!(write!(f, "{}{},{}", *self.val.borrow(), s.ws1, s.ws2)),
+  		None => try!(write!(f, "{}", *self.val.borrow())),
   	}
   	for i in 0..self.comment_nls.len() - 1 {
   		try!(write!(f, "{}", self.comment_nls[i]));
@@ -636,7 +636,7 @@ impl<'a> Display for ArrayValue<'a> {
 }
 
 impl<'a> ArrayValue<'a> {
-  pub fn new(val: Rc<Value<'a>>, array_sep: Option<WSSep<'a>>,
+  pub fn new(val: Rc<RefCell<Value<'a>>>, array_sep: Option<WSSep<'a>>,
   	comment_nls: Vec<CommentOrNewLines<'a>>) -> ArrayValue<'a> {
   	ArrayValue{val: val, array_sep: array_sep, comment_nls: comment_nls}
   }

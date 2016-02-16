@@ -86,6 +86,7 @@ mod test {
                      Array, CommentOrNewLines};
   use types::{TimeOffsetAmount, DateTime, TimeOffset, StrType, Str, Bool};
   use std::rc::Rc;
+  use std::cell::RefCell;
   
 
   #[test]
@@ -122,7 +123,7 @@ enabled = true"#).1, Done("",
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
               "title", WSSep::new_str(" ", " "),
-              Rc::new(Value::String(Str::Str("TÓM£ Éжá₥ƥℓè"), StrType::Basic))
+              Rc::new(RefCell::new(Value::String(Str::Str("TÓM£ Éжá₥ƥℓè"), StrType::Basic)))
             )),
             None, None
           )
@@ -141,18 +142,18 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
-              "name", WSSep::new_str(" ", " "), Rc::new(Value::String(Str::Str("Tô₥ Þřèƨƭôñ-Wèřñèř"), StrType::Basic))
+              "name", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::String(Str::Str("Tô₥ Þřèƨƭôñ-Wèřñèř"), StrType::Basic)))
             )), None, None
           )
         ),
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", " "), Some(KeyVal::new_str(
-              "dob", WSSep::new_str(" ", " "), Rc::new(Value::DateTime(DateTime::new_str(
+              "dob", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::DateTime(DateTime::new_str(
                 "1979", "05", "27", "07", "32", "00", None, TimeOffset::Time(TimeOffsetAmount::new_str(
                   "-", "08", "00"
                 ))
-              )))
+              ))))
             )),
             None, Some(Comment::new_str(" Fïřƨƭ çℓáƨƨ δáƭèƨ"))
           )
@@ -172,7 +173,7 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
-              "server", WSSep::new_str(" ", " "), Rc::new(Value::String(Str::Str("192.168.1.1"), StrType::Basic))
+              "server", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::String(Str::Str("192.168.1.1"), StrType::Basic)))
             )),
             None, None
           )
@@ -180,20 +181,20 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
-              "ports", WSSep::new_str(" ", " "), Rc::new(Value::Array(Rc::new(Array::new(
+              "ports", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
                 vec![
                   ArrayValue::new(
-                    Rc::new(Value::Integer(Str::Str("8001"))), Some(WSSep::new_str("", " " )), vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                    Rc::new(RefCell::new(Value::Integer(Str::Str("8001")))), Some(WSSep::new_str("", " " )), vec![CommentOrNewLines::NewLines(Str::Str(""))]
                   ),
                   ArrayValue::new(
-                    Rc::new(Value::Integer(Str::Str("8001"))), Some(WSSep::new_str("", " ")), vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                    Rc::new(RefCell::new(Value::Integer(Str::Str("8001")))), Some(WSSep::new_str("", " ")), vec![CommentOrNewLines::NewLines(Str::Str(""))]
                   ),
                   ArrayValue::new(
-                    Rc::new(Value::Integer(Str::Str("8002"))), None, vec![CommentOrNewLines::NewLines(Str::Str(" "))]
+                    Rc::new(RefCell::new(Value::Integer(Str::Str("8002")))), None, vec![CommentOrNewLines::NewLines(Str::Str(" "))]
                   )
                 ],
                 vec![CommentOrNewLines::NewLines(Str::Str(" "))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
-              ))))
+              ))))))
             )),
             None, None
           )
@@ -201,7 +202,7 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
-              "connection_max", WSSep::new_str(" ", " "), Rc::new(Value::Integer(Str::Str("5000")))
+              "connection_max", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Integer(Str::Str("5000"))))
             )),
             None, None
           )
@@ -209,7 +210,7 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
-              "enabled", WSSep::new_str(" ", " "), Rc::new(Value::Boolean(Bool::True))
+              "enabled", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Boolean(Bool::True)))
             )),
             None, None
           )
@@ -239,7 +240,7 @@ enabled = true"#).1, Done("",
           NLExpression::new_str(
             "\r\n", Expression::new(
               WSSep::new_str("", ""), Some(KeyVal::new_str(
-                "key", WSSep::new_str("", ""), Rc::new(Value::String(Str::Str("value"), StrType::Basic))
+                "key", WSSep::new_str("", ""), Rc::new(RefCell::new(Value::String(Str::Str("value"), StrType::Basic)))
               )),
               None, Some(Comment::new_str("wλïƭeƨƥáçè"))
             )
@@ -281,7 +282,7 @@ enabled = true"#).1, Done("",
       Done("\r\n", NLExpression::new_str(
         "\r\n", Expression::new(
          WSSep::new_str("   ", "     "), Some(KeyVal::new_str(
-            "SimpleKey", WSSep::new_str(" ", " "), Rc::new(Value::Integer(Str::Str("1_2_3_4_5")))
+            "SimpleKey", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Integer(Str::Str("1_2_3_4_5"))))
           )),
          None, Some(Comment::new_str("  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£"))
         )
@@ -309,7 +310,7 @@ enabled = true"#).1, Done("",
       Done("\n",
         Expression::new(
           WSSep::new_str("\t\t\t", "  "), Some(KeyVal::new_str(
-            "\"řúññïñϱôúƭôƒωôřδƨ\"", WSSep::new_str(" ", " "), Rc::new(Value::Float(Str::Str("0.1")))
+            "\"řúññïñϱôúƭôƒωôřδƨ\"", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Float(Str::Str("0.1"))))
           )),
           None, Some(Comment::new_str("Â₥èřïçáñ Éжƥřèƨƨ"))
         )
@@ -356,7 +357,7 @@ enabled = true"#).1, Done("",
     assert_eq!(p.keyval_comment(" \"Tôƭáℓℓ¥\" = true\t#λèřè ïƨ ₥¥ çô₥₥èñƭ\n").1,
       Done("\n",
         Expression::new(WSSep::new_str(" ", "\t"), Some(KeyVal::new_str(
-            "\"Tôƭáℓℓ¥\"", WSSep::new_str(" ", " "), Rc::new(Value::Boolean(Bool::True))
+            "\"Tôƭáℓℓ¥\"", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Boolean(Bool::True)))
           )),
           None, Some(Comment::new_str("λèřè ïƨ ₥¥ çô₥₥èñƭ"))
         )

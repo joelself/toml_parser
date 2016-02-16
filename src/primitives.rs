@@ -35,11 +35,9 @@ fn get_array_table_key<'a>(tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_inde
 }
 
 
-
-
 impl<'a> Parser<'a> {
 
-  fn insert_keyval_into_map(&mut self, key: &'a str, val: Rc<Value<'a>>) {
+  fn insert_keyval_into_map(&mut self, key: &'a str, val: Rc<RefCell<Value<'a>>>) {
     let map = RefCell::new(&mut self.map);
     let mut insert = false;
     let mut error = false;
@@ -283,15 +281,15 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(pub val<Parser<'a>, &'a str, Rc<Value> >, mut self,
+  method!(pub val<Parser<'a>, &'a str, Rc<RefCell<Value>> >, mut self,
     alt!(
-      complete!(call_m!(self.array))        => {|arr|   Rc::new(Value::Array(arr))}             |
-      complete!(call_m!(self.inline_table)) => {|it|    Rc::new(Value::InlineTable(it))}        |
-      complete!(call_m!(self.date_time))    => {|dt|    Rc::new(Value::DateTime(dt))}           |
-      complete!(call_m!(self.float))        => {|flt|   Rc::new(Value::Float(Str::Str(flt)))}   |
-      complete!(call_m!(self.integer))      => {|int|   Rc::new(Value::Integer(Str::Str(int)))} |
-      complete!(call_m!(self.boolean))      => {|b|     Rc::new(Value::Boolean(b))}             |
-      complete!(call_m!(self.string))       => {|s|     Rc::new(s)}
+      complete!(call_m!(self.array))        => {|arr|   Rc::new(RefCell::new(Value::Array(arr)))}             |
+      complete!(call_m!(self.inline_table)) => {|it|    Rc::new(RefCell::new(Value::InlineTable(it)))}        |
+      complete!(call_m!(self.date_time))    => {|dt|    Rc::new(RefCell::new(Value::DateTime(dt)))}           |
+      complete!(call_m!(self.float))        => {|flt|   Rc::new(RefCell::new(Value::Float(Str::Str(flt))))}   |
+      complete!(call_m!(self.integer))      => {|int|   Rc::new(RefCell::new(Value::Integer(Str::Str(int))))} |
+      complete!(call_m!(self.boolean))      => {|b|     Rc::new(RefCell::new(Value::Boolean(b)))}             |
+      complete!(call_m!(self.string))       => {|s|     Rc::new(RefCell::new(s))}
     )
   );
 
@@ -326,6 +324,7 @@ mod test {
   use ::types::{DateTime, TimeOffsetAmount, TimeOffset, StrType, Bool, Str};
   use parser::Parser;
   use std::rc::Rc;
+  use std::cell::RefCell;
 
   #[test]
   fn test_integer() {
@@ -490,50 +489,50 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
   fn test_val() {
     let mut p = Parser::new();
     assert_eq!(p.val("[4,9]").1, Done("",
-      Rc::new(Value::Array(Rc::new(Array::new(
+      Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
         vec![
           ArrayValue::new(
-            Rc::new(Value::Integer(Str::Str("4"))), Some(WSSep::new_str("", "")),
+            Rc::new(RefCell::new(Value::Integer(Str::Str("4")))), Some(WSSep::new_str("", "")),
             vec![CommentOrNewLines::NewLines(Str::Str(""))]
           ),
           ArrayValue::new(
-            Rc::new(Value::Integer(Str::Str("9"))), None,
+            Rc::new(RefCell::new(Value::Integer(Str::Str("9")))), None,
             vec![CommentOrNewLines::NewLines(Str::Str(""))]
           ),
         ],
         vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
-      )
-    )))));
+      ))
+    ))))));
     p = Parser::new();
     assert_eq!(p.val("{\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"='TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™'}").1, Done("",
-      Rc::new(Value::InlineTable(Rc::new(InlineTable::new(
+      Rc::new(RefCell::new(Value::InlineTable(Rc::new(RefCell::new(InlineTable::new(
         vec![
           TableKeyVal::new(
             KeyVal::new_str(
               "\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"", WSSep::new_str("", ""),
-              Rc::new(Value::String(Str::Str("TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™"), StrType::Literal))
+              Rc::new(RefCell::new(Value::String(Str::Str("TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™"), StrType::Literal)))
             ),
             WSSep::new_str("", "")
           )
         ],
         WSSep::new_str("", "")
-    ))))));
+    ))))))));
     p = Parser::new();
-    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Rc::new(Value::DateTime(DateTime::new_str(
+    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Rc::new(RefCell::new(Value::DateTime(DateTime::new_str(
       "2112", "09", "30", "12", "33", "01", Some("345"), TimeOffset::Time(TimeOffsetAmount::new_str(
         "-", "11", "30"
       ))
-    )))));
+    ))))));
     p = Parser::new();
-    assert_eq!(p.val("3487.3289E+22").1, Done("", Rc::new(Value::Float(Str::Str("3487.3289E+22")))));
+    assert_eq!(p.val("3487.3289E+22").1, Done("", Rc::new(RefCell::new(Value::Float(Str::Str("3487.3289E+22"))))));
     p = Parser::new();
-    assert_eq!(p.val("8932838").1, Done("", Rc::new(Value::Integer(Str::Str("8932838")))));
+    assert_eq!(p.val("8932838").1, Done("", Rc::new(RefCell::new(Value::Integer(Str::Str("8932838"))))));
     p = Parser::new();
-    assert_eq!(p.val("false").1, Done("", Rc::new(Value::Boolean(Bool::False))));
+    assert_eq!(p.val("false").1, Done("", Rc::new(RefCell::new(Value::Boolean(Bool::False)))));
     p = Parser::new();
-    assert_eq!(p.val("true").1, Done("", Rc::new(Value::Boolean(Bool::True))));
+    assert_eq!(p.val("true").1, Done("", Rc::new(RefCell::new(Value::Boolean(Bool::True)))));
     p = Parser::new();
-    assert_eq!(p.val("'Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±'").1, Done("", Rc::new(Value::String(Str::Str("Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±"), StrType::Literal))));
+    assert_eq!(p.val("'Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±'").1, Done("", Rc::new(RefCell::new(Value::String(Str::Str("Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±"), StrType::Literal)))));
   }
 
   #[test]
@@ -541,7 +540,7 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
     let p = Parser::new();
     assert_eq!(p.keyval("Boolean = 84.67").1, Done("", KeyVal::new_str(
       "Boolean", WSSep::new_str(" ", " "),
-      Rc::new(Value::Float(Str::Str("84.67")))
+      Rc::new(RefCell::new(Value::Float(Str::Str("84.67"))))
     )));
   }
 }

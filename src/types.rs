@@ -223,8 +223,8 @@ impl<'a> DateTime<'a> {
 }
 
 pub enum ParseError<'a> {
-	MixedArray(Vec<Rc<Value<'a>>>),
-	DuplicateKey(String, Rc<Value<'a>>),
+	MixedArray(Vec<Rc<RefCell<Value<'a>>>>),
+	DuplicateKey(String, Rc<RefCell<Value<'a>>>),
 	DuplicateArrayOfTableKey(String, String, Rc<Value<'a>>),
-	InvalidTable(String, RefCell<HashMap<String, Rc<Value<'a>>>>)
+	InvalidTable(String, RefCell<HashMap<String, Rc<RefCell<Value<'a>>>>>)
 }

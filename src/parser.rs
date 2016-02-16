@@ -3,6 +3,7 @@ use std::fmt::Display;
 use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use nomplusplus::IResult;
 use ast::structs::{Toml, ArrayType, HashValue, TableType, Value, Array, InlineTable};
 use types::{ParseError, ParseResult, TOMLValue, Str};
@@ -59,12 +60,13 @@ impl<'a> Parser<'a> {
 			},
 			_ => self.failure.set(true),
 		};
-		// BEGIN DEBUG STATEMENTS
+		self
+	}
+
+	pub fn print_keys_and_values(self: &Parser<'a>) {
 		for (k, v) in self.map.iter() {
 			println!("key: {} : value: {}", k, v);
 		}
-		// END DEBUG STATEMENTS
-		self
 	}
 
 	pub fn get_result(self: &Parser<'a>) -> ParseResult<'a> {
@@ -91,7 +93,7 @@ impl<'a> Parser<'a> {
 			let hashval = self.map.get(&key).unwrap();
 			let clone = hashval.clone();
 			if let Some(val) = clone.value {
-				match &*val {
+				match &*val.borrow() {
 					&Value::Integer(ref v) => Some(TOMLValue::Integer(v.clone())),
 					&Value::Float(ref v) => Some(TOMLValue::Float(v.clone())),
 					&Value::Boolean(v) => Some(TOMLValue::Boolean(v)),
@@ -110,27 +112,37 @@ impl<'a> Parser<'a> {
 
 	pub fn set_value(self: &mut Parser<'a>, key: String, val: TOMLValue<'a>) -> bool {
 		let rf_map = RefCell::new(&mut self.map);
+		let mut map_val: Option<Value<'a>> = None;
 		if rf_map.borrow().contains_key(&key) {
-			let mut map_val = Value::Integer(Str::Str("0"));
-			{
-				let borrow = rf_map.borrow();
-				let entry = borrow.get(&key);
-				if let Some(_) = entry {
-					map_val = match val {
-						TOMLValue::Integer(ref v) 		=> Value::Integer(v.clone()),
-						TOMLValue::Float(ref v)				=> Value::Float(v.clone()),
-						TOMLValue::Boolean(v) 		=> Value::Boolean(v),
-						TOMLValue::DateTime(v)		=> Value::DateTime(v.clone()),
-						TOMLValue::Array(arr)			=> Parser::reconstruct_array(*borrow, &key, arr),
-						TOMLValue::String(ref s, t)		=> Value::String(s.clone(), t),
-						TOMLValue::InlineTable(it)	=> Parser::reconstruct_inline_table(*borrow, &key, it),
-					};
-				}
-				rf_map.borrow_mut().insert(key, HashValue::new(Rc::new(map_val)));
-				return true;
+			let borrow = rf_map.borrow();
+			let entry = borrow.get(&key);
+			if let Some(_) = entry {
+				map_val = match val {
+					TOMLValue::Integer(ref v) 	=> Some(Value::Integer(v.clone())),
+					TOMLValue::Float(ref v)			=> Some(Value::Float(v.clone())),
+					TOMLValue::Boolean(v) 			=> Some(Value::Boolean(v)),
+					TOMLValue::DateTime(v)			=> Some(Value::DateTime(v.clone())),
+					TOMLValue::Array(arr)				=> Some(Parser::reconstruct_array(*borrow, &key, arr)),
+					TOMLValue::String(ref s, t)	=> Some(Value::String(s.clone(), t)),
+					TOMLValue::InlineTable(it)	=> Some(Parser::reconstruct_inline_table(*borrow, &key, it)),
+				};
 			}
 		}
-		false
+		if let Some(v) = map_val {
+			let mut map_borrow = rf_map.borrow_mut();
+			let val = match map_borrow.entry(key) {
+				Entry::Occupied(entry) => entry.into_mut(),
+				_ => return false,
+			};
+			let value: &Option<Rc<RefCell<Value<'a>>>> = &val.value;
+			let value = match value {
+				
+			}
+			*value.borrow_mut() = v;
+			true
+		} else {
+			false
+		}
 	}
 
 	fn reconstruct_array(map: &HashMap<String, HashValue<'a>>, key: &String, arr: Rc<Vec<TOMLValue<'a>>>) -> Value<'a> {
@@ -138,10 +150,10 @@ impl<'a> Parser<'a> {
 		return Value::Integer(Str::Str("1"));
 	}
 
-	fn sanitize_array(arr: Rc<Array<'a>>) -> TOMLValue<'a> {
+	fn sanitize_array(arr: Rc<RefCell<Array<'a>>>) -> TOMLValue<'a> {
 		let mut result: Vec<TOMLValue> = vec![];
-		for av in arr.values.iter() {
-			match *av.val {
+		for av in arr.borrow().values.iter() {
+			match *av.val.borrow() {
 				Value::Integer(ref v) => result.push(TOMLValue::Integer(v.clone())),
 				Value::Float(ref v) => result.push(TOMLValue::Float(v.clone())),
 				Value::Boolean(v) => result.push(TOMLValue::Boolean(v)),
@@ -159,10 +171,10 @@ impl<'a> Parser<'a> {
 		return Value::Integer(Str::Str("2"));
 	}
 	
-	fn sanitize_inline_table(it: Rc<InlineTable<'a>>) -> TOMLValue<'a> {
+	fn sanitize_inline_table(it: Rc<RefCell<InlineTable<'a>>>) -> TOMLValue<'a> {
 		let mut result: Vec<(Str<'a>, TOMLValue)> = vec![];
-		for kv in it.keyvals.iter() {
-			match *kv.keyval.val {
+		for kv in it.borrow().keyvals.iter() {
+			match *kv.keyval.val.borrow() {
 				Value::Integer(ref v) => result.push((kv.keyval.key.clone(), TOMLValue::Integer(v.clone()))),
 				Value::Float(ref v) => result.push((kv.keyval.key.clone(), TOMLValue::Float(v.clone()))),
 				Value::Boolean(v) => result.push((kv.keyval.key.clone(), TOMLValue::Boolean(v))),
