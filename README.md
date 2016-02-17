@@ -15,24 +15,35 @@
 Based on [my version](https://github.com/joelself/toml/blob/abnf/toml.abnf) of the official [TOML ABNF](https://github.com/toml-lang/toml/blob/abnf/toml.abnf#L54) (at least until they merge my changes). Currently can parse entire Unicode TOML files and reconstruct them into a perfect copy, preserving order and all whitespace. Tested with perfect output on the toml README example, the regular, hard, and unicode hard examples in the [toml test directory](https://github.com/toml-lang/toml/tree/master/tests).
 
 Next steps for the first release are:
-- [x] Might back off to use beta Rust or, less likely, stable Rust
+- [x] Back off to use beta Rust or, less likely, stable Rust
 - [x] Unit tests for all parsers that don't have them yet
-- [x] Add module to nom that can create and call parser [methods](http://stackoverflow.com/questions/155609/difference-between-a-method-and-a-function) in addition to functions (this is a big one).
-- [x] An integration test method that will iterate through each toml file in the assets directory (which includes the [toml-test valid tests](https://github.com/BurntSushi/toml-test/tree/master/tests/valid) and the toml examples mentioned earlier), parse the file, then reconstruct it and compare it to the original.
-- [ ] Value look-up/modification
-- [ ] Key modification
-- [ ] Content validation, and non-failure error reporting (currently the parser doesn't complain about heterogeneous arrays or duplicate keys, because it wants to give you a chance to correct them rather than immediately fail and force you to fix it by hand.)
+- [x] ***Add macros to [nom](https://github.com/joelself/nom/tree/methods) that produce and consume methods***
+- [x] An integration test method that will iterate through each toml file in the assets directory (which includes the toml-test valid tests and the toml examples mentioned in the README), parse the file, then reconstruct it and compare it to the original.
+- [ ] Value look-up (*Finished, but reimplementing to allow direct look-up inside arrays and inline tables*)
+  - [ ] Sub-key list for arrays and inline tables only (*Finished, but reimplementing keying, see above*)
+- [ ] Value modification (*In progress*)
+  - [ ] Value add/delete for arrays only
+  - [ ] Key/Value add/delete for inline tables only
+- [ ] Key modification for inline tables (general key modification moved to 0.2)
+- [ ] Content validation, and non-failure error reporting (currently the parser doesn't fail on heterogeneous arrays, duplicate keys, or invalid tables because it wants to give you a chance to correct them rather than  force you to fix the original TOML by hand.) (*Mostly done*)
+- [ ] Unit tests for key look-up
+- [ ] Unit tests for key modification
+- [ ] An integration test that fails or returns errors for each invalid toml-test
+
+It looks like a lot of stuff is left to do, but most of it is in various stages of completion, so I'm actually getting close to beinng done with v0.1.0
 
 The difference between this toml library and others is that I'll preserve the exact formatting at all times unless told not to.
 
 Some other things I will probably add for future realeses:
 * Element addition and deletion
-* Type conversion
-* Strip extraneous spaces and newlines
-* User defined re-indentation
+* Table manipulation
+* More error reporting
+* ~~Type conversion~~ (moved up to v0.1.0, because it is built-in to the way things work)
+* Strip extraneous spaces, newlines and comments
+* User defined whitespace schemes
 * Element re-ordering
-* For Cargo.toml files, updating dependency versions to the latest version on crates.io
-* For Cargo.toml files, change ranges on dependency versions
+* ~~For Cargo.toml files, updating dependency versions to the latest version on crates.io~~ (Application specific features are for different projects)
+* ~~For Cargo.toml files, change ranges on dependency versions~~ (Application specific features are for different projects)
 * Conversion to JSON and YAML
 
 To get the source simply ```git clone https://github.com/joelself/toml_parser.git```.
