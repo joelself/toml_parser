@@ -30,7 +30,7 @@ Next steps for the first release are:
 - [ ] Unit tests for key modification
 - [ ] An integration test that fails or returns errors for each invalid toml-test
 
-It looks like a lot of stuff is left to do, but most of it is in various stages of completion, so I'm actually getting close to beinng done with v0.1.0
+It looks like a lot of stuff is left to do, but most of it is in various stages of completion, so I'm actually getting close to being done with v0.1.0
 
 The difference between this toml library and others is that I'll preserve the exact formatting at all times unless told not to.
 
