@@ -2,7 +2,7 @@ use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    CommentOrNewLines, ArrayValue, Array, Value,
                    InlineTable, WSSep, TableKeyVal, ArrayType,
                    HashValue, format_tt_keys};
-use parser::Parser;
+use parser::{Parser, Key};
 use types::{ParseError, Str};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -181,6 +181,7 @@ impl<'a> Parser<'a> {
             }
             self.last_array_type.borrow_mut().pop();
             self.last_array_type.borrow_mut().push(t);
+            self.keychain.borrow_mut().inc();
             ArrayValue::new(val, Some(array_sep),comment_nls)
           }
         )
@@ -198,6 +199,7 @@ impl<'a> Parser<'a> {
             }
             self.last_array_type.borrow_mut().pop();
             self.last_array_type.borrow_mut().push(t);
+            self.keychain.borrow_mut().inc();
             ArrayValue::new(val, None, comment_nls)
           }
         )
@@ -219,8 +221,10 @@ impl<'a> Parser<'a> {
   pub fn array(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, IResult<&'a str, Rc<RefCell<Array>>>) {
     // Initialize last array type to None, we need a stack because arrays can be nested
     self.last_array_type.borrow_mut().push(ArrayType::None);
+    self.keychain.borrow_mut().push(Key::Index(0));
     let (tmp, res) = self.array_internal(input);
     self = tmp; // Restore self
+    self.keychain.borrow_mut().pop();
     self.last_array_type.borrow_mut().pop();
     (self, res)
   }
