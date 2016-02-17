@@ -7,6 +7,7 @@ use types::{ParseError, Str};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::cell::Cell;
 use nomplusplus::IResult;
 
 #[inline(always)]
@@ -98,18 +99,26 @@ impl<'a> Parser<'a> {
           let len = self.last_array_tables.borrow().len();
           let last_key = format_tt_keys(&self.last_array_tables.borrow()[len - 1]);
           if format_tt_keys(&*res) == last_key {
+            // TODO: get key without index and add this index to its list of subkeys
             let last_index = self.last_array_tables_index.borrow()[len - 1];
             self.last_array_tables_index.borrow_mut()[len - 1] = last_index + 1;
           } else {
             let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
             if subtable {
+              let last_key = Parser::get_array_table_key(&self.last_array_tables,
+                &self.last_array_tables_index);
+              // TODO: lookup last_key and add new key to its list of subkeys
               self.last_array_tables.borrow_mut().push(res.clone());
               self.last_array_tables_index.borrow_mut().push(0);
             } else {
               self.last_array_tables.borrow_mut().clear();
               self.last_array_tables.borrow_mut().push(res.clone());
+              // TODO: change this to lookup parent key, if it exists, start at first subkey,
+              //       and rebuild the last_array_tables and last_array_tables_index from
+              //       child keys
               self.last_array_tables_index.borrow_mut().clear();
               self.last_array_tables_index.borrow_mut().push(0);
+
             }
           }
         }else {
@@ -181,7 +190,9 @@ impl<'a> Parser<'a> {
             }
             self.last_array_type.borrow_mut().pop();
             self.last_array_type.borrow_mut().push(t);
-            self.keychain.borrow_mut().inc();
+            let keychain_len = self.keychain.borrow().len();
+            self.keychain.borrow_mut()[keychain_len - 1].inc();
+            // TODO: Add this key value to the hash table, just call insert_key_val_into_map(val.clone())?
             ArrayValue::new(val, Some(array_sep),comment_nls)
           }
         )
@@ -199,7 +210,9 @@ impl<'a> Parser<'a> {
             }
             self.last_array_type.borrow_mut().pop();
             self.last_array_type.borrow_mut().push(t);
-            self.keychain.borrow_mut().inc();
+            let keychain_len = self.keychain.borrow().len();
+            self.keychain.borrow_mut()[keychain_len - 1].inc();
+            // TODO: Add this key value to the hash table, just call insert_key_val_into_map(val.clone())?
             ArrayValue::new(val, None, comment_nls)
           }
         )
@@ -221,7 +234,7 @@ impl<'a> Parser<'a> {
   pub fn array(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, IResult<&'a str, Rc<RefCell<Array>>>) {
     // Initialize last array type to None, we need a stack because arrays can be nested
     self.last_array_type.borrow_mut().push(ArrayType::None);
-    self.keychain.borrow_mut().push(Key::Index(0));
+    self.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     let (tmp, res) = self.array_internal(input);
     self = tmp; // Restore self
     self.keychain.borrow_mut().pop();

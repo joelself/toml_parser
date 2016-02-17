@@ -20,20 +20,14 @@ pub fn count_lines(s: &str) -> u64 {
 }
 
 pub enum Key<'a> {
-	Str(Str<'a>),
-	Index(usize),
+	Str(RefCell<Str<'a>>),
+	Index(Cell<usize>),
 }
 
 impl<'a> Key<'a> {
-	pub fn inc(self) {
-		if let Key::Index(mut i) = self {
-			i += 1;
-		}
-	}
-
-	pub fn replace(self, new_key: Str<'a>) {
-		if let Key::Str(mut s) = self {
-			s = new_key;
+	pub fn inc(&mut self) {
+		if let &mut Key::Index(ref mut i) = self {
+			i.set(i.get() + 1);
 		}
 	}
 }

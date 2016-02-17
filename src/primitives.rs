@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, ErrorCode,
-                   HashValue, TableType, format_keys, get_last_key};
+                   HashValue, TableType, Table, format_keys, get_last_keys};
 use ::types::{DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
              Str, Bool};
 use parser::{Parser, Key, count_lines};
@@ -20,47 +20,55 @@ fn is_keychar(chr: char) -> bool {
   uchr == 0x2D || uchr == 0x5f    // "-", "_"
 }
 
-
-fn get_array_table_key<'a>(tables: &RefCell<Vec<Rc<TableType<'a>>>>,
-  tables_index: &RefCell<Vec<usize>>) -> String {
-  let mut full_key: String = String::new();
-  // TODO: get_last_key can't just get the last key, it has to get the last keyS that are appended to the 
-  //       the previous table's key(s). Also have to format StandardTable keys at the end
-  // For example:
-  // [[first]]
-  // key = 5
-  //   [[first.second.third]]
-  //   something = 7.7
-  for i in 0..tables_index.borrow().len() {
-    if let &TableType::Array(ref t) = &*tables.borrow()[i] {
-      let key = get_last_key(t);
-      full_key.push_str(&key);
-      let index = tables_index.borrow()[i];
-      full_key.push_str(&format!("[{}].", index));
-    }
-  }
-  full_key
-}
-
-fn get_keychain_key<'a>(keychain: &RefCell<Vec<Key<'a>>>) -> String {
-  // TODO: This function, just iterate through the vector creating the key
-}
-
-fn get_full_key<'a>(tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,
-                    keychain: &RefCell<Vec<Key<'a>>>) -> String {
-  // TODO: This function, just call get_array_table key then append get_keychain key to it. The 
-  //       keychain is guaranteed to have at least one value in it, but the array_table_key could
-  //       be empty so don't put a dot in front of the keychain key if the array_table_key is empty
-}
-
-
 impl<'a> Parser<'a> {
+  pub fn get_array_table_key(tables: &RefCell<Vec<Rc<TableType<'a>>>>,
+    tables_index: &RefCell<Vec<usize>>) -> String {
+    let mut full_key: String = String::new();
+    let last_table: Option<&Table> = None;
+    let tables_len = tables_index.borrow().len();
+    for i in 0..tables_len {
+      match  &*tables.borrow()[i] {
+        &TableType::Array(ref t) => {
+          let keys = get_last_keys(last_table, t);
+          for key in keys {
+            full_key.push_str(&key);
+          }
+          let index = tables_index.borrow()[i];
+          if i < tables_len - 1 {
+            full_key.push_str(&format!("[{}].", index));
+          } else {
+            full_key.push_str(&format!("[{}]", index));
+          }
+        },
+        &TableType::Standard(ref t) => {
+          // Standard tables can't be nested so this has to be the last table in the vector
+          let keys = get_last_keys(last_table, t);
+          for key in keys {
+            full_key.push_str(&key);
+          }
+        }
+      }
+    }
+    full_key
+  }
 
-  fn insert_keyval_into_map(&mut self, key: &'a str, val: Rc<RefCell<Value<'a>>>) {
+  fn get_keychain_key(keychain: &RefCell<Vec<Key<'a>>>) -> String {
+    // TODO: This function, just iterate through the vector creating the key
+    return "".to_string();
+  }
+
+  fn get_full_key(tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,
+                      keychain: &RefCell<Vec<Key<'a>>>) -> String {
+    // TODO: This function, just call get_array_table key then append get_keychain key to it. The 
+    //       keychain is guaranteed to have at least one value in it, but the array_table_key could
+    //       be empty so don't put a dot in front of the keychain key if the array_table_key is empty
+    return "".to_string();
+  }
+
+  fn insert_keyval_into_map(&mut self, val: Rc<RefCell<Value<'a>>>) {
     let map = RefCell::new(&mut self.map);
     let mut insert = false;
     let mut error = false;
-    let key = key.to_string();
     let mut full_key: String;
     match &self.last_table {
       // If the last table is None
@@ -69,27 +77,27 @@ impl<'a> Parser<'a> {
       //    If the value in non-empty add the key/val to the error list
       //  If the key doesn't exist, insert it
       &None => {
-        full_key = format!("{}", key); // TODO: Replace with get_full_key
-        if (*map.borrow()).contains_key(&key) {
+        //full_key = format!("{}", key); // TODO: Replace with get_full_key
+        full_key = Parser::get_keychain_key(&self.keychain);
+        if (*map.borrow()).contains_key(&full_key) {
           error = true;
         } else {
           insert = true;
         }
       },
-
-        // If the last table was a StandardTable or ArrayTable:
-        //  If the key exists
-        //    If the value is empty, insert the value
-        //    If the value is non-empty add the key/val pair to the error list
-        //    If the key is for an ArrayOfTables add the key/val to the error list
-        //  If the key doesn't exist add the key/value pair to the hash table
+      // If the last table was a StandardTable or ArrayTable:
+      //  If the key exists
+      //    If the value is empty, insert the value
+      //    If the value is non-empty add the key/val pair to the error list
+      //    If the key is for an ArrayOfTables add the key/val to the error list
+      //  If the key doesn't exist add the key/value pair to the hash table
       &Some(ref ttype) => {
         match **ttype {
           TableType::Standard(ref t) => {
             self.last_array_tables.borrow_mut().push(ttype.clone());
-            full_key = get_array_table_key(&self.last_array_tables, &self.last_array_tables_index);
+            full_key = Parser::get_full_key(&self.last_array_tables,
+              &self.last_array_tables_index, &self.keychain);
             self.last_array_tables.borrow_mut().pop();
-            full_key.push_str(&format!("{}.{}", format_keys(t), key)); // TODO: Replace wih get_full_key
             let contains_key = map.borrow().contains_key(&full_key);
             if !contains_key {
               insert = true;
@@ -98,8 +106,8 @@ impl<'a> Parser<'a> {
             }
           },
           TableType::Array(_) => {
-            full_key = get_array_table_key(&self.last_array_tables, &self.last_array_tables_index);
-            full_key.push_str(&key); // TODO: Replace with get_full_key
+            full_key = Parser::get_full_key(&self.last_array_tables,
+              &self.last_array_tables_index, &self.keychain);
             let contains_key = map.borrow().contains_key(&full_key);
             if !contains_key {
               insert = true;
@@ -285,8 +293,11 @@ impl<'a> Parser<'a> {
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
   method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(
-    complete!(call_m!(self.quoted_key))   =>  {|k| {self.keychain.borrow_mut().push(Key::Str(Str::Str(k))); k}}|
-    complete!(call_m!(self.unquoted_key)) =>  {|k| {self.keychain.borrow_mut().push(Key::Str(Str::Str(k))); k}}
+    complete!(call_m!(self.quoted_key))   =>  {|k| {
+      self.keychain.borrow_mut().push(Key::Str(RefCell::new(Str::Str(k)))); k
+    }}|
+    complete!(call_m!(self.unquoted_key)) =>  {|k| {
+      self.keychain.borrow_mut().push(Key::Str(RefCell::new(Str::Str(k)))); k}}
   ));
 
   method!(keyval_sep<Parser<'a>, &'a str, WSSep>, mut self,

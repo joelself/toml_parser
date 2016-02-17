@@ -371,11 +371,24 @@ impl<'a> WSKeySep<'a> {
     }
 }
 
-pub fn get_last_key(t: &Table) -> String {
-	if t.subkeys.len() == 0 {
-		return string!(t.key);
-	} else {
-		return string!(t.subkeys[t.subkeys.len()-1].key);
+pub fn get_last_keys(last_table: Option<&Table>, t: &Table) -> Vec<String> {
+	match last_table {
+		None => {
+			let mut last_keys = vec![string!(t.key)];
+			for i in 0..t.subkeys.len() {
+				last_keys.push(string!(t.subkeys[i].key));
+			}
+			last_keys
+		},
+		Some(lt) => {
+			let len_last = lt.subkeys.len();
+			let len = t.subkeys.len();
+			let mut last_keys = vec![];
+			for i in len_last..len {
+				last_keys.push(string!(t.subkeys[i].key));
+			}
+			last_keys
+		}
 	}
 }
 
