@@ -5,6 +5,8 @@ use std::cell::RefCell;
 use std::collections::LinkedList;
 use std::option::Option;
 use ::types::{DateTime, TimeOffset, StrType, Str, Bool};
+#[macro_use]
+use ::macros;
 
 
 /// Compares two Options that contain comparable structs

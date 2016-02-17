@@ -1,4 +1,5 @@
 extern crate tomllib;
+use std::rc::Rc;
 use tomllib::parser::Parser;
 use tomllib::types::{StrType, TOMLValue, TimeOffsetAmount, TimeOffset, DateTime, Str};
 
@@ -14,7 +15,7 @@ dob = 1979-05-27T07:32:00-08:00 # First class dates
 
 [database]
 server = "192.168.1.1"
-ports = [ 8001, 8003, 8002 ]
+ports = [ 8001, 8003, [5, 6] ]
 connection_max = 5000
 enabled = true
 
@@ -65,6 +66,18 @@ hosts = [
       "+".to_string(), "05".to_string(), "30".to_string()
     ))
   )));
+  parser.set_value("database.ports".to_string(), TOMLValue::Array(
+    Rc::new(vec![
+      TOMLValue::Float(Str::String("1.23".to_string())),
+      TOMLValue::Float(Str::String("4.56".to_string())),
+      TOMLValue::Array(
+        Rc::new(vec![
+          TOMLValue::String(Str::String("foobar".to_string()), StrType::MLBasic),
+          TOMLValue::String(Str::String("barfoo".to_string()), StrType::MLLiteral)
+        ])
+      ),
+    ])
+  ));
   parser.print_keys_and_values();
   println!("{}", parser);
   // let (tmp, new_str) = parser.add_string(new_owner);
