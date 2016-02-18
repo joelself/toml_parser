@@ -4,28 +4,32 @@
 * primitives.rs
 	- [x] Implement get_keychain_key
 	- [x] Implement get_full_key
-	- [ ] Implement get_key_parent
+	- [x] Implement get_key_parent
 	- [x] Change Key::Str to just hold an &'a str again
 	- [x] Fix DateTime to allow only Date, only DateTime (no fractional seconds), only DateTime (with fractional seconds), Full DateTime with offset
 	- [x] Change TimeOffset::Z to TimeOffset::Zulu?
 	- [x] Change '+'/'-' to enum
+	- [x] Inserting a value insert's its key in it's parent's children 
+	- [ ] Re-implement get_array_table_key to take into account implicit tables ** Start Here ** and in the last 2 cases in array_table post processing
 
 * ast/structs.rs
 	- [x] Re-implement HashValue to have a list of children or max index of children
-	- [ ] Fix DateTime to allow only Date, only DateTime (no fractional seconds), only DateTime (with fractional seconds), Full DateTime with offset
-	- [ ] Change TimeOffset::Z to TimeOffset::Zulu?
-	- [ ] Change '+'/'-' to enum
+	- [x] Fix DateTime to allow only Date, only DateTime (no fractional seconds), only DateTime (with fractional seconds), Full DateTime with offset
+	- [x] Change TimeOffset::Z to TimeOffset::Zulu?
+	- [x] Change '+'/'-' to enum
 
 * objects.rs
-	- [ ] In array_table when adding to existing table get_key_parent and add the new index as a child in the map, then add full_key to the map with None value
-	- [ ] In array_table and std_table if table keys imply subtables that don't exist, add the implied tables as std_tables to the map with None value and add add their subkeys as children
+	- [x] In array_table when adding to existing table get_key_parent and add the new index as a child in the map, then add full_key to the map with None value
+	- [ ] In array_table if table keys imply subtables that don't exist, add the implied tables as std_tables to the map with None value and add add their subkeys as children (partially done)
+	- [ ] In std_table if table keys imply subtables that don't exist, add the implied tables as std_tables to the map with None value and add add their subkeys as children
 	- [ ] In array_table if get_key_parent exists and has no indexed children, then it is an error (see toml-test/invalid/table_array_implicit)
 	- [ ] In array_table when encountering a new table that isn't a subtable of the last table, rebuild last_array_tables and last_array_tables_index by starting at the first subkey, looking up it's children and so-on, if the array_table already exists
-	- [ ] In array_table and std_table always add new table to map with None value
+	- [x] In array_table always add new table to map with None value
+	- [ ] In ]std_table always add new table to map with None value
 	- [ ] In array_value insert_key_val_into_map
 
 * parser.rs
-	- [ ] Change Key::Str to just hold an &'a str again
+	- [x] Change Key::Str to just hold a Str
 	- [ ] Implement reconstruct_inline_table
 	- [ ] Need to rehash keys values when reconstituting tables and arrays when their keys or structure has changed and also change their parent's children
 		- [ ] Array is replaced with scalar => remove keys for replaced array values

@@ -1,11 +1,12 @@
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    CommentOrNewLines, ArrayValue, Array, Value,
                    InlineTable, WSSep, TableKeyVal, ArrayType,
-                   HashValue, format_tt_keys};
+                   HashValue, Children, format_tt_keys};
 use parser::{Parser, Key};
 use types::{ParseError, Str};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::rc::Rc;
 use std::cell::Cell;
 use nom::IResult;
@@ -24,6 +25,29 @@ fn map_val_to_array_type(val: &Value) -> ArrayType {
 }
 
 impl<'a> Parser<'a> {
+  fn add_implicit_tables(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
+    tables: &RefCell<Vec<Rc<TableType<'a>>>>,
+    tables_index: &RefCell<Vec<usize>>, table: Rc<TableType<'a>>) {
+    let mut last_key = Parser::get_array_table_key(tables, tables_index);
+    let len = tables.borrow().len();
+    if let TableType::Array(ref last_at) = *tables.borrow()[len - 1] {
+      if let TableType::Array(ref at) = *table {
+        for i in last_at.subkeys.len()..at.subkeys.len() - 1 {
+          let mut borrow = map.borrow_mut();
+          if let Entry::Occupied(mut o) = borrow.entry(last_key.clone()) {
+            match &o.get_mut().subkeys {
+              &Children::Count(ref c)    => c.set(c.get() + 1),
+              &Children::Keys(ref hs_rf) => {hs_rf.borrow_mut().insert(string!(at.subkeys[i].key));},
+            }
+          }
+          last_key.push_str(".");
+          last_key.push_str(str!(at.subkeys[i].key));
+          map.borrow_mut().insert(last_key.clone(), HashValue::none_keys());
+        }
+      }
+    }
+  }
+
   // Table
   method!(pub table<Parser<'a>, &'a str, Rc<TableType> >, mut self,
     alt!(
@@ -93,6 +117,7 @@ impl<'a> Parser<'a> {
         let res = Rc::new(TableType::Array(Table::new_str(
           WSSep::new_str(ws1, ws2), key, subkeys
         )));
+        let map = RefCell::new(&mut self.map);
         self.array_error.set(false);
         let len = self.last_array_tables.borrow().len();
         if len > 0 {
@@ -100,14 +125,22 @@ impl<'a> Parser<'a> {
           let last_key = format_tt_keys(&self.last_array_tables.borrow()[len - 1]);
           if format_tt_keys(&*res) == last_key {
             // TODO: get key without index and add this index to its list of subkeys
+            let parent_key = Parser::get_key_parent(&self.last_array_tables,
+              &self.last_array_tables_index);
+            let mut borrow = map.borrow_mut();
+            let mut entry = borrow.entry(parent_key);
+            if let Entry::Occupied(mut o) = entry {
+              if let &Children::Count(ref c) = &o.get_mut().subkeys {
+                 c.set(c.get() + 1);
+              }
+            }
             let last_index = self.last_array_tables_index.borrow()[len - 1];
             self.last_array_tables_index.borrow_mut()[len - 1] = last_index + 1;
           } else {
             let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
             if subtable {
-              let last_key = Parser::get_array_table_key(&self.last_array_tables,
-                &self.last_array_tables_index);
-              // TODO: lookup last_key and add new key to its list of subkeys
+              Parser::add_implicit_tables(&map, &self.last_array_tables,
+                &self.last_array_tables_index, res.clone());
               self.last_array_tables.borrow_mut().push(res.clone());
               self.last_array_tables_index.borrow_mut().push(0);
             } else {
@@ -116,27 +149,27 @@ impl<'a> Parser<'a> {
               // TODO: change this to lookup parent key, if it exists, start at first subkey,
               //       and rebuild the last_array_tables and last_array_tables_index from
               //       child keys
+              // TODO: Add implicit tables if necessary
               self.last_array_tables_index.borrow_mut().clear();
               self.last_array_tables_index.borrow_mut().push(0);
-
             }
           }
         }else {
+          // TODO: Add implicit tables if necessary
           self.last_array_tables.borrow_mut().push(res.clone());
           self.last_array_tables_index.borrow_mut().push(0);
         }
-        let full_key = format_tt_keys(&*res);
-        let contains_key = self.map.contains_key(&full_key);
+        let full_key = Parser::get_array_table_key(&self.last_array_tables,
+          &self.last_array_tables_index);
+        let contains_key = map.borrow().contains_key(&full_key);
         if !contains_key {
-          self.map.insert(full_key, HashValue::none_count());
+          map.borrow_mut().insert(full_key, HashValue::none_count());
         }
         self.last_table = Some(res.clone());
         res
       }
     )
   );
-
-
 
   // Array
   method!(array_sep<Parser<'a>, &'a str, WSSep>, mut self,

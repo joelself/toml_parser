@@ -25,8 +25,18 @@ macro_rules! str_ref (
 macro_rules! string (
     ($s:expr) => (
         match $s {
-        	Str::Str(s) => s.to_string(),
-        	Str::String(ref s) => s.clone(),
+            Str::Str(s) => s.to_string(),
+            Str::String(ref s) => s.clone(),
+        };
+    );
+);
+
+#[macro_export]
+macro_rules! string_ref (
+    ($s:expr) => (
+        match $s {
+            &Str::Str(s) => s.to_string(),
+            &Str::String(ref s) => s.clone(),
         };
     );
 );

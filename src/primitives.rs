@@ -1,7 +1,9 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::collections::hash_map::Entry;
 use ast::structs::{KeyVal, WSSep, Value, ErrorCode,
-                   HashValue, TableType, Table, format_keys, get_last_keys};
+                   HashValue, TableType, Table, Children,
+                   format_keys, get_last_keys};
 use ::types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
              Str, Bool};
 use parser::{Parser, Key, count_lines};
@@ -21,6 +23,26 @@ fn is_keychar(chr: char) -> bool {
 }
 
 impl<'a> Parser<'a> {
+  pub fn get_key_parent(tables: &RefCell<Vec<Rc<TableType<'a>>>>,
+    tables_index: &RefCell<Vec<usize>>) -> String {
+    let mut key_parent: String = String::new();
+    let last_table: Option<&Table> = None;
+    let tables_len = tables_index.borrow().len();
+    for i in 0..tables_len {
+      if let &TableType::Array(ref t) = &*tables.borrow()[i] {
+        let keys = get_last_keys(last_table, t);
+        for key in keys {
+          key_parent.push_str(&key);
+        }
+        let index = tables_index.borrow()[i];
+        if i < tables_len - 1 {
+          key_parent.push_str(&format!("[{}].", index));
+        }
+      }
+    }
+    key_parent
+  }
+
   pub fn get_array_table_key(tables: &RefCell<Vec<Rc<TableType<'a>>>>,
     tables_index: &RefCell<Vec<usize>>) -> String {
     let mut full_key: String = String::new();
@@ -52,35 +74,42 @@ impl<'a> Parser<'a> {
     full_key
   }
 
-  fn get_keychain_key(keychain: &RefCell<Vec<Key<'a>>>) -> String {
+  fn get_keychain_key(keychain: &RefCell<Vec<Key<'a>>>) -> (String, String) {
     let len = keychain.borrow().len();
     let mut key = String::new();
+    let mut parent_key = String::new();
     for i in 0..len {
       match &keychain.borrow()[i] {
         &Key::Str(ref str_str) => key.push_str(str_ref!(str_str)),
         &Key::Index(ref i) => key.push_str(&format!("[{}]", i.get())),
       }
+      if i == len - 2 {
+        parent_key = key.clone();
+      }
       if i < len - 1 {
         key.push_str(".");
       }
     }
-    return key;
+    return (key, parent_key);
   }
 
   fn get_full_key(tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,
-                      keychain: &RefCell<Vec<Key<'a>>>) -> String {
-    // TODO: This function, just call get_array_table key then append get_keychain key to it. The 
-    //       keychain is guaranteed to have at least one value in it, but the array_table_key could
-    //       be empty so don't put a dot in front of the keychain key if the array_table_key is empty
+                      keychain: &RefCell<Vec<Key<'a>>>) -> (String, String) {
     let array_key = Parser::get_array_table_key(tables, tables_index);
-    let chain_key = Parser::get_keychain_key(keychain);
+    let (chain_key, parent_chain_key) = Parser::get_keychain_key(keychain);
     let mut full_key = String::new();
+    let mut parent_key = String::new();
     if array_key.len() > 0 {
       full_key.push_str(&array_key);
       full_key.push_str(".");
+      parent_key.push_str(&array_key);
+      if parent_chain_key.len() > 0 {
+        parent_key.push_str(".");
+      }
     }
     full_key.push_str(&chain_key);
-    return full_key;
+    parent_key.push_str(&parent_chain_key);
+    return (full_key, parent_key);
   }
 
   fn insert_keyval_into_map(&mut self, val: Rc<RefCell<Value<'a>>>) {
@@ -88,6 +117,7 @@ impl<'a> Parser<'a> {
     let mut insert = false;
     let mut error = false;
     let mut full_key: String;
+    let mut parent_key: String;
     match &self.last_table {
       // If the last table is None
       //  If the key exists
@@ -95,8 +125,9 @@ impl<'a> Parser<'a> {
       //    If the value in non-empty add the key/val to the error list
       //  If the key doesn't exist, insert it
       &None => {
-        //full_key = format!("{}", key); // TODO: Replace with get_full_key
-        full_key = Parser::get_keychain_key(&self.keychain);
+        let tuple = Parser::get_keychain_key(&self.keychain);
+        full_key = tuple.0;
+        parent_key = tuple.1;
         if (*map.borrow()).contains_key(&full_key) {
           error = true;
         } else {
@@ -113,8 +144,10 @@ impl<'a> Parser<'a> {
         match **ttype {
           TableType::Standard(ref t) => {
             self.last_array_tables.borrow_mut().push(ttype.clone());
-            full_key = Parser::get_full_key(&self.last_array_tables,
+            let tuple = Parser::get_full_key(&self.last_array_tables,
               &self.last_array_tables_index, &self.keychain);
+            full_key = tuple.0;
+            parent_key = tuple.1;
             self.last_array_tables.borrow_mut().pop();
             let contains_key = map.borrow().contains_key(&full_key);
             if !contains_key {
@@ -124,8 +157,10 @@ impl<'a> Parser<'a> {
             }
           },
           TableType::Array(_) => {
-            full_key = Parser::get_full_key(&self.last_array_tables,
+            let tuple = Parser::get_full_key(&self.last_array_tables,
               &self.last_array_tables_index, &self.keychain);
+            full_key = tuple.0;
+            parent_key = tuple.1;
             let contains_key = map.borrow().contains_key(&full_key);
             if !contains_key {
               insert = true;
@@ -143,9 +178,21 @@ impl<'a> Parser<'a> {
       ));
     } else if insert {
       match *val.borrow() {
-        Value::InlineTable(_) => map.borrow_mut().insert(full_key, HashValue::new_keys(val.clone())),
-        _                     => map.borrow_mut().insert(full_key, HashValue::new_count(val.clone())),
+        Value::InlineTable(_) => map.borrow_mut().insert(full_key.clone(), HashValue::new_keys(val.clone())),
+        _                     => map.borrow_mut().insert(full_key.clone(), HashValue::new_count(val.clone())),
       };
+      let mut borrow = map.borrow_mut();
+      let mut entry = borrow.entry(parent_key.clone());
+      if let Entry::Occupied(mut o) = entry {
+        match &o.get_mut().subkeys {
+          &Children::Count(ref c) => c.set(c.get() + 1),
+          &Children::Keys(ref hs_rf) => {
+            if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
+              hs_rf.borrow_mut().insert(string_ref!(s));
+            }
+          },
+        }
+      }
     }
   }
 

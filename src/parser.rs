@@ -52,7 +52,9 @@ pub struct Parser<'a> {
 // TODO change this to return a parser result
 impl<'a> Parser<'a> {
 	pub fn new() -> Parser<'a> {
-		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: HashMap::new(),
+		let mut map = HashMap::new();
+		map.insert("".to_string(), HashValue::none_keys());
+		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: map,
 						errors: RefCell::new(vec![]), leftover: "",
 						line_count: Cell::new(0), last_array_tables: RefCell::new(vec![]),
 						last_array_tables_index: RefCell::new(vec![]),
