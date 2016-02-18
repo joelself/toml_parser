@@ -1,17 +1,17 @@
 * Everywhere
-	- [ ] Switch back to using nom now that the new version has been released
+	- [x] Switch back to using nom now that the new version has been released
 
 * primitives.rs
-	- [ ] Implement get_keychain_key
-	- [ ] Implement get_full_key
+	- [x] Implement get_keychain_key
+	- [x] Implement get_full_key
 	- [ ] Implement get_key_parent
-	- [ ] Change Key::Str to just hold an &'a str again
-	- [ ] Fix DateTime to allow only Date, only DateTime (no fractional seconds), only DateTime (with fractional seconds), Full DateTime with offset
-	- [ ] Change TimeOffset::Z to TimeOffset::Zulu?
-	- [ ] Change '+'/'-' to enum
+	- [x] Change Key::Str to just hold an &'a str again
+	- [x] Fix DateTime to allow only Date, only DateTime (no fractional seconds), only DateTime (with fractional seconds), Full DateTime with offset
+	- [x] Change TimeOffset::Z to TimeOffset::Zulu?
+	- [x] Change '+'/'-' to enum
 
 * ast/structs.rs
-	- [ ] Re-implement HashValue to have a list of children or max index of children
+	- [x] Re-implement HashValue to have a list of children or max index of children
 	- [ ] Fix DateTime to allow only Date, only DateTime (no fractional seconds), only DateTime (with fractional seconds), Full DateTime with offset
 	- [ ] Change TimeOffset::Z to TimeOffset::Zulu?
 	- [ ] Change '+'/'-' to enum

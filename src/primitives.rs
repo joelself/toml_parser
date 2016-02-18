@@ -1,12 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use ast::structs::{Time, FullDate, KeyVal, WSSep, Value, ErrorCode,
+use ast::structs::{KeyVal, WSSep, Value, ErrorCode,
                    HashValue, TableType, Table, format_keys, get_last_keys};
-use ::types::{DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
+use ::types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
              Str, Bool};
 use parser::{Parser, Key, count_lines};
-use nomplusplus;
-use nomplusplus::{IResult, InputLength};
+use nom;
+use nom::{IResult, InputLength};
 // TODO LIST:
 // Make sure empty key is accepted
 // Allow Date only. Right now we require time and offset for a full date-time
@@ -53,8 +53,18 @@ impl<'a> Parser<'a> {
   }
 
   fn get_keychain_key(keychain: &RefCell<Vec<Key<'a>>>) -> String {
-    // TODO: This function, just iterate through the vector creating the key
-    return "".to_string();
+    let len = keychain.borrow().len();
+    let mut key = String::new();
+    for i in 0..len {
+      match &keychain.borrow()[i] {
+        &Key::Str(ref str_str) => key.push_str(str_ref!(str_str)),
+        &Key::Index(ref i) => key.push_str(&format!("[{}]", i.get())),
+      }
+      if i < len - 1 {
+        key.push_str(".");
+      }
+    }
+    return key;
   }
 
   fn get_full_key(tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,
@@ -62,7 +72,15 @@ impl<'a> Parser<'a> {
     // TODO: This function, just call get_array_table key then append get_keychain key to it. The 
     //       keychain is guaranteed to have at least one value in it, but the array_table_key could
     //       be empty so don't put a dot in front of the keychain key if the array_table_key is empty
-    return "".to_string();
+    let array_key = Parser::get_array_table_key(tables, tables_index);
+    let chain_key = Parser::get_keychain_key(keychain);
+    let mut full_key = String::new();
+    if array_key.len() > 0 {
+      full_key.push_str(&array_key);
+      full_key.push_str(".");
+    }
+    full_key.push_str(&chain_key);
+    return full_key;
   }
 
   fn insert_keyval_into_map(&mut self, val: Rc<RefCell<Value<'a>>>) {
@@ -124,7 +142,10 @@ impl<'a> Parser<'a> {
         full_key, val.clone()
       ));
     } else if insert {
-      map.borrow_mut().insert(full_key, HashValue::new(val.clone()));
+      match *val.borrow() {
+        Value::InlineTable(_) => map.borrow_mut().insert(full_key, HashValue::new_keys(val.clone())),
+        _                     => map.borrow_mut().insert(full_key, HashValue::new_count(val.clone())),
+      };
     }
   }
 
@@ -160,45 +181,45 @@ impl<'a> Parser<'a> {
     )
   );
 
-  fn ml_basic_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nomplusplus::IResult<&'a str, &'a str>) {
+  fn ml_basic_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nom::IResult<&'a str, &'a str>) {
     let (tmp, raw) = self.raw_ml_basic_string(input);
     self = tmp;
     let r = match raw {
       IResult::Done(i, o) => IResult::Done(i, &o["\"\"\"".input_len()..o.input_len()-"\"\"\"".input_len()]),
-      IResult::Error(_) => IResult::Error(nomplusplus::Err::Code(nomplusplus::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+      IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
       IResult::Incomplete(i) => IResult::Incomplete(i),
     };
     (self, r)
   }
 
-  fn basic_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nomplusplus::IResult<&'a str, &'a str>) {
+  fn basic_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nom::IResult<&'a str, &'a str>) {
     let (tmp, raw) = self.raw_basic_string(input);
     self = tmp;
     let r = match raw {
       IResult::Done(i, o) => IResult::Done(i, &o["\"".input_len()..o.input_len()-"\"".input_len()]),
-      IResult::Error(_) => IResult::Error(nomplusplus::Err::Code(nomplusplus::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+      IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
       IResult::Incomplete(i) => IResult::Incomplete(i),
     };
     (self, r)
   }
 
-  fn ml_literal_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nomplusplus::IResult<&'a str, &'a str>) {
+  fn ml_literal_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nom::IResult<&'a str, &'a str>) {
     let (tmp, raw) = self.raw_ml_literal_string(input);
     self = tmp;
     let r = match raw {
       IResult::Done(i, o) => IResult::Done(i, &o["'''".input_len()..o.input_len()-"'''".input_len()]),
-      IResult::Error(_) => IResult::Error(nomplusplus::Err::Code(nomplusplus::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+      IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
       IResult::Incomplete(i) => IResult::Incomplete(i),
     };
     (self, r)
   }
 
-  fn literal_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nomplusplus::IResult<&'a str, &'a str>) {
+  fn literal_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nom::IResult<&'a str, &'a str>) {
     let (tmp, raw) = self.raw_literal_string(input);
     self = tmp;
     let r = match raw {
       IResult::Done(i, o) => IResult::Done(i, &o["'".input_len()..o.input_len()-"'".input_len()]),
-      IResult::Error(_) => IResult::Error(nomplusplus::Err::Code(nomplusplus::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
+      IResult::Error(_) => IResult::Error(nom::Err::Code(nom::ErrorKind::Custom(ErrorCode::MLLiteralString as u32))),
       IResult::Incomplete(i) => IResult::Incomplete(i),
     };
     (self, r)
@@ -226,17 +247,20 @@ impl<'a> Parser<'a> {
 
   method!(time<Parser<'a>, &'a str, Time>, mut self,
     chain!(
-      hour: re_find!("^[0-9]{2}")   ~
-            tag_s!(":")             ~
-    minute: re_find!("^[0-9]{2}")   ~
-            tag_s!(":")             ~
-    second: re_find!("^[0-9]{2}")   ~
-   fraction: complete!(call_m!(self.fractional)) ? ,
+           tag_s!("T")                            ~
+     hour: re_find!("^[0-9]{2}")                  ~
+            tag_s!(":")                           ~
+   minute: re_find!("^[0-9]{2}")                  ~
+            tag_s!(":")                           ~
+   second: re_find!("^[0-9]{2}")                  ~
+ fraction: complete!(call_m!(self.fractional)) ?  ~
+   offset: complete!(call_m!(self.time_offset)) ? ,
       ||{
         Time::new_str(hour, minute, second, match fraction {
             Some(ref x) => Some(x[1]),
             None        => None,
-          }
+          },
+          offset
         )
       }
     )
@@ -247,7 +271,7 @@ impl<'a> Parser<'a> {
   pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
      hour: re_find!("^[0-9]{2}")                                  ~
            tag_s!(":")                                            ~
-  minute: re_find!("^[0-9]{2}")                                   ,
+   minute: re_find!("^[0-9]{2}")                                  ,
       ||{
         TimeOffsetAmount::new_str(pos_neg, hour, minute)
       }
@@ -256,12 +280,12 @@ impl<'a> Parser<'a> {
 
   method!(time_offset<Parser<'a>, &'a str, TimeOffset>, mut self,
     alt!(
-      complete!(tag_s!("Z"))                       => {|_|       TimeOffset::Z} |
+      complete!(tag_s!("Z"))                       => {|_|       TimeOffset::Zulu} |
       complete!(call_m!(self.time_offset_amount))  => {|offset|  TimeOffset::Time(offset)}
     )
   );
 
-  method!(full_date<Parser<'a>, &'a str, FullDate>, self,
+  method!(date<Parser<'a>, &'a str, Date>, self,
     chain!(
      year: re_find!("^([0-9]{4})") ~
            tag_s!("-") ~
@@ -269,20 +293,17 @@ impl<'a> Parser<'a> {
            tag_s!("-") ~
       day: re_find!("^([0-9]{2})"),
       ||{
-        FullDate::new_str(year, month, day)
+        Date::new_str(year, month, day)
       }
     )
   );
 
   method!(date_time<Parser<'a>, &'a str, DateTime>, mut self,
     chain!(
-     date: call_m!(self.full_date)  ~
-           tag_s!("T")~
-     time: call_m!(self.time)       ~
-   offset: call_m!(self.time_offset),
+     date: call_m!(self.date)       ~
+     time: call_m!(self.time) ?     ,
         ||{
-          DateTime::new(date.year.clone(), date.month.clone(), date.day.clone(), time.hour.clone(),
-            time.minute.clone(), time.second.clone(), time.fraction.clone(), offset)
+          DateTime::new(date, time)
         }
     )
   );
@@ -294,10 +315,10 @@ impl<'a> Parser<'a> {
 
   method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(
     complete!(call_m!(self.quoted_key))   =>  {|k| {
-      self.keychain.borrow_mut().push(Key::Str(RefCell::new(Str::Str(k)))); k
+      self.keychain.borrow_mut().push(Key::Str(Str::Str(k))); k
     }}|
     complete!(call_m!(self.unquoted_key)) =>  {|k| {
-      self.keychain.borrow_mut().push(Key::Str(RefCell::new(Str::Str(k)))); k}}
+      self.keychain.borrow_mut().push(Key::Str(Str::Str(k))); k}}
   ));
 
   method!(keyval_sep<Parser<'a>, &'a str, WSSep>, mut self,
@@ -348,7 +369,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
-  use nomplusplus::IResult::Done;
+  use nom::IResult::Done;
   use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal,
                      InlineTable, TableKeyVal, Value,
                      CommentOrNewLines};
@@ -469,7 +490,7 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
       Done("", TimeOffset::Time(TimeOffsetAmount::new_str("+", "12", "34")))
     );
     p = Parser::new();
-    assert_eq!(p.time_offset("Z").1, Done("", TimeOffset::Z));
+    assert_eq!(p.time_offset("Z").1, Done("", TimeOffset::Zulu));
   }
 
   #[test]

@@ -1,7 +1,8 @@
 extern crate tomllib;
 use std::rc::Rc;
 use tomllib::parser::Parser;
-use tomllib::types::{StrType, TOMLValue, TimeOffsetAmount, TimeOffset, DateTime, Str};
+use tomllib::types::{StrType, TOMLValue, TimeOffsetAmount, TimeOffset,
+                     DateTime, Date, Time, Str};
 
 fn main() {
 	let parser = Parser::new();
@@ -59,13 +60,14 @@ hosts = [
   parser.set_value("database.connection_max".to_string(),
     TOMLValue::String(Str::String("100".to_string()), StrType::Literal));
   parser.set_value("title".to_string(), TOMLValue::Float(Str::String("4.567".to_string())));
-  parser.set_value("owner.dob".to_string(), TOMLValue::DateTime(DateTime::new_string(
-    "1981".to_string(), "04".to_string(), "15".to_string(),
-    "08".to_string(), "08".to_string(), "00".to_string(), Some("005".to_string()),
-    TimeOffset::Time(TimeOffsetAmount::new_string(
-      "+".to_string(), "05".to_string(), "30".to_string()
-    ))
-  )));
+  parser.set_value("owner.dob".to_string(), TOMLValue::DateTime(DateTime::new(
+    Date::new_string("1981".to_string(), "04".to_string(), "15".to_string()),
+    Some(Time::new_string("08".to_string(), "08".to_string(), "00".to_string(), Some("005".to_string()),
+      Some(TimeOffset::Time(TimeOffsetAmount::new_string(
+        "+".to_string(), "05".to_string(), "30".to_string()
+      )))
+    )
+  ))));
   parser.set_value("database.ports".to_string(), TOMLValue::Array(
     Rc::new(vec![
       TOMLValue::Float(Str::String("1.23".to_string())),

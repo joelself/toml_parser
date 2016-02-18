@@ -79,7 +79,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
-  use nomplusplus::IResult::Done;
+  use nom::IResult::Done;
   use parser::Parser;
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
                      TableType, Value, NLExpression, ArrayValue, Toml,

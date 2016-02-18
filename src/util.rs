@@ -31,7 +31,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
-  use nomplusplus::IResult::Done;
+  use nom::IResult::Done;
   use parser::Parser;
   use ast::structs::Comment;
 

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use nomplusplus::IResult;
+use nom::IResult;
 use ast::structs::{Toml, ArrayType, HashValue, TableType, Value, Array, InlineTable};
 use types::{ParseError, ParseResult, TOMLValue, Str};
 
@@ -20,7 +20,7 @@ pub fn count_lines(s: &str) -> u64 {
 }
 
 pub enum Key<'a> {
-	Str(RefCell<Str<'a>>),
+	Str(Str<'a>),
 	Index(Cell<usize>),
 }
 

@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate nomplusplus;
+extern crate nom;
 extern crate regex;
 #[macro_use]
 mod macros;

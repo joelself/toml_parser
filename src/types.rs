@@ -90,18 +90,6 @@ impl<'a> Display for TOMLValue<'a> {
 }
 
 #[derive(Debug, Eq, Clone)]
-pub struct DateTime<'a> {
-	pub year: Str<'a>,
-	pub month: Str<'a>,
-	pub day: Str<'a>,
-	pub hour: Str<'a>,
-	pub minute: Str<'a>,
-	pub second: Str<'a>,
-	pub fraction: Option<Str<'a>>,
-	pub offset: TimeOffset<'a>,
-}
-
-#[derive(Debug, Eq, Clone)]
 pub enum Str<'a> {
 	String(String),
 	Str(&'a str)
@@ -126,17 +114,52 @@ impl<'a> PartialEq for Str<'a> {
 		}
 	}
 }
- 
+
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+pub enum PosNeg {
+	Pos,
+	Neg,
+}
+
+impl Display for PosNeg {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  	match self {
+  		&PosNeg::Pos => write!(f, "+"),
+  		&PosNeg::Neg => write!(f, "-"),
+  	}
+  	
+  }
+}
+
 #[derive(Debug, Eq, Clone)]
 pub enum TimeOffset<'a> {
-	Z,
+	Zulu,
 	Time(TimeOffsetAmount<'a>),
+}
+
+impl<'a> PartialEq for TimeOffset<'a> {
+	fn eq(&self, other: &TimeOffset<'a>) -> bool {
+		match (self, other) {
+			(&TimeOffset::Zulu, &TimeOffset::Zulu) => true,
+			(&TimeOffset::Time(ref i), &TimeOffset::Time(ref j)) if(i == j) => true,
+			_ => false
+		}
+	}
+}
+
+impl<'a> Display for TimeOffset<'a> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  	match self {
+  		&TimeOffset::Zulu => write!(f, "Z"),
+  		&TimeOffset::Time(ref t) => write!(f, "{}", t),
+  	}
+  }
 }
 
 // (+|-)<hour>:<minute>
 #[derive(Debug, Eq, Clone)]
 pub struct TimeOffsetAmount<'a> {
-	pub pos_neg: Str<'a>,
+	pub pos_neg: PosNeg,
 	pub hour: Str<'a>,
 	pub minute: Str<'a>,
 }
@@ -157,18 +180,65 @@ impl<'a> Display for TimeOffsetAmount<'a> {
 
 impl<'a> TimeOffsetAmount<'a> {
   pub fn new_str(pos_neg: &'a str, hour: &'a str, minute: &'a str) -> TimeOffsetAmount<'a> {
-  	TimeOffsetAmount{pos_neg: Str::Str(pos_neg), hour: Str::Str(hour), minute: Str::Str(minute)}
+  	let pn = match pos_neg {
+  		"+" => PosNeg::Pos,
+  		_		=> PosNeg::Neg,
+  	};
+  	TimeOffsetAmount{pos_neg: pn, hour: Str::Str(hour), minute: Str::Str(minute)}
   }
   pub fn new_string(pos_neg: String, hour: String, minute: String) -> TimeOffsetAmount<'a> {
-  	TimeOffsetAmount{pos_neg: Str::String(pos_neg), hour: Str::String(hour), minute: Str::String(minute)}
+  	let pos = String::from("+");
+  	let mut pn = PosNeg::Neg;
+  	if pos_neg == pos {
+  		pn = PosNeg::Pos;
+  	}
+  	TimeOffsetAmount{pos_neg: pn, hour: Str::String(hour), minute: Str::String(minute)}
   }
 }
 
-impl<'a> PartialEq for DateTime<'a> {
-	fn eq(&self, other: &DateTime<'a>) -> bool {
+// <year>-<month>-<day>
+#[derive(Debug, Eq, Clone)]
+pub struct Date<'a> {
+	pub year: Str<'a>,
+	pub month: Str<'a>,
+	pub day: Str<'a>,
+}
+
+impl<'a> PartialEq for Date<'a> {
+	fn eq(&self, other: &Date<'a>) -> bool {
 		self.year == other.year &&
 		self.month == other.month &&
-		self.day == other.day && 
+		self.day == other.day
+	}
+}
+
+impl<'a> Display for Date<'a> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  	write!(f, "{}-{}-{}", self.year, self.month, self.day)
+  }
+}
+
+impl<'a> Date<'a> {
+  pub fn new_str(year: &'a str, month: &'a str, day: &'a str) -> Date<'a> {
+  	Date{year: Str::Str(year), month: Str::Str(month), day: Str::Str(day)}
+  }
+  pub fn new_string(year: String, month: String, day: String) -> Date<'a> {
+  	Date{year: Str::String(year), month: Str::String(month), day: Str::String(day)}
+  }
+}
+
+// <hour>:<minute>:<second>(.<fraction>)?
+#[derive(Debug, Eq, Clone)]
+pub struct Time<'a> {
+  pub hour: Str<'a>,
+	pub minute: Str<'a>,
+	pub second: Str<'a>,
+	pub fraction: Option<Str<'a>>,
+	pub offset: Option<TimeOffset<'a>>,
+}
+
+impl<'a> PartialEq for Time<'a> {
+	fn eq(&self, other: &Time<'a>) -> bool {
 		self.hour == other.hour &&
 		self.minute == other.minute &&
 		self.second == other.second &&
@@ -177,48 +247,65 @@ impl<'a> PartialEq for DateTime<'a> {
 	}
 }
 
+impl<'a> Display for Time<'a> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  	match (&self.fraction, &self.offset) {
+  		(&Some(ref frac), &Some(ref offset)) 	=> write!(f, "T{}:{}:{}.{}{}", self.hour, self.minute, self.second, frac, offset),
+  		(&Some(ref frac), &None) 							=> write!(f, "T{}:{}:{}.{}", self.hour, self.minute, self.second, frac),
+  		(&None, &Some(ref offset)) 						=> write!(f, "T{}:{}:{}{}", self.hour, self.minute, self.second, offset),
+  		(&None, &None) 												=> write!(f, "T{}:{}:{}", self.hour, self.minute, self.second),
+  	}
+  }
+}
+
+impl<'a> Time<'a> {
+  pub fn new_str(hour: &'a str, minute: &'a str, second: &'a str, fraction: Option<&'a str>, offset: Option<TimeOffset<'a>>)
+  	-> Time<'a> {
+  	if let Some(s) = fraction {
+  		Time{hour: Str::Str(hour), minute: Str::Str(minute), second: Str::Str(second),
+  			fraction: Some(Str::Str(s)), offset: offset}
+  	} else {
+  		Time{hour: Str::Str(hour), minute: Str::Str(minute), second: Str::Str(second),
+  			fraction: None, offset: offset}
+  	}
+  }
+  pub fn new_string(hour: String, minute: String, second: String, fraction: Option<String>, offset: Option<TimeOffset<'a>>)
+  	-> Time<'a> {
+  	if let Some(s) = fraction {
+  		Time{hour: Str::String(hour), minute: Str::String(minute), second: Str::String(second),
+  			fraction: Option::Some(Str::String(s)), offset: offset}
+  	} else {
+  		Time{hour: Str::String(hour), minute: Str::String(minute), second: Str::String(second),
+  			fraction: None, offset: offset}
+  	}
+  }
+}
+
+#[derive(Debug, Eq, Clone)]
+pub struct DateTime<'a> {
+	pub date: Date<'a>,
+	pub time: Option<Time<'a>>,
+}
+
+impl<'a> PartialEq for DateTime<'a> {
+	fn eq(&self, other: &DateTime<'a>) -> bool {
+		self.date == other.date &&
+		self.time == other.time
+	}
+}
+
 impl<'a> Display for DateTime<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-  	match self.fraction {
-  		Some(ref frac) => write!(f, "{}-{}-{}T{}:{}:{}.{}{}",
-					    		self.year, self.month, self.day,
-					    		self.hour, self.minute, self.second, frac,
-					    		self.offset),
-  		None 		=> write!(f, "{}-{}-{}T{}:{}:{}{}",
-					    		self.year, self.month, self.day,
-					    		self.hour, self.minute, self.second,
-					    		self.offset),
+  	match &self.time {
+  		&Some(ref time) => write!(f, "{}{}", self.date, time),
+  		&None => write!(f, "{}", self.date),
   	}
   }
 }
 
 impl<'a> DateTime<'a> {
-	pub fn new(year: Str<'a>, month: Str<'a>, day: Str<'a>, hour: Str<'a>, minute: Str<'a>,
-		second: Str<'a>, fraction: Option<Str<'a>>, offset: TimeOffset<'a>) -> DateTime<'a> {
-		DateTime{year: year, month: month, day: day, hour: hour, minute: minute, second: second,
-			fraction: fraction, offset: offset}
-	}
-	pub fn new_str(year: &'a str, month: &'a str, day: &'a str, hour: &'a str, minute: &'a str,
-		second: &'a str, fraction: Option<&'a str>, offset: TimeOffset<'a>) -> DateTime<'a> {
-		match fraction {
-			Some(f) => DateTime{year: Str::Str(year), month: Str::Str(month), day: Str::Str(day),
-				hour: Str::Str(hour), minute: Str::Str(minute), second: Str::Str(second),
-				fraction: Some(Str::Str(f)), offset: offset},
-			None 		=> DateTime{year: Str::Str(year), month: Str::Str(month), day: Str::Str(day),
-				hour: Str::Str(hour), minute: Str::Str(minute), second: Str::Str(second),
-				fraction: None, offset: offset},
-		}
-	}
-	pub fn new_string(year: String, month: String, day: String, hour: String, minute: String,
-		second: String, fraction: Option<String>, offset: TimeOffset<'a>) -> DateTime<'a> {
-		match fraction {
-			Some(f) => DateTime{year: Str::String(year), month: Str::String(month), day: Str::String(day),
-				hour: Str::String(hour), minute: Str::String(minute), second: Str::String(second),
-				fraction: Some(Str::String(f)), offset: offset},
-			None 		=> DateTime{year: Str::String(year), month: Str::String(month), day: Str::String(day),
-				hour: Str::String(hour), minute: Str::String(minute), second: Str::String(second),
-				fraction: None, offset: offset},
-		}
+	pub fn new(date: Date<'a>, time: Option<Time<'a>>) -> DateTime<'a> {
+		DateTime{date: date, time: time}
 	}
 }
 

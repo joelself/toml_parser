@@ -1,8 +1,8 @@
 use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
-use std::cell::RefCell;
-use std::collections::LinkedList;
+use std::cell::{RefCell, Cell};
+use std::collections::HashSet;
 use std::option::Option;
 use ::types::{DateTime, TimeOffset, StrType, Str, Bool};
 #[macro_use]
@@ -145,10 +145,22 @@ pub enum ArrayType {
 	None,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Children {
+	Count(Cell<usize>),
+	Keys(RefCell<HashSet<String>>)
+}
+
+// impl PartialEq for Children {
+// 	fn eq(&self, other: &Children) -> bool {
+// 		self.value == other.value
+// 	}
+// }
+
 #[derive(Debug, Eq, Clone)]
 pub struct HashValue<'a> {
 	pub value: Option<Rc<RefCell<Value<'a>>>>, 
-	pub subkeys: RefCell<LinkedList<String>>,
+	pub subkeys: Children,
 }
 
 impl<'a> Display for HashValue<'a> {
@@ -162,16 +174,28 @@ impl<'a> Display for HashValue<'a> {
 }
 
 impl<'a> HashValue<'a> {
-	pub fn new(value: Rc<RefCell<Value<'a>>>) -> HashValue<'a> {
+	pub fn new_keys(value: Rc<RefCell<Value<'a>>>) -> HashValue<'a> {
 		HashValue {
 			value: Some(value),
-			subkeys: RefCell::new(LinkedList::new()),
+			subkeys: Children::Keys(RefCell::new(HashSet::new())),
 		}
 	}
-	pub fn none() -> HashValue<'a> {
+	pub fn none_keys() -> HashValue<'a> {
 		HashValue {
 			value: None,
-			subkeys: RefCell::new(LinkedList::new()),
+			subkeys: Children::Keys(RefCell::new(HashSet::new())),
+		}
+	}
+	pub fn new_count(value: Rc<RefCell<Value<'a>>>) -> HashValue<'a> {
+		HashValue {
+			value: Some(value),
+			subkeys: Children::Count(Cell::new(0)),
+		}
+	}
+	pub fn none_count() -> HashValue<'a> {
+		HashValue {
+			value: None,
+			subkeys: Children::Count(Cell::new(0)),
 		}
 	}
 }
@@ -241,25 +265,6 @@ impl<'a> Display for TableType<'a> {
     		&TableType::Array(ref t) => write!(f, "[[{}]]", t),
     	}
     }
-}
-
-impl<'a> PartialEq for TimeOffset<'a> {
-	fn eq(&self, other: &TimeOffset<'a>) -> bool {
-		match (self, other) {
-			(&TimeOffset::Z, &TimeOffset::Z) => true,
-			(&TimeOffset::Time(ref i), &TimeOffset::Time(ref j)) if(i == j) => true,
-			_ => false
-		}
-	}
-}
-
-impl<'a> Display for TimeOffset<'a> {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-  	match self {
-  		&TimeOffset::Z => write!(f, "Z"),
-  		&TimeOffset::Time(ref t) => write!(f, "{}", t),
-  	}
-  }
 }
 
 // #<text>
@@ -478,87 +483,6 @@ impl<'a> TableType<'a> {
 		}
 		false
 	}
-}
-
-// <hour>:<minute>:<second>(.<fraction>)?
-#[derive(Debug, Eq)]
-pub struct Time<'a> {
-  pub hour: Str<'a>,
-	pub minute: Str<'a>,
-	pub second: Str<'a>,
-	pub fraction: Option<Str<'a>>,
-}
-
-impl<'a> PartialEq for Time<'a> {
-	fn eq(&self, other: &Time<'a>) -> bool {
-		self.hour == other.hour &&
-		self.minute == other.minute &&
-		self.second == other.second &&
-		self.fraction == other.fraction
-	}
-}
-
-impl<'a> Display for Time<'a> {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-  	match self.fraction {
-  		Some(ref frac) 	=> write!(f, "{}:{}:{}.{}", self.hour, self.minute, self.second, frac),
-  		None						=> write!(f, "{}:{}:{}", self.hour, self.minute, self.second),
-  	}
-  }
-}
-
-impl<'a> Time<'a> {
-  pub fn new_str(hour: &'a str, minute: &'a str, second: &'a str, fraction: Option<&'a str>)
-  	-> Time<'a> {
-  	if let Some(s) = fraction {
-  		Time{hour: Str::Str(hour), minute: Str::Str(minute), second: Str::Str(second),
-  			fraction: Some(Str::Str(s))}
-  	} else {
-  		Time{hour: Str::Str(hour), minute: Str::Str(minute), second: Str::Str(second),
-  			fraction: None}
-  	}
-  }
-  pub fn new_string(hour: String, minute: String, second: String, fraction: Option<String>)
-  	-> Time<'a> {
-  	if let Some(s) = fraction {
-  		Time{hour: Str::String(hour), minute: Str::String(minute), second: Str::String(second),
-  			fraction: Option::Some(Str::String(s))}
-  	} else {
-  		Time{hour: Str::String(hour), minute: Str::String(minute), second: Str::String(second),
-  			fraction: None}
-  	}
-  }
-}
-
-// <year>-<month>-<day>
-#[derive(Debug, Eq)]
-pub struct FullDate<'a> {
-	pub year: Str<'a>,
-	pub month: Str<'a>,
-	pub day: Str<'a>,
-}
-
-impl<'a> PartialEq for FullDate<'a> {
-	fn eq(&self, other: &FullDate<'a>) -> bool {
-		self.year == other.year &&
-		self.month == other.month &&
-		self.day == other.day
-	}
-}
-
-impl<'a> Display for FullDate<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	write!(f, "{}-{}-{}", self.year, self.month, self.day)
-    }
-}
-
-impl<'a> FullDate<'a> {
-    pub fn new_str(year: &'a str, month: &'a str, day: &'a str) -> FullDate<'a> {
-    	FullDate{year: Str::Str(year), month: Str::Str(month), day: Str::Str(day)}
-    }
-    pub fn new_string(year: String, month: String, day: String) -> FullDate<'a> {
-    	FullDate{year: Str::String(year), month: Str::String(month), day: Str::String(day)}
-    }
 }
 
 // <comment><newlines+>

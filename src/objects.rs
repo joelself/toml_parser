@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::cell::Cell;
-use nomplusplus::IResult;
+use nom::IResult;
 
 #[inline(always)]
 fn map_val_to_array_type(val: &Value) -> ArrayType {
@@ -71,7 +71,7 @@ impl<'a> Parser<'a> {
           }
           let full_key = format_tt_keys(&res);
           if !self.map.contains_key(&full_key) {
-            self.map.insert(full_key, HashValue::none());
+            self.map.insert(full_key, HashValue::none_keys());
           }
         }
         self.last_table = Some(res.clone());
@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
         let full_key = format_tt_keys(&*res);
         let contains_key = self.map.contains_key(&full_key);
         if !contains_key {
-          self.map.insert(full_key, HashValue::none());
+          self.map.insert(full_key, HashValue::none_count());
         }
         self.last_table = Some(res.clone());
         res
@@ -297,7 +297,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod test {
-  use nomplusplus::IResult::Done;
+  use nom::IResult::Done;
   use ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
                      KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table,
                      TableType, Value};
@@ -464,7 +464,7 @@ mod test {
       Done("", Rc::new(RefCell::new(Array::new(
         vec![ArrayValue::new(
           Rc::new(RefCell::new(Value::DateTime(DateTime::new_str("2010", "10", "10", "10", "10", "10", Some("33"),
-            TimeOffset::Z
+            TimeOffset::Zulu
           )))),
           Some(WSSep::new_str("", " ")),
           vec![CommentOrNewLines::NewLines(Str::Str(""))]

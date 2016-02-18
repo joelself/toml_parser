@@ -12,6 +12,16 @@ macro_rules! str (
 );
 
 #[macro_export]
+macro_rules! str_ref (
+    ($s:expr) => (
+        match $s {
+            &Str::Str(s) => s,
+            &Str::String(ref s) => s,
+        };
+    );
+);
+
+#[macro_export]
 macro_rules! string (
     ($s:expr) => (
         match $s {
