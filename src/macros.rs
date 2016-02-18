@@ -3,22 +3,28 @@ use ast::structs::Value;
 use parser::Parser;
 #[macro_export]
 macro_rules! str (
-    ($s:expr) => (
-        match $s {
-        	Str::Str(s) => s,
-        	Str::String(ref s) => s,
-        };
-    );
+  ($s:expr) => (
+    {
+      let out: &str = match $s {
+      	Str::Str(s) => s,
+      	Str::String(ref s) => s,
+      };
+      out
+    }
+  );
 );
 
 #[macro_export]
 macro_rules! str_ref (
-    ($s:expr) => (
-        match $s {
-            &Str::Str(s) => s,
-            &Str::String(ref s) => s,
-        };
-    );
+  ($s:expr) => (
+    {
+      let out: &str = match $s {
+        &Str::Str(s) => s,
+        &Str::String(ref s) => s,
+      };
+      out
+    }
+  );
 );
 
 #[macro_export]

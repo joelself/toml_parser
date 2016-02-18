@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use ast::structs::{KeyVal, WSSep, Value, ErrorCode,
                    HashValue, TableType, Table, Children,
@@ -43,7 +44,8 @@ impl<'a> Parser<'a> {
     key_parent
   }
 
-  pub fn get_array_table_key(tables: &RefCell<Vec<Rc<TableType<'a>>>>,
+
+  pub fn get_array_table_key(map: &RefCell<&mut HashMap<String, HashValue<'a>>>, tables: &RefCell<Vec<Rc<TableType<'a>>>>,
     tables_index: &RefCell<Vec<usize>>) -> String {
     let mut full_key: String = String::new();
     let last_table: Option<&Table> = None;
@@ -52,9 +54,27 @@ impl<'a> Parser<'a> {
       match  &*tables.borrow()[i] {
         &TableType::Array(ref t) => {
           let keys = get_last_keys(last_table, t);
-          for key in keys {
-            full_key.push_str(&key);
+          let len = keys.len();
+          for i in 0..len - 1 {
+            full_key.push_str(&keys[i]);
+            let hash_value_opt = map.borrow().get(full_key);
+            match hash_value_opt {
+              Some(hash_value) =>  {
+                match hash_value.subkeys {
+                  Children::Count(c) => full_key.push_str(&format!("[{}].", c.get())),
+                  Children::Keys(hs_rf) => {
+                    if hs_rf.borrow().contains(&keys[i]) {
+                      full_key.push_str(".")
+                    } else {
+                      panic!("Key does not exist in map: \"{}\"", &format!("{}.{}", full_key, &keys[i]));
+                    }
+                  },
+                }
+              }
+              None => panic!("Key does not exist in map: \"{}\"", &full_key),
+            }
           }
+          full_key.push_str(&keys[len-1]);
           let index = tables_index.borrow()[i];
           if i < tables_len - 1 {
             full_key.push_str(&format!("[{}].", index));
@@ -93,9 +113,11 @@ impl<'a> Parser<'a> {
     return (key, parent_key);
   }
 
-  fn get_full_key(tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,
-                      keychain: &RefCell<Vec<Key<'a>>>) -> (String, String) {
-    let array_key = Parser::get_array_table_key(tables, tables_index);
+  fn get_full_key(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
+    tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,
+    keychain: &RefCell<Vec<Key<'a>>>) -> (String, String) {
+
+    let array_key = Parser::get_array_table_key(map, tables, tables_index);
     let (chain_key, parent_chain_key) = Parser::get_keychain_key(keychain);
     let mut full_key = String::new();
     let mut parent_key = String::new();
@@ -144,7 +166,7 @@ impl<'a> Parser<'a> {
         match **ttype {
           TableType::Standard(ref t) => {
             self.last_array_tables.borrow_mut().push(ttype.clone());
-            let tuple = Parser::get_full_key(&self.last_array_tables,
+            let tuple = Parser::get_full_key(&map, &self.last_array_tables,
               &self.last_array_tables_index, &self.keychain);
             full_key = tuple.0;
             parent_key = tuple.1;
@@ -157,7 +179,7 @@ impl<'a> Parser<'a> {
             }
           },
           TableType::Array(_) => {
-            let tuple = Parser::get_full_key(&self.last_array_tables,
+            let tuple = Parser::get_full_key(&map, &self.last_array_tables,
               &self.last_array_tables_index, &self.keychain);
             full_key = tuple.0;
             parent_key = tuple.1;

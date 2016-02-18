@@ -28,24 +28,51 @@ impl<'a> Parser<'a> {
   fn add_implicit_tables(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>,
     tables_index: &RefCell<Vec<usize>>, table: Rc<TableType<'a>>) {
-    let mut last_key = Parser::get_array_table_key(tables, tables_index);
+    let mut last_key = Parser::get_array_table_key(map, tables, tables_index);
     let len = tables.borrow().len();
     if let TableType::Array(ref last_at) = *tables.borrow()[len - 1] {
       if let TableType::Array(ref at) = *table {
         for i in last_at.subkeys.len()..at.subkeys.len() - 1 {
           let mut borrow = map.borrow_mut();
+          let mut insert = false;
           if let Entry::Occupied(mut o) = borrow.entry(last_key.clone()) {
-            match &o.get_mut().subkeys {
-              &Children::Count(ref c)    => c.set(c.get() + 1),
-              &Children::Keys(ref hs_rf) => {hs_rf.borrow_mut().insert(string!(at.subkeys[i].key));},
-            }
+            insert = match &o.get_mut().subkeys {
+              &Children::Keys(ref hs_rf) => hs_rf.borrow_mut().insert(string!(at.subkeys[i].key)),
+              // TODO: This is wrong for the first iteration, always insert on first iteration
+              _ => panic!("Implicit tables can only be Standard Tables: \"{}\"", format!("{}.{}", last_key, str!(at.subkeys[i].key))),
+            };
           }
           last_key.push_str(".");
           last_key.push_str(str!(at.subkeys[i].key));
-          map.borrow_mut().insert(last_key.clone(), HashValue::none_keys());
+          if insert {
+            map.borrow_mut().insert(last_key.clone(), HashValue::none_keys());
+          }
         }
       }
     }
+  }
+
+  fn increment_array_table_index(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
+    tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,) {
+    let parent_key = Parser::get_key_parent(tables, tables_index);
+    let mut borrow = map.borrow_mut();
+    let mut entry = borrow.entry(parent_key);
+    if let Entry::Occupied(mut o) = entry {
+      if let &Children::Count(ref c) = &o.get_mut().subkeys {
+         c.set(c.get() + 1);
+      }
+    }
+    let len = tables_index.borrow().len();
+    let last_index = tables_index.borrow()[len - 1];
+    tables_index.borrow_mut()[len - 1] = lastst_index + 1;
+  }
+
+  fn add_tables(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
+    table: Rc<TableType<'a>>) {
+    //TODO: Implement this, if the first key exists, increment its counter or add to it's child Keys
+    //      Otherwise iterate through the keys adding new full keys as impplicit tables except for
+    //      the last
+    unimplemented!()
   }
 
   // Table
@@ -120,22 +147,13 @@ impl<'a> Parser<'a> {
         let map = RefCell::new(&mut self.map);
         self.array_error.set(false);
         let len = self.last_array_tables.borrow().len();
+        let current_key = format_tt_keys(&*res);
         if len > 0 {
           let len = self.last_array_tables.borrow().len();
           let last_key = format_tt_keys(&self.last_array_tables.borrow()[len - 1]);
-          if format_tt_keys(&*res) == last_key {
-            // TODO: get key without index and add this index to its list of subkeys
-            let parent_key = Parser::get_key_parent(&self.last_array_tables,
+          if current_key == last_key {
+            Parser::increment_array_table_index(&map, &self.last_array_tables,
               &self.last_array_tables_index);
-            let mut borrow = map.borrow_mut();
-            let mut entry = borrow.entry(parent_key);
-            if let Entry::Occupied(mut o) = entry {
-              if let &Children::Count(ref c) = &o.get_mut().subkeys {
-                 c.set(c.get() + 1);
-              }
-            }
-            let last_index = self.last_array_tables_index.borrow()[len - 1];
-            self.last_array_tables_index.borrow_mut()[len - 1] = last_index + 1;
           } else {
             let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
             if subtable {
@@ -144,22 +162,26 @@ impl<'a> Parser<'a> {
               self.last_array_tables.borrow_mut().push(res.clone());
               self.last_array_tables_index.borrow_mut().push(0);
             } else {
-              self.last_array_tables.borrow_mut().clear();
-              self.last_array_tables.borrow_mut().push(res.clone());
-              // TODO: change this to lookup parent key, if it exists, start at first subkey,
-              //       and rebuild the last_array_tables and last_array_tables_index from
-              //       child keys
-              // TODO: Add implicit tables if necessary
-              self.last_array_tables_index.borrow_mut().clear();
-              self.last_array_tables_index.borrow_mut().push(0);
+              while current_key != format_tt_keys(&self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1]) {
+                self.last_array_tables.borrow_mut().pop();
+                self.last_array_tables_index.borrow_mut().pop();
+              }
+              if self.last_array_tables.borrow().len() > 0 {
+                Parser::increment_array_table_index(&map, &self.last_array_tables,
+                  &self.last_array_tables_index);
+              } else {
+                Parser::add_tables(&map, res.clone());
+                self.last_array_tables.borrow_mut().push(res.clone());
+                self.last_array_tables_index.borrow_mut().push(0);
+              }
             }
           }
-        }else {
-          // TODO: Add implicit tables if necessary
+        } else {
+          Parser::add_tables(&map, res.clone());
           self.last_array_tables.borrow_mut().push(res.clone());
           self.last_array_tables_index.borrow_mut().push(0);
         }
-        let full_key = Parser::get_array_table_key(&self.last_array_tables,
+        let full_key = Parser::get_array_table_key(&map, &self.last_array_tables,
           &self.last_array_tables_index);
         let contains_key = map.borrow().contains_key(&full_key);
         if !contains_key {
