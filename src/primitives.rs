@@ -57,12 +57,13 @@ impl<'a> Parser<'a> {
           let len = keys.len();
           for i in 0..len - 1 {
             full_key.push_str(&keys[i]);
-            let hash_value_opt = map.borrow().get(full_key);
+            let map_borrow = map.borrow();
+            let hash_value_opt = map_borrow.get(&full_key);
             match hash_value_opt {
               Some(hash_value) =>  {
                 match hash_value.subkeys {
-                  Children::Count(c) => full_key.push_str(&format!("[{}].", c.get())),
-                  Children::Keys(hs_rf) => {
+                  Children::Count(ref c) => full_key.push_str(&format!("[{}].", c.get())),
+                  Children::Keys(ref hs_rf) => {
                     if hs_rf.borrow().contains(&keys[i]) {
                       full_key.push_str(".")
                     } else {

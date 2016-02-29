@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::collections::HashSet;
 use std::option::Option;
+use std::fmt::Result;
 use ::types::{DateTime, TimeOffset, StrType, Str, Bool};
 #[macro_use]
 use ::macros;
@@ -379,18 +380,18 @@ impl<'a> WSKeySep<'a> {
 pub fn get_last_keys(last_table: Option<&Table>, t: &Table) -> Vec<String> {
 	match last_table {
 		None => {
-			let mut last_keys = vec![string!(t.key)];
-			for i in 0..t.subkeys.len() {
-				last_keys.push(string!(t.subkeys[i].key));
+			let mut last_keys = vec![];
+			for i in 0..t.keys.len() {
+				last_keys.push(string!(t.keys[i].key));
 			}
 			last_keys
 		},
 		Some(lt) => {
-			let len_last = lt.subkeys.len();
-			let len = t.subkeys.len();
+			let len_last = lt.keys.len();
+			let len = t.keys.len();
 			let mut last_keys = vec![];
 			for i in len_last..len {
-				last_keys.push(string!(t.subkeys[i].key));
+				last_keys.push(string!(t.keys[i].key));
 			}
 			last_keys
 		}
@@ -399,15 +400,12 @@ pub fn get_last_keys(last_table: Option<&Table>, t: &Table) -> Vec<String> {
 
 pub fn format_keys(t: &Table) -> String {
 	let mut s = String::new();
-	let key: &str = str!(t.key);
-	s.push_str(key);
-	if t.subkeys.len() > 0 {
-		s.push('.');
-		for i in 0..t.subkeys.len() - 1 {
-			s.push_str(str!(t.subkeys[i].key));
+	if t.keys.len() > 0 {
+		for i in 0..t.keys.len() - 1 {
+			s.push_str(str!(t.keys[i].key));
 			s.push('.');
 		}
-		s.push_str(str!(t.subkeys[t.subkeys.len() - 1].key));
+		s.push_str(str!(t.keys[t.keys.len() - 1].key));
 	}
 	s
 }
@@ -416,14 +414,12 @@ pub fn format_tt_keys(tabletype: &TableType) -> String {
 	match tabletype {
 		&TableType::Standard(ref t) | &TableType::Array(ref t) => {
 			let mut s = String::new();
-			s.push_str(str!(t.key));
-			if t.subkeys.len() > 0 {
-				s.push('.');
-				for i in 0..t.subkeys.len() - 1 {
-					s.push_str(str!(t.subkeys[i].key));
+			if t.keys.len() > 0 {
+				for i in 0..t.keys.len() - 1 {
+					s.push_str(str!(t.keys[i].key));
 					s.push('.');
 				}
-				s.push_str(str!(t.subkeys[t.subkeys.len() - 1].key));
+				s.push_str(str!(t.keys[t.keys.len() - 1].key));
 			}
 			s
 		}
@@ -434,35 +430,38 @@ pub fn format_tt_keys(tabletype: &TableType) -> String {
 // Array: [[<ws.ws1><key><subkeys*><ws.ws2>]]
 #[derive(Debug, Eq)]
 pub struct Table<'a> {
-	pub ws: WSSep<'a>, // opening whitespace and closing whitespace
-	pub key: Str<'a>,
-	pub subkeys: Vec<WSKeySep<'a>>,
+	pub keys: Vec<WSKeySep<'a>>,
 }
 
 impl<'a> PartialEq for Table<'a> {
 	fn eq(&self, other: &Table<'a>) -> bool {
-		self.ws == other.ws &&
-		self.key == other.key &&
-		self.subkeys == other.subkeys
+		self.keys == other.keys
 	}
 }
 
 impl<'a> Display for Table<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-  	try!(write!(f, "{}{}", self.ws.ws1, self.key));
-  	for key in &self.subkeys {
-  		try!(write!(f, "{}", key));
-  	}
-  	write!(f, "{}", self.ws.ws2)
+    if self.keys.len() > 0 {
+      try!(write!(f, "{}{}", self.keys[0].ws.ws1, self.keys[0].key));
+    	for i in 1..self.keys.len() {
+    		try!(write!(f, "{}", self.keys[i]));
+    	}
+    	write!(f, "{}", self.keys[0].ws.ws2)
+    }
+    else {
+      Ok(())
+    }
   }
 }
 
 impl<'a> Table<'a> {
-  pub fn new_str(ws: WSSep<'a>, key: &'a str, subkeys: Vec<WSKeySep<'a>>) -> Table<'a> {
-  	Table{ws: ws, key: Str::Str(key), subkeys: subkeys}
+  pub fn new_str(ws: WSSep<'a>, key: &'a str, mut subkeys: Vec<WSKeySep<'a>>) -> Table<'a> {
+  	subkeys.insert(0, WSKeySep::new_str(ws, key));
+    Table{keys: subkeys}
   }
-  pub fn new_string(ws: WSSep<'a>, key: String, subkeys: Vec<WSKeySep<'a>>) -> Table<'a> {
-  	Table{ws: ws, key: Str::String(key), subkeys: subkeys}
+  pub fn new_string(ws: WSSep<'a>, key: String, mut subkeys: Vec<WSKeySep<'a>>) -> Table<'a> {
+  	subkeys.insert(0, WSKeySep::new_string(ws, key));
+    Table{keys: subkeys}
   }
 }
 

@@ -29,26 +29,53 @@ impl<'a> Parser<'a> {
     tables: &RefCell<Vec<Rc<TableType<'a>>>>,
     tables_index: &RefCell<Vec<usize>>, table: Rc<TableType<'a>>) {
     let mut last_key = Parser::get_array_table_key(map, tables, tables_index);
-    let len = tables.borrow().len();
-    if let TableType::Array(ref last_at) = *tables.borrow()[len - 1] {
+    let mut len = tables.borrow().len();
+    let mut pop = false;
+    // TODO: Need to add an array_table_root key that points to all of it's Children
+    //       And a std_table_root that points to all of it's children, neither root should
+    //       be part of the key
+    if len == 0 {
+      tables.borrow_mut().push(Rc::new(TableType::Array(
+        Table::new_str(WSSep::new_str("", ""), "", vec![])
+      )));
+      pop = true;
+      len = 1;
+    }
+    if let TableType::Array(ref last_at) = *tables.borrow()[len - 1]
+    {
       if let TableType::Array(ref at) = *table {
-        for i in last_at.subkeys.len()..at.subkeys.len() - 1 {
+        let mut first = true;
+        for i in last_at.keys.len() - 1..at.keys.len() - 1 {
           let mut borrow = map.borrow_mut();
           let mut insert = false;
+          println!("index: {}, last_key: {}", i, last_key);
           if let Entry::Occupied(mut o) = borrow.entry(last_key.clone()) {
-            insert = match &o.get_mut().subkeys {
-              &Children::Keys(ref hs_rf) => hs_rf.borrow_mut().insert(string!(at.subkeys[i].key)),
-              // TODO: This is wrong for the first iteration, always insert on first iteration
-              _ => panic!("Implicit tables can only be Standard Tables: \"{}\"", format!("{}.{}", last_key, str!(at.subkeys[i].key))),
-            };
+            if first {
+              insert = match &o.get_mut().subkeys {
+                &Children::Keys(ref hs_rf) => hs_rf.borrow_mut().insert(string!(at.keys[i].key)),
+                &Children::Count(ref cell) => { cell.set(cell.get() + 1); true },
+              };
+              first = false;
+            } else {
+              insert = match &o.get_mut().subkeys {
+                &Children::Keys(ref hs_rf) => hs_rf.borrow_mut().insert(string!(at.keys[i].key)),
+                _ => panic!("Implicit tables can only be Standard Tables: \"{}\"", format!("{}.{}", last_key, str!(at.keys[i].key))),
+              };
+            }
           }
-          last_key.push_str(".");
-          last_key.push_str(str!(at.subkeys[i].key));
+          if last_key != "" {
+            last_key.push_str(".");
+          }
+          last_key.push_str(str!(at.keys[i].key));
           if insert {
-            map.borrow_mut().insert(last_key.clone(), HashValue::none_keys());
+            println!("insert last_key {}", last_key);
+            borrow.insert(last_key.clone(), HashValue::none_keys());
           }
         }
       }
+    }
+    if pop {
+      tables.borrow_mut().pop();
     }
   }
 
@@ -64,15 +91,7 @@ impl<'a> Parser<'a> {
     }
     let len = tables_index.borrow().len();
     let last_index = tables_index.borrow()[len - 1];
-    tables_index.borrow_mut()[len - 1] = lastst_index + 1;
-  }
-
-  fn add_tables(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
-    table: Rc<TableType<'a>>) {
-    //TODO: Implement this, if the first key exists, increment its counter or add to it's child Keys
-    //      Otherwise iterate through the keys adding new full keys as impplicit tables except for
-    //      the last
-    unimplemented!()
+    tables_index.borrow_mut()[len - 1] = last_index + 1;
   }
 
   // Table
@@ -144,50 +163,55 @@ impl<'a> Parser<'a> {
         let res = Rc::new(TableType::Array(Table::new_str(
           WSSep::new_str(ws1, ws2), key, subkeys
         )));
-        let map = RefCell::new(&mut self.map);
-        self.array_error.set(false);
-        let len = self.last_array_tables.borrow().len();
-        let current_key = format_tt_keys(&*res);
-        if len > 0 {
+        {
+          let map = RefCell::new(&mut self.map);
+          self.array_error.set(false);
           let len = self.last_array_tables.borrow().len();
-          let last_key = format_tt_keys(&self.last_array_tables.borrow()[len - 1]);
-          if current_key == last_key {
-            Parser::increment_array_table_index(&map, &self.last_array_tables,
-              &self.last_array_tables_index);
-          } else {
-            let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
-            if subtable {
-              Parser::add_implicit_tables(&map, &self.last_array_tables,
-                &self.last_array_tables_index, res.clone());
-              self.last_array_tables.borrow_mut().push(res.clone());
-              self.last_array_tables_index.borrow_mut().push(0);
+          let current_key = format_tt_keys(&*res);
+          if len > 0 {
+            let len = self.last_array_tables.borrow().len();
+            let last_key = format_tt_keys(&self.last_array_tables.borrow()[len - 1]);
+            if current_key == last_key {
+              Parser::increment_array_table_index(&map, &self.last_array_tables,
+                &self.last_array_tables_index);
             } else {
-              while current_key != format_tt_keys(&self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1]) {
-                self.last_array_tables.borrow_mut().pop();
-                self.last_array_tables_index.borrow_mut().pop();
-              }
-              if self.last_array_tables.borrow().len() > 0 {
-                Parser::increment_array_table_index(&map, &self.last_array_tables,
-                  &self.last_array_tables_index);
-              } else {
-                Parser::add_tables(&map, res.clone());
+              let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
+              if subtable {
+                Parser::add_implicit_tables(&map, &self.last_array_tables,
+                  &self.last_array_tables_index, res.clone());
                 self.last_array_tables.borrow_mut().push(res.clone());
                 self.last_array_tables_index.borrow_mut().push(0);
+              } else {
+                while current_key != format_tt_keys(&self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1]) {
+                  self.last_array_tables.borrow_mut().pop();
+                  self.last_array_tables_index.borrow_mut().pop();
+                }
+                if self.last_array_tables.borrow().len() > 0 {
+                  Parser::increment_array_table_index(&map, &self.last_array_tables,
+                    &self.last_array_tables_index);
+                } else {
+                  Parser::add_implicit_tables(&map, &self.last_array_tables,
+                    &self.last_array_tables_index,  res.clone());
+                  self.last_array_tables.borrow_mut().push(res.clone());
+                  self.last_array_tables_index.borrow_mut().push(0);
+                }
               }
             }
+          } else {
+            Parser::add_implicit_tables(&map, &self.last_array_tables,
+              &self.last_array_tables_index, res.clone());
+            self.last_array_tables.borrow_mut().push(res.clone());
+            self.last_array_tables_index.borrow_mut().push(0);
           }
-        } else {
-          Parser::add_tables(&map, res.clone());
-          self.last_array_tables.borrow_mut().push(res.clone());
-          self.last_array_tables_index.borrow_mut().push(0);
+          let full_key = Parser::get_array_table_key(&map, &self.last_array_tables,
+            &self.last_array_tables_index);
+          let contains_key = map.borrow().contains_key(&full_key);
+          if !contains_key {
+            map.borrow_mut().insert(full_key, HashValue::none_count());
+          }
+          self.last_table = Some(res.clone());
         }
-        let full_key = Parser::get_array_table_key(&map, &self.last_array_tables,
-          &self.last_array_tables_index);
-        let contains_key = map.borrow().contains_key(&full_key);
-        if !contains_key {
-          map.borrow_mut().insert(full_key, HashValue::none_count());
-        }
-        self.last_table = Some(res.clone());
+        self.print_keys_and_values();
         res
       }
     )
