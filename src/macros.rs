@@ -1,6 +1,3 @@
-use types::{Str, TOMLValue};
-use ast::structs::Value;
-use parser::Parser;
 #[macro_export]
 macro_rules! str (
   ($s:expr) => (

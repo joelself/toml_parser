@@ -1,8 +1,8 @@
 extern crate tomllib;
-use std::rc::Rc;
+//use std::rc::Rc;
 use tomllib::parser::Parser;
-use tomllib::types::{StrType, TOMLValue, TimeOffsetAmount, TimeOffset,
-                     DateTime, Date, Time, Str};
+//use tomllib::types::{StrType, TOMLValue, TimeOffsetAmount, TimeOffset,
+//                     DateTime, Date, Time, Str};
 
 fn main() {
 	let parser = Parser::new();
@@ -50,15 +50,53 @@ fn main() {
 //   "alpha",
 //   "omega"
 // ]"#);
-let mut parser = parser.parse(r#"[[One.Two.Three]]
-Foo = 4
-Bar = 5
-[[One.Two.Three.Four]]
-Some = "thing"
-Every = "thing"
-[One.Two.Three.Eight]
-This = 1.2
-That = 2.3
+let parser = parser.parse(
+r#"[[products]]
+name = "Hammer"
+sku = 738594937
+
+[[products]]
+
+[[products]]
+name = "Nail"
+sku = 284758393
+color = "gray"
+
+[[fruit]]
+  name = "apple"
+
+  [fruit.physical]
+    color = "red"
+    shape = "round"
+
+  [[fruit.variety]]
+    name = "red delicious"
+
+  [[fruit.variety]]
+    name = "granny smith"
+
+[[fruit]]
+  name = "banana"
+
+  [[fruit.variety]]
+    name = "plantain"
+[[albums]]
+name = "Born to Run"
+
+  [[albums.songs]]
+  name = "Jungleland"
+
+  [[albums.songs]]
+  name = "Meeting Across the River"
+
+[[albums]]
+name = "Born in the USA"
+  
+  [[albums.songs]]
+  name = "Glory Days"
+
+  [[albums.songs]]
+  name = "Dancing in the Dark"
 "#);
   // let mut new_owner = String::new();
   // new_owner.push_str("Joel Self");

@@ -4,10 +4,7 @@ use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::collections::HashSet;
 use std::option::Option;
-use std::fmt::Result;
-use ::types::{DateTime, TimeOffset, StrType, Str, Bool};
-#[macro_use]
-use ::macros;
+use ::types::{DateTime, StrType, Str, Bool};
 
 
 /// Compares two Options that contain comparable structs
@@ -19,6 +16,7 @@ pub fn comp_opt<T: Eq>(left: &Option<T>, right: &Option<T>) -> bool {
 	}
 }
 
+#[allow(dead_code)]
 pub enum ErrorCode {
 	BasicString = 0,
 	MLBasicString = 1,
@@ -46,6 +44,7 @@ impl<'a> Display for Toml<'a> {
    }
 }
 
+#[allow(dead_code)]
 impl<'a> Toml<'a> {
 	pub fn new(exprs: Vec<NLExpression<'a>>) -> Toml<'a> {
 		Toml{exprs: exprs}
@@ -71,6 +70,7 @@ impl<'a> Display for NLExpression<'a> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a> NLExpression<'a> {
 	pub fn new_str(nl: &'a str, expr: Expression<'a>) -> NLExpression<'a> {
 		NLExpression{nl: Str::Str(nl), expr: expr}
@@ -166,14 +166,24 @@ pub struct HashValue<'a> {
 
 impl<'a> Display for HashValue<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self.subkeys {
+      Children::Count(ref c) => try!(write!(f, "Subkey Count: {}, ", c.get())),
+      Children::Keys(ref keys) => {
+        try!(write!(f, "Subkey Set: "));
+        for key in keys.borrow().iter() {
+          try!(write!(f, "{}, ", key));
+        }
+      },
+    }
 		if let Some(ref v) = self.value {
-			write!(f, "{}", *v.borrow())
+			write!(f, "Value: {}", *v.borrow())
 		} else {
-			write!(f, "")
+			write!(f, "No Value")
 		}
 	}
 }
 
+#[allow(dead_code)]
 impl<'a> HashValue<'a> {
 	pub fn new_keys(value: Rc<RefCell<Value<'a>>>) -> HashValue<'a> {
 		HashValue {
@@ -193,12 +203,18 @@ impl<'a> HashValue<'a> {
 			subkeys: Children::Count(Cell::new(0)),
 		}
 	}
-	pub fn none_count() -> HashValue<'a> {
-		HashValue {
-			value: None,
-			subkeys: Children::Count(Cell::new(0)),
-		}
-	}
+  pub fn none_count() -> HashValue<'a> {
+    HashValue {
+      value: None,
+      subkeys: Children::Count(Cell::new(0)),
+    }
+  }
+  pub fn one_count() -> HashValue<'a> {
+    HashValue {
+      value: None,
+      subkeys: Children::Count(Cell::new(1)),
+    }
+  }
 }
 
 impl<'a> PartialEq for HashValue<'a> {
@@ -286,6 +302,7 @@ impl<'a> Display for Comment<'a> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a> Comment<'a> {
 	pub fn new_str(text: &'a str) -> Comment<'a> {
 		Comment{text: Str::Str(text)}
@@ -308,6 +325,7 @@ impl<'a> PartialEq for WSSep<'a> {
 	}
 }
 
+#[allow(dead_code)]
 impl<'a> WSSep<'a> {
 	pub fn new_str(ws1: &'a str, ws2: &'a str) -> WSSep<'a> {
 		WSSep{ws1: Str::Str(ws1), ws2: Str::Str(ws2)}
@@ -339,6 +357,7 @@ impl<'a> Display for KeyVal<'a> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a> KeyVal<'a> {
     pub fn new_str(key: &'a str, keyval_sep: WSSep<'a>, val: Rc<RefCell<Value<'a>>>) -> KeyVal<'a> {
     	KeyVal{key: Str::Str(key), keyval_sep: keyval_sep, val: val}
@@ -368,6 +387,7 @@ impl<'a> Display for WSKeySep<'a> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a> WSKeySep<'a> {
     pub fn new_str(ws: WSSep<'a>, key: &'a str) -> WSKeySep<'a> {
     	WSKeySep{ws: ws, key: Str::Str(key)}
@@ -380,7 +400,7 @@ impl<'a> WSKeySep<'a> {
 pub fn get_last_keys(last_table: Option<&Table>, t: &Table) -> Vec<String> {
 	match last_table {
 		None => {
-			let mut last_keys = vec![];
+			let mut last_keys = vec!["$TableRoot$".to_string()];
 			for i in 0..t.keys.len() {
 				last_keys.push(string!(t.keys[i].key));
 			}
@@ -454,6 +474,7 @@ impl<'a> Display for Table<'a> {
   }
 }
 
+#[allow(dead_code)]
 impl<'a> Table<'a> {
   pub fn new_str(ws: WSSep<'a>, key: &'a str, mut subkeys: Vec<WSKeySep<'a>>) -> Table<'a> {
   	subkeys.insert(0, WSKeySep::new_str(ws, key));
@@ -506,6 +527,7 @@ impl<'a> Display for CommentNewLines<'a> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a> CommentNewLines<'a> {
     pub fn new_str(pre_ws_nl: &'a str, comment: Comment<'a>, newlines: &'a str)
     	-> CommentNewLines<'a> {

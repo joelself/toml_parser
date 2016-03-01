@@ -25,6 +25,37 @@ fn map_val_to_array_type(val: &Value) -> ArrayType {
 }
 
 impl<'a> Parser<'a> {
+
+  fn is_top_std_table(tables: &RefCell<Vec<Rc<TableType<'a>>>>) -> bool {
+    if tables.borrow().len() ==  0 {
+      return false;
+    } else {
+      let len = tables.borrow().len();
+      if let TableType::Standard(_) = *tables.borrow()[len - 1] {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  fn equal_key_length(table: Rc<TableType<'a>>, tables: &RefCell<Vec<Rc<TableType<'a>>>>) -> bool {
+    if tables.borrow().len() ==  0 {
+      return false;
+    } else {
+      match *table {
+        TableType::Array(ref t1) | TableType::Standard(ref t1) => {
+          let len = tables.borrow().len();
+          match *tables.borrow()[len - 1] {
+            TableType::Array(ref t2) | TableType::Standard(ref t2) => {
+              return t1.keys.len() == t2.keys.len();
+            }
+          }
+        }
+      }
+    }
+  }
+
   fn add_implicit_tables(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>,
     tables_index: &RefCell<Vec<usize>>, table: Rc<TableType<'a>>) {
@@ -35,55 +66,77 @@ impl<'a> Parser<'a> {
     //       And a std_table_root that points to all of it's children, neither root should
     //       be part of the key
     if len == 0 {
-      tables.borrow_mut().push(Rc::new(TableType::Array(
-        Table::new_str(WSSep::new_str("", ""), "", vec![])
+      tables.borrow_mut().push(Rc::new(TableType::Standard(
+        Table::new_str(WSSep::new_str("", ""), "$TableRoot$", vec![])
       )));
       pop = true;
       len = 1;
+      last_key.push_str("$TableRoot$");
     }
-    if let TableType::Array(ref last_at) = *tables.borrow()[len - 1]
-    {
-      if let TableType::Array(ref at) = *table {
-        let mut first = true;
-        for i in last_at.keys.len() - 1..at.keys.len() - 1 {
-          let mut borrow = map.borrow_mut();
-          let mut insert = false;
-          println!("index: {}, last_key: {}", i, last_key);
-          if let Entry::Occupied(mut o) = borrow.entry(last_key.clone()) {
-            if first {
-              insert = match &o.get_mut().subkeys {
-                &Children::Keys(ref hs_rf) => hs_rf.borrow_mut().insert(string!(at.keys[i].key)),
-                &Children::Count(ref cell) => { cell.set(cell.get() + 1); true },
-              };
-              first = false;
-            } else {
-              insert = match &o.get_mut().subkeys {
-                &Children::Keys(ref hs_rf) => hs_rf.borrow_mut().insert(string!(at.keys[i].key)),
-                _ => panic!("Implicit tables can only be Standard Tables: \"{}\"", format!("{}.{}", last_key, str!(at.keys[i].key))),
-              };
+    match *tables.borrow()[len - 1] {
+      TableType::Array(ref last_at) | TableType::Standard(ref last_at) => {
+    // if let TableType::Array(ref last_at) = *tables.borrow()[len - 1] || let TableType::Standard(ref last_at) = *tables.borrow()[len - 1]
+    // {
+        match *table {
+          TableType::Array(ref tb) | TableType::Standard(ref tb) => {
+            let mut first = true;
+            println!("last_at.keys.len() - 1: {}, tb.keys.len() - 1: {}", last_at.keys.len() - 1, tb.keys.len() - 1);
+            for i in 0..last_at.keys.len() {
+              println!("key {}: {}", i, last_at.keys[i].key);
             }
-          }
-          if last_key != "" {
-            last_key.push_str(".");
-          }
-          last_key.push_str(str!(at.keys[i].key));
-          if insert {
-            println!("insert last_key {}", last_key);
-            borrow.insert(last_key.clone(), HashValue::none_keys());
-          }
+            let mut start = last_at.keys.len();
+            if last_key == "$TableRoot$" {
+              start -= 1;
+            }
+            for i in start..tb.keys.len() {
+              let mut borrow = map.borrow_mut();
+              let mut insert = false;
+              println!("index: {}, last_key: {}", i, last_key);
+              if let Entry::Occupied(mut o) = borrow.entry(last_key.clone()) {
+                if first {
+                  insert = match &o.get_mut().subkeys {
+                    &Children::Keys(ref hs_rf) => hs_rf.borrow_mut().insert(string!(tb.keys[i].key)),
+                    &Children::Count(ref cell) => { cell.set(cell.get() + 1); true },
+                  };
+                  first = false;
+                } else {
+                  insert = match &o.get_mut().subkeys {
+                    &Children::Keys(ref hs_rf) => hs_rf.borrow_mut().insert(string!(tb.keys[i].key)),
+                    _ => panic!("Implicit tables can only be Standard Tables: \"{}\"", format!("{}.{}", last_key, str!(tb.keys[i].key))),
+                  };
+                }
+              }
+              if last_key != "$TableRoot$" {
+                last_key.push_str(".");
+              } else {
+                last_key.truncate(0);
+              }
+              last_key.push_str(str!(tb.keys[i].key));
+              if insert {
+                println!("insert last_key {}", last_key);
+                if i == tb.keys.len() - 1 {
+                  borrow.insert(last_key.clone(), HashValue::one_count());
+                } else {
+                  borrow.insert(last_key.clone(), HashValue::none_keys());
+                }
+              }
+            }
+          },
         }
       }
     }
     if pop {
       tables.borrow_mut().pop();
     }
+    println!("Returning from add_implicit_tables");
   }
 
   fn increment_array_table_index(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,) {
     let parent_key = Parser::get_key_parent(tables, tables_index);
+    println!("increment_array_table_index: {}", parent_key);
     let mut borrow = map.borrow_mut();
-    let mut entry = borrow.entry(parent_key);
+    let entry = borrow.entry(parent_key);
     if let Entry::Occupied(mut o) = entry {
       if let &Children::Count(ref c) = &o.get_mut().subkeys {
          c.set(c.get() + 1);
@@ -92,6 +145,27 @@ impl<'a> Parser<'a> {
     let len = tables_index.borrow().len();
     let last_index = tables_index.borrow()[len - 1];
     tables_index.borrow_mut()[len - 1] = last_index + 1;
+  }
+
+  fn add_to_table_set(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
+    tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>, key: &str) -> bool{
+    let parent_key = Parser::get_key_parent(tables, tables_index);
+    println!("add_to_table_set: {}", parent_key);
+    let mut borrow = map.borrow_mut();
+    let entry = borrow.entry(parent_key);
+    if let Entry::Occupied(mut o) = entry {
+      if let &Children::Keys(ref keys) = &o.get_mut().subkeys {
+        let contains = keys.borrow().contains(key);
+        if contains {
+          println!("key already exists");
+          return false;
+        } else {
+          println!("add_to_table_set--> {}", key);
+          keys.borrow_mut().insert(key.to_string());
+        }
+      }
+    }
+    return true;
   }
 
   // Table
@@ -125,26 +199,81 @@ impl<'a> Parser<'a> {
       ws2: call_m!(self.ws)             ~
            tag_s!("]")    ,
       ||{
+        let keys_len = subkeys.len() + 1;
         let res = Rc::new(TableType::Standard(Table::new_str(
           WSSep::new_str(ws1, ws2), key, subkeys
         )));
-        if self.last_array_tables.borrow().len() > 0 {
-          let last_table = &*self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1];
-          if !res.is_subtable_of(last_table) ||
-            format_tt_keys(&res) == format_tt_keys(last_table) {
-            self.errors.borrow_mut().push(ParseError::InvalidTable (
-              format_tt_keys(&res), RefCell::new(HashMap::new())
-            ));
-            self.array_error.set(true);
+        let mut error = false;
+        let keychain_len = self.keychain.borrow().len();
+        self.keychain.borrow_mut().truncate(keychain_len - keys_len);
+        if Parser::is_top_std_table(&self.last_array_tables) || Parser::equal_key_length(res.clone(), &self.last_array_tables) {
+          self.last_array_tables.borrow_mut().pop();
+          self.last_array_tables_index.borrow_mut().pop();
+        }
+        let map = RefCell::new(&mut self.map);
+        let mut table_key = "".to_string();
+        println!("Before get len");
+        let mut len = self.last_array_tables.borrow().len();
+        if len > 0 {
+          let current_key = format_tt_keys(&*res);
+          let last_key = format_tt_keys(&self.last_array_tables.borrow()[len - 1]);
+          if current_key == last_key {
+            error = true;
           } else {
-            self.array_error.set(false);
-          }
-          let full_key = format_tt_keys(&res);
-          if !self.map.contains_key(&full_key) {
-            self.map.insert(full_key, HashValue::none_keys());
+            println!("Check if subtable");
+            let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
+            if !subtable {
+              loop {
+                println!("Not subtable pop {}", self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1]);
+                self.last_array_tables.borrow_mut().pop();
+                self.last_array_tables_index.borrow_mut().pop();
+                len -= 1;
+                println!("check array_tables len and subtable");
+                if len == 0 || res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]) {
+                  break;
+                }
+              }
+            }
+            if len > 0 && current_key == format_tt_keys(&self.last_array_tables.borrow()[len - 1]) {
+              error = true;
+            } else {
+              self.last_array_tables.borrow_mut().push(res.clone());
+              self.last_array_tables_index.borrow_mut().push(0);
+              table_key = Parser::get_array_table_key(&map, &self.last_array_tables, &self.last_array_tables_index);
+              println!("Standard Table Key: {}", table_key);
+              if map.borrow().contains_key(&table_key) {
+                let map_borrow = map.borrow();
+                let hash_val_opt = map_borrow.get(&table_key);
+                if let Some(ref hash_val) = hash_val_opt {
+                  if let Children::Count(_) = hash_val.subkeys {
+                    error = true;
+                  } else if let Children::Keys(ref keys) = hash_val.subkeys {
+                    if keys.borrow().len() > 0 {
+                      error = true;
+                    }
+                  }
+                }
+              }
+            }
           }
         }
-        self.last_table = Some(res.clone());
+        println!("Before error check");
+        if error {
+          self.errors.borrow_mut().push(ParseError::InvalidTable (
+            format_tt_keys(&res), RefCell::new(HashMap::new())
+          ));
+          self.array_error.set(true);
+        } else {
+          Parser::add_implicit_tables(&map, &self.last_array_tables,
+            &self.last_array_tables_index, res.clone());
+          if let TableType::Standard(ref tbl) = *res {
+            Parser::add_to_table_set(&map, &self.last_array_tables,
+              &self.last_array_tables_index, str!(tbl.keys[keys_len - 1].key));
+            self.array_error.set(false);
+            map.borrow_mut().insert(table_key, HashValue::none_keys());
+            self.last_table = Some(res.clone());
+          }
+        }
         res
       }
     )
@@ -160,36 +289,52 @@ impl<'a> Parser<'a> {
       ws2: call_m!(self.ws)             ~
            tag_s!("]]")   ,
       ||{
+        let keys_len = subkeys.len() + 1;
         let res = Rc::new(TableType::Array(Table::new_str(
           WSSep::new_str(ws1, ws2), key, subkeys
         )));
+        let keychain_len = self.keychain.borrow().len();
+        self.keychain.borrow_mut().truncate(keychain_len - keys_len);
+        if Parser::is_top_std_table(&self.last_array_tables) {
+          self.last_array_tables.borrow_mut().pop();
+          self.last_array_tables_index.borrow_mut().pop();
+        }
         {
           let map = RefCell::new(&mut self.map);
           self.array_error.set(false);
           let len = self.last_array_tables.borrow().len();
           let current_key = format_tt_keys(&*res);
           if len > 0 {
-            let len = self.last_array_tables.borrow().len();
+            let mut len = self.last_array_tables.borrow().len();
             let last_key = format_tt_keys(&self.last_array_tables.borrow()[len - 1]);
+            println!("current_key: {}, last_key: {}", current_key, last_key);
             if current_key == last_key {
+              println!("Increment array table index");
               Parser::increment_array_table_index(&map, &self.last_array_tables,
                 &self.last_array_tables_index);
             } else {
               let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
               if subtable {
+                println!("Is subtable");
                 Parser::add_implicit_tables(&map, &self.last_array_tables,
                   &self.last_array_tables_index, res.clone());
                 self.last_array_tables.borrow_mut().push(res.clone());
                 self.last_array_tables_index.borrow_mut().push(0);
               } else {
-                while current_key != format_tt_keys(&self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1]) {
+                println!("NOT subtable");
+                while self.last_array_tables.borrow().len() > 0 &&
+                  current_key != format_tt_keys(&self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1]) {
+                  println!("pop table");
                   self.last_array_tables.borrow_mut().pop();
                   self.last_array_tables_index.borrow_mut().pop();
                 }
-                if self.last_array_tables.borrow().len() > 0 {
+                len = self.last_array_tables.borrow().len();
+                if len > 0 {
+                  println!("Increment array table index the second");
                   Parser::increment_array_table_index(&map, &self.last_array_tables,
                     &self.last_array_tables_index);
                 } else {
+                  println!("Add implicit tables");
                   Parser::add_implicit_tables(&map, &self.last_array_tables,
                     &self.last_array_tables_index,  res.clone());
                   self.last_array_tables.borrow_mut().push(res.clone());
@@ -198,16 +343,22 @@ impl<'a> Parser<'a> {
               }
             }
           } else {
+            println!("Len == 0 add implicit tables");
             Parser::add_implicit_tables(&map, &self.last_array_tables,
               &self.last_array_tables_index, res.clone());
             self.last_array_tables.borrow_mut().push(res.clone());
             self.last_array_tables_index.borrow_mut().push(0);
           }
+          println!("Before call to get_array_table_key");
           let full_key = Parser::get_array_table_key(&map, &self.last_array_tables,
             &self.last_array_tables_index);
+          println!("After call to get_array_table_key");
           let contains_key = map.borrow().contains_key(&full_key);
           if !contains_key {
-            map.borrow_mut().insert(full_key, HashValue::none_count());
+            map.borrow_mut().insert(full_key, HashValue::none_keys());
+          } else {
+            Parser::increment_array_table_index(&map, &self.last_array_tables,
+              &self.last_array_tables_index);
           }
           self.last_table = Some(res.clone());
         }

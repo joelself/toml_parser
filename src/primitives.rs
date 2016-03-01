@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use ast::structs::{KeyVal, WSSep, Value, ErrorCode,
                    HashValue, TableType, Table, Children,
-                   format_keys, get_last_keys};
+                   get_last_keys};
 use ::types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
              Str, Bool};
 use parser::{Parser, Key, count_lines};
@@ -29,15 +29,25 @@ impl<'a> Parser<'a> {
     let mut key_parent: String = String::new();
     let last_table: Option<&Table> = None;
     let tables_len = tables_index.borrow().len();
+    let mut prev_end = 0;
     for i in 0..tables_len {
       if let &TableType::Array(ref t) = &*tables.borrow()[i] {
-        let keys = get_last_keys(last_table, t);
-        for key in keys {
-          key_parent.push_str(&key);
+        if key_parent.len() > 0 {
+          key_parent.push('.');
         }
+        let keys = get_last_keys(last_table, t);
+        for j in prev_end..keys.len() {
+          if keys[j] != "$TableRoot$" {
+            key_parent.push_str(&keys[j]);
+            if j < keys.len() - 1 {
+              key_parent.push('.');
+            }
+          }
+        }
+        prev_end = keys.len();
         let index = tables_index.borrow()[i];
         if i < tables_len - 1 {
-          key_parent.push_str(&format!("[{}].", index));
+          key_parent.push_str(&format!("[{}]", index));
         }
       }
     }
@@ -50,24 +60,37 @@ impl<'a> Parser<'a> {
     let mut full_key: String = String::new();
     let last_table: Option<&Table> = None;
     let tables_len = tables_index.borrow().len();
+    let mut prev_end = 0;
     for i in 0..tables_len {
       match  &*tables.borrow()[i] {
         &TableType::Array(ref t) => {
+          println!("Array Table: {}", t);
           let keys = get_last_keys(last_table, t);
           let len = keys.len();
-          for i in 0..len - 1 {
-            full_key.push_str(&keys[i]);
+          for j in prev_end..len - 1 {
+            println!("keys[{}] = {}", j, keys[j]);
+            full_key.push_str(&keys[j]);
             let map_borrow = map.borrow();
             let hash_value_opt = map_borrow.get(&full_key);
             match hash_value_opt {
               Some(hash_value) =>  {
                 match hash_value.subkeys {
-                  Children::Count(ref c) => full_key.push_str(&format!("[{}].", c.get())),
-                  Children::Keys(ref hs_rf) => {
-                    if hs_rf.borrow().contains(&keys[i]) {
-                      full_key.push_str(".")
+                  Children::Count(ref c) => {
+                    if full_key == "$TableRoot$" {
+                      full_key.truncate(0);
                     } else {
-                      panic!("Key does not exist in map: \"{}\"", &format!("{}.{}", full_key, &keys[i]));
+                      full_key.push_str(&format!("[{}].", c.get()))
+                    }
+                  },
+                  Children::Keys(ref hs_rf) => {
+                    if hs_rf.borrow().contains(&keys[j+1]) {
+                      if full_key == "$TableRoot$" {
+                        full_key.truncate(0);
+                      } else {
+                        full_key.push('.');
+                      }
+                    } else {
+                      panic!("Key does not exist in map: \"{}\"", &format!("{}.{}", full_key, &keys[j+1]));
                     }
                   },
                 }
@@ -75,6 +98,7 @@ impl<'a> Parser<'a> {
               None => panic!("Key does not exist in map: \"{}\"", &full_key),
             }
           }
+          prev_end = len;
           full_key.push_str(&keys[len-1]);
           let index = tables_index.borrow()[i];
           if i < tables_len - 1 {
@@ -86,12 +110,18 @@ impl<'a> Parser<'a> {
         &TableType::Standard(ref t) => {
           // Standard tables can't be nested so this has to be the last table in the vector
           let keys = get_last_keys(last_table, t);
-          for key in keys {
-            full_key.push_str(&key);
+          for j in prev_end..keys.len() - 1 {
+            if keys[j] == "$TableRoot$" {
+              continue;
+            }
+            full_key.push_str(&keys[j]);
+            full_key.push('.');
           }
+          full_key.push_str(&keys[keys.len() - 1]);
         }
       }
     }
+    println!("full_key: {}", full_key);
     full_key
   }
 
@@ -104,10 +134,10 @@ impl<'a> Parser<'a> {
         &Key::Str(ref str_str) => key.push_str(str_ref!(str_str)),
         &Key::Index(ref i) => key.push_str(&format!("[{}]", i.get())),
       }
-      if i == len - 2 {
+      if len > 1 && i == len - 2 {
         parent_key = key.clone();
       }
-      if i < len - 1 {
+      if len > 0 && i < len - 1 {
         key.push_str(".");
       }
     }
@@ -120,6 +150,7 @@ impl<'a> Parser<'a> {
 
     let array_key = Parser::get_array_table_key(map, tables, tables_index);
     let (chain_key, parent_chain_key) = Parser::get_keychain_key(keychain);
+    println!("array_key: {}, chain_key: {}, parent_chain_key: {}", array_key, chain_key, parent_chain_key);
     let mut full_key = String::new();
     let mut parent_key = String::new();
     if array_key.len() > 0 {
@@ -132,15 +163,17 @@ impl<'a> Parser<'a> {
     }
     full_key.push_str(&chain_key);
     parent_key.push_str(&parent_chain_key);
+    println!("full_key: {}, parent_key: {}", full_key, parent_key);
     return (full_key, parent_key);
   }
 
   fn insert_keyval_into_map(&mut self, val: Rc<RefCell<Value<'a>>>) {
+    println!("Insert val: {}", *(*val).borrow());
     let map = RefCell::new(&mut self.map);
     let mut insert = false;
     let mut error = false;
-    let mut full_key: String;
-    let mut parent_key: String;
+    let full_key: String;
+    let parent_key: String;
     match &self.last_table {
       // If the last table is None
       //  If the key exists
@@ -165,7 +198,7 @@ impl<'a> Parser<'a> {
       //  If the key doesn't exist add the key/value pair to the hash table
       &Some(ref ttype) => {
         match **ttype {
-          TableType::Standard(ref t) => {
+          TableType::Standard(_) => {
             self.last_array_tables.borrow_mut().push(ttype.clone());
             let tuple = Parser::get_full_key(&map, &self.last_array_tables,
               &self.last_array_tables_index, &self.keychain);
@@ -196,16 +229,18 @@ impl<'a> Parser<'a> {
     }
 
     if error {
+      println!("Error: {}", *(*val).borrow());
       self.errors.borrow_mut().push(ParseError::DuplicateKey(
         full_key, val.clone()
       ));
     } else if insert {
+      println!("Insert: {}", *(*val).borrow());
       match *val.borrow() {
         Value::InlineTable(_) => map.borrow_mut().insert(full_key.clone(), HashValue::new_keys(val.clone())),
         _                     => map.borrow_mut().insert(full_key.clone(), HashValue::new_count(val.clone())),
       };
       let mut borrow = map.borrow_mut();
-      let mut entry = borrow.entry(parent_key.clone());
+      let entry = borrow.entry(parent_key.clone());
       if let Entry::Occupied(mut o) = entry {
         match &o.get_mut().subkeys {
           &Children::Count(ref c) => c.set(c.get() + 1),
@@ -422,8 +457,10 @@ impl<'a> Parser<'a> {
       || {
         let res = KeyVal::new_str(key, ws, val);
         if self.array_error.get() {
+          println!("array_error");
           let err = self.errors.borrow_mut().pop().unwrap();
           if let ParseError::InvalidTable(_, ref map) = err {
+            println!("InvalidTable");
             map.borrow_mut().insert(res.key.to_string(), res.val.clone());
           }
           self.errors.borrow_mut().push(err);

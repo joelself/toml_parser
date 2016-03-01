@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
 use std::cell::{RefCell, Cell};
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use nom::IResult;
 use ast::structs::{Toml, ArrayType, HashValue, TableType, Value, Array, InlineTable};
@@ -53,7 +53,7 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
 	pub fn new() -> Parser<'a> {
 		let mut map = HashMap::new();
-		map.insert("".to_string(), HashValue::none_keys());
+		map.insert("$TableRoot$".to_string(), HashValue::none_keys());
 		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: map,
 						errors: RefCell::new(vec![]), leftover: "",
 						line_count: Cell::new(0), last_array_tables: RefCell::new(vec![]),
@@ -79,9 +79,13 @@ impl<'a> Parser<'a> {
 	}
 
 	pub fn print_keys_and_values(self: &Parser<'a>) {
+    let mut btree = BTreeMap::new();
 		for (k, v) in self.map.iter() {
-			println!("key: {} : value: {}", k, v);
+      btree.insert(k, v);
 		}
+    for (k, v) in btree.iter() {
+      println!("key: {} - {}", k, v);
+    }
 	}
 
 	pub fn get_result(self: &Parser<'a>) -> ParseResult<'a> {
@@ -178,7 +182,7 @@ impl<'a> Parser<'a> {
 							return Parser::reconstruct_inline_table(&mut arr_rf.borrow_mut().values[i].val, it.clone()),
 					};
 					let mut array_borrow = arr_rf.borrow_mut();
-					let mut array_val_rc = &mut array_borrow.values[i].val;
+					let array_val_rc = &mut array_borrow.values[i].val;
 					*array_val_rc.borrow_mut() = value;
 				}
 				return true;
@@ -196,8 +200,8 @@ impl<'a> Parser<'a> {
 	}
 
 	// TODO: Implement reconstruct_inline_table, remembering to rehash values
-	fn reconstruct_inline_table(val_rf: &mut Rc<RefCell<Value<'a>>>,
-		tit: Rc<Vec<(Str, TOMLValue<'a>)>>) -> bool {
+	fn reconstruct_inline_table(_val_rf: &mut Rc<RefCell<Value<'a>>>,
+		_tit: Rc<Vec<(Str, TOMLValue<'a>)>>) -> bool {
 		// match *val_rf.borrow_mut() {
 		// 	Value::InlineTable(ref mut it_rf) 	=> {
 		// 		let len = tit.len();
