@@ -47,6 +47,7 @@ pub struct Parser<'a> {
 	pub mixed_array: Cell<bool>,
 	pub failure: Cell<bool>,
 	pub string: String,
+  pub tabs: String,
 }
 
 // TODO change this to return a parser result
@@ -61,7 +62,7 @@ impl<'a> Parser<'a> {
 						last_table: None, last_array_type: RefCell::new(vec![]),
 						keychain: RefCell::new(vec![]), 
 						array_error: Cell::new(false), mixed_array: Cell::new(false),
-						failure: Cell::new(false), string: String::new()}
+						failure: Cell::new(false), string: String::new(), tabs: String::new()}
 	}
 
 	pub fn parse(mut self: Parser<'a>, input: &'a str) -> Parser<'a> {

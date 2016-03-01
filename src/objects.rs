@@ -10,6 +10,7 @@ use std::collections::hash_map::Entry;
 use std::rc::Rc;
 use std::cell::Cell;
 use nom::IResult;
+use nom;
 
 #[inline(always)]
 fn map_val_to_array_type(val: &Value) -> ArrayType {
@@ -115,7 +116,11 @@ impl<'a> Parser<'a> {
               if insert {
                 println!("insert last_key {}", last_key);
                 if i == tb.keys.len() - 1 {
-                  borrow.insert(last_key.clone(), HashValue::one_count());
+                  if let TableType::Array(_) = *table {
+                    borrow.insert(last_key.clone(), HashValue::one_count());
+                  } else {
+                    borrow.insert(last_key.clone(), HashValue::none_keys());
+                  }
                 } else {
                   borrow.insert(last_key.clone(), HashValue::none_keys());
                 }
@@ -384,7 +389,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(ws_newline<Parser<'a>, &'a str, &'a str>, self, re_find!("^( |\t|\n|(\r\n))*"));
+  method!(ws_newline<Parser<'a>, &'a str, &'a str>, mut self, re_find!("^( |\t|\n|(\r\n))*"));
 
   method!(comment_nl<Parser<'a>, &'a str, CommentNewLines>, mut self,
     chain!(
@@ -407,13 +412,10 @@ impl<'a> Parser<'a> {
   method!(comment_or_nls<Parser<'a>, &'a str, Vec<CommentOrNewLines> >, mut self,
     many1!(call_m!(self.comment_or_nl)));
   
-  // TODO: Redo this with array_sep wrapped in a complete!() ?
   method!(array_value<Parser<'a>, &'a str, ArrayValue>, mut self,
-    alt!(
-      complete!(
         chain!(
           val: call_m!(self.val)                        ~
-    array_sep: call_m!(self.array_sep)                  ~
+    array_sep: complete!(call_m!(self.array_sep))?      ~
   comment_nls: complete!(call_m!(self.comment_or_nls))  ,
           ||{
             let t = map_val_to_array_type(&*val.borrow());
@@ -425,39 +427,18 @@ impl<'a> Parser<'a> {
             self.last_array_type.borrow_mut().pop();
             self.last_array_type.borrow_mut().push(t);
             let keychain_len = self.keychain.borrow().len();
+            self.insert_keyval_into_map(val.clone());
             self.keychain.borrow_mut()[keychain_len - 1].inc();
-            // TODO: Add this key value to the hash table, just call insert_key_val_into_map(val.clone())?
-            ArrayValue::new(val, Some(array_sep),comment_nls)
+            ArrayValue::new(val, array_sep, comment_nls)
           }
         )
-      ) |
-      complete!(
-        chain!(
-          val: call_m!(self.val)                       ~
-  comment_nls: complete!(call_m!(self.comment_or_nls)) ,
-          ||{
-            let t = map_val_to_array_type(&*val.borrow());
-            let len = self.last_array_type.borrow().len();
-            if len > 0 && self.last_array_type.borrow()[len - 1] != ArrayType::None &&
-               self.last_array_type.borrow()[len - 1] != t {
-              self.mixed_array.set(true);
-            }
-            self.last_array_type.borrow_mut().pop();
-            self.last_array_type.borrow_mut().push(t);
-            let keychain_len = self.keychain.borrow().len();
-            self.keychain.borrow_mut()[keychain_len - 1].inc();
-            // TODO: Add this key value to the hash table, just call insert_key_val_into_map(val.clone())?
-            ArrayValue::new(val, None, comment_nls)
-          }
-        )
-      )
-    )
   );
 
   method!(array_values<Parser<'a>, &'a str, Vec<ArrayValue> >, mut self,
     chain!(
      vals: many0!(call_m!(self.array_value)) ,
      ||{
+        println!("Finished array values");
         let mut tmp = vec![];
         tmp.extend(vals);
         tmp
@@ -465,15 +446,25 @@ impl<'a> Parser<'a> {
     )
   );
 
-  pub fn array(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, IResult<&'a str, Rc<RefCell<Array>>>) {
+  pub fn array(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, IResult<&'a str, Rc<RefCell<Value>>>) {
     // Initialize last array type to None, we need a stack because arrays can be nested
+    println!("*** array called on input:\t\t\t{}", input);
     self.last_array_type.borrow_mut().push(ArrayType::None);
     self.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     let (tmp, res) = self.array_internal(input);
     self = tmp; // Restore self
     self.keychain.borrow_mut().pop();
     self.last_array_type.borrow_mut().pop();
-    (self, res)
+    let new_res = match res {
+      IResult::Error(e) => IResult::Error(e),
+      IResult::Incomplete(needed) => IResult::Incomplete(needed),
+      IResult::Done(left, rc_rf_array) => {
+        let rc_rf_value = Rc::new(RefCell::new(Value::Array(rc_rf_array)));
+        //self.insert_keyval_into_map(rc_rf_value.clone());
+        IResult::Done(left, rc_rf_value)
+      },
+    };
+    (self, new_res)
   }
 
   method!(pub array_internal<Parser<'a>, &'a str, Rc<RefCell<Array>> >, mut self,
@@ -484,6 +475,7 @@ impl<'a> Parser<'a> {
          cn2: call_m!(self.comment_or_nls)  ~
               tag_s!("]")                   ,
       ||{
+        println!("Close array");
        let array_result = Rc::new(RefCell::new(Array::new(array_vals, cn1, cn2)));
         if self.mixed_array.get() {
           self.mixed_array.set(false);

@@ -50,36 +50,40 @@ fn main() {
 //   "alpha",
 //   "omega"
 // ]"#);
+// let parser = parser.parse(
+// r#"[[products]]
+// name = "Hammer"
+// sku = 738594937
+
+// [[products]]
+
+// [[products]]
+// name = "Nail"
+// sku = 284758393
+// color = "gray"
+
+// [[fruit]]
+//   name = "apple"
+
+//   [fruit.physical.fizzy.phys]]
+//     color = "red"
+//     shape = "round"
+
+//   [[fruit.variety]]
+//     name = "red delicious"
+
+//   [[fruit.variety]]
+//     name = "granny smith"
+
+// [[fruit]]
+//   name = "banana"
+
+//   [[fruit.variety]]
+//     name = "plantain"
+// "#);
 let parser = parser.parse(
-r#"[[products]]
-name = "Hammer"
-sku = 738594937
-
-[[products]]
-
-[[products]]
-name = "Nail"
-sku = 284758393
-color = "gray"
-
-[[fruit]]
-  name = "apple"
-
-  [fruit.physical.fizzy.phys]]
-    color = "red"
-    shape = "round"
-
-  [[fruit.variety]]
-    name = "red delicious"
-
-  [[fruit.variety]]
-    name = "granny smith"
-
-[[fruit]]
-  name = "banana"
-
-  [[fruit.variety]]
-    name = "plantain"
+r#"[computers]
+room_A = [[1], [[2, 5], [3, 4]]]
 "#);
   // let mut new_owner = String::new();
   // new_owner.push_str("Joel Self");

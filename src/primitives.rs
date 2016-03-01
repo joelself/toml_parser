@@ -131,14 +131,16 @@ impl<'a> Parser<'a> {
     let mut parent_key = String::new();
     for i in 0..len {
       match &keychain.borrow()[i] {
-        &Key::Str(ref str_str) => key.push_str(str_ref!(str_str)),
+        &Key::Str(ref str_str) => {
+          if key.len() > 0 {
+            key.push('.');
+          }
+          key.push_str(str_ref!(str_str))
+        },
         &Key::Index(ref i) => key.push_str(&format!("[{}]", i.get())),
       }
       if len > 1 && i == len - 2 {
         parent_key = key.clone();
-      }
-      if len > 0 && i < len - 1 {
-        key.push_str(".");
       }
     }
     return (key, parent_key);
@@ -167,11 +169,12 @@ impl<'a> Parser<'a> {
     return (full_key, parent_key);
   }
 
-  fn insert_keyval_into_map(&mut self, val: Rc<RefCell<Value<'a>>>) {
+  pub fn insert_keyval_into_map(&mut self, val: Rc<RefCell<Value<'a>>>) {
     println!("Insert val: {}", *(*val).borrow());
     let map = RefCell::new(&mut self.map);
     let mut insert = false;
     let mut error = false;
+    let mut setvalue = false;
     let full_key: String;
     let parent_key: String;
     match &self.last_table {
@@ -184,8 +187,14 @@ impl<'a> Parser<'a> {
         let tuple = Parser::get_keychain_key(&self.keychain);
         full_key = tuple.0;
         parent_key = tuple.1;
-        if (*map.borrow()).contains_key(&full_key) {
-          error = true;
+        let map_borrow = map.borrow();
+        let hv_opt = map_borrow.get(&full_key);
+        if let Some(hv) = hv_opt {
+          if let Some(_) = hv.value {
+            error = true;
+          } else {
+            setvalue = true;
+          }
         } else {
           insert = true;
         }
@@ -205,11 +214,16 @@ impl<'a> Parser<'a> {
             full_key = tuple.0;
             parent_key = tuple.1;
             self.last_array_tables.borrow_mut().pop();
-            let contains_key = map.borrow().contains_key(&full_key);
-            if !contains_key {
-              insert = true;
+            let map_borrow = map.borrow();
+            let hv_opt = map_borrow.get(&full_key);
+            if let Some(hv) = hv_opt {
+              if let Some(_) = hv.value {
+                error = true;
+              } else {
+                setvalue = true;
+              }
             } else {
-              error = true;
+              insert = true;
             }
           },
           TableType::Array(_) => {
@@ -217,11 +231,16 @@ impl<'a> Parser<'a> {
               &self.last_array_tables_index, &self.keychain);
             full_key = tuple.0;
             parent_key = tuple.1;
-            let contains_key = map.borrow().contains_key(&full_key);
-            if !contains_key {
-              insert = true;
+            let map_borrow = map.borrow();
+            let hv_opt = map_borrow.get(&full_key);
+            if let Some(hv) = hv_opt {
+              if let Some(_) = hv.value {
+                error = true;
+              } else {
+                setvalue = true;
+              }
             } else {
-              error = true;
+              insert = true;
             }
           },
         }
@@ -233,20 +252,50 @@ impl<'a> Parser<'a> {
       self.errors.borrow_mut().push(ParseError::DuplicateKey(
         full_key, val.clone()
       ));
-    } else if insert {
-      println!("Insert: {}", *(*val).borrow());
-      match *val.borrow() {
-        Value::InlineTable(_) => map.borrow_mut().insert(full_key.clone(), HashValue::new_keys(val.clone())),
-        _                     => map.borrow_mut().insert(full_key.clone(), HashValue::new_count(val.clone())),
-      };
+    } else if setvalue  || insert {
+      if setvalue {
+        println!("Set existing hash value. full_key: {}, parent_key: {}, val: {}", full_key, parent_key, *(*val).borrow());
+        let mut borrow = map.borrow_mut();
+        let entry = borrow.entry(full_key.clone());
+        match entry {
+          Entry::Occupied(mut o) => {
+            println!("Children: {:?}", &o.get_mut().subkeys);
+            o.get_mut().value = Some(val.clone());
+          },
+          _ => panic!("Unreachable! Set existing hash value has no exisiting hash value."),
+        }
+      } else if insert {
+        println!("Insert full_key: {}, parent_key: {}, val: {}", full_key, parent_key, *(*val).borrow());
+        match *val.borrow() {
+          Value::InlineTable(_) => map.borrow_mut().insert(full_key.clone(), HashValue::new_keys(val.clone())),
+          _                     => map.borrow_mut().insert(full_key.clone(), HashValue::new_count(val.clone())),
+        };
+      }
+
+      // in either case update the parent and possibly grandparent
       let mut borrow = map.borrow_mut();
-      let entry = borrow.entry(parent_key.clone());
-      if let Entry::Occupied(mut o) = entry {
-        match &o.get_mut().subkeys {
-          &Children::Count(ref c) => c.set(c.get() + 1),
-          &Children::Keys(ref hs_rf) => {
-            if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
-              hs_rf.borrow_mut().insert(string_ref!(s));
+      {
+        let entry = borrow.entry(parent_key.clone());
+        match entry {
+          Entry::Occupied(mut o) => {
+            println!("Children: {:?}", &o.get_mut().subkeys);
+            match &o.get_mut().subkeys {
+              &Children::Count(ref c) => { println!("parent inc to {}", c.get() + 1); c.set(c.get() + 1) },
+              &Children::Keys(ref hs_rf) => {
+                if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
+                  hs_rf.borrow_mut().insert(string_ref!(s));
+                }
+              },
+            }
+          },
+          Entry::Vacant(v) => {
+            println!("vacant parent");
+            if let Key::Index(_) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
+              println!("initialize to 1");
+              v.insert(HashValue::one_count());
+            } else if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
+              println!("initialize to string: {}", s);
+              v.insert(HashValue::one_keys(string_ref!(s)));
             }
           },
         }
@@ -255,31 +304,31 @@ impl<'a> Parser<'a> {
   }
 
   // Integer
-  method!(integer<Parser<'a>, &'a str, &'a str>, self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
+  method!(integer<Parser<'a>, &'a str, &'a str>, mut self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
 
   // Float
-  method!(float<Parser<'a>, &'a str, &'a str>, self,
+  method!(float<Parser<'a>, &'a str, &'a str>, mut self,
          re_find!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
 
   // String
   // TODO: method!(string<&'a str, &'a str>, alt!(basic_string | ml_basic_string | literal_string | ml_literal_string));
 
   // Basic String
-  method!(raw_basic_string<Parser<'a>, &'a str, &'a str>, self,
+  method!(raw_basic_string<Parser<'a>, &'a str, &'a str>, mut self,
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*?\""));
   // Multiline Basic String
   // TODO: Convert this to take_while_s using a function that increments self.linecount
-  method!(raw_ml_basic_string<Parser<'a>, &'a str, &'a str>, self,
+  method!(raw_ml_basic_string<Parser<'a>, &'a str, &'a str>, mut self,
     chain!(
    string: re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*?\"\"\""),
       ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
     )
   );
   // Literal String
-  method!(raw_literal_string<Parser<'a>, &'a str, &'a str>, self, re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
+  method!(raw_literal_string<Parser<'a>, &'a str, &'a str>, mut self, re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
   // Multiline Literal String
   // TODO: Convert to take_while_s using a function that increments self.linecount
-  method!(raw_ml_literal_string<Parser<'a>, &'a str, &'a str>, self,
+  method!(raw_ml_literal_string<Parser<'a>, &'a str, &'a str>, mut self,
     chain!(
    string: re_find!("^'''(	|[ -􏿿]|\n|(\r\n))*?'''"),
       ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
@@ -341,14 +390,14 @@ impl<'a> Parser<'a> {
 
   // TODO: Allow alternate casing, but report it as an error
   // Boolean
-  method!(boolean<Parser<'a>, &'a str, Bool>, self, alt!(complete!(tag_s!("false")) => {|_| Bool::False} |
+  method!(boolean<Parser<'a>, &'a str, Bool>, mut self, alt!(complete!(tag_s!("false")) => {|_| Bool::False} |
                                                          complete!(tag_s!("true"))  => {|_| Bool::True}));
 
 
   // Datetime
   // I use re_capture here because I only want the number without the dot. It captures the entire match
   // in the 0th position and the first capture group in the 1st position
-  method!(fractional<Parser<'a>, &'a str, Vec<&'a str> >, self, re_capture!("^\\.([0-9]+)"));
+  method!(fractional<Parser<'a>, &'a str, Vec<&'a str> >, mut self, re_capture!("^\\.([0-9]+)"));
 
   method!(time<Parser<'a>, &'a str, Time>, mut self,
     chain!(
@@ -371,7 +420,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(time_offset_amount<Parser<'a>, &'a str, TimeOffsetAmount >, self,
+  method!(time_offset_amount<Parser<'a>, &'a str, TimeOffsetAmount >, mut self,
     chain!(
   pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
      hour: re_find!("^[0-9]{2}")                                  ~
@@ -390,7 +439,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(date<Parser<'a>, &'a str, Date>, self,
+  method!(date<Parser<'a>, &'a str, Date>, mut self,
     chain!(
      year: re_find!("^([0-9]{4})") ~
            tag_s!("-") ~
@@ -414,8 +463,8 @@ impl<'a> Parser<'a> {
   );
 
   // Key-Value pairs
-  method!(unquoted_key<Parser<'a>, &'a str, &'a str>, self, take_while1_s!(is_keychar));
-  method!(quoted_key<Parser<'a>, &'a str, &'a str>, self,
+  method!(unquoted_key<Parser<'a>, &'a str, &'a str>, mut self, take_while1_s!(is_keychar));
+  method!(quoted_key<Parser<'a>, &'a str, &'a str>, mut self,
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
   method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(
@@ -439,7 +488,13 @@ impl<'a> Parser<'a> {
 
   method!(pub val<Parser<'a>, &'a str, Rc<RefCell<Value>> >, mut self,
     alt!(
-      complete!(call_m!(self.array))        => {|arr|   Rc::new(RefCell::new(Value::Array(arr)))}             |
+      complete!(chain!(
+        peek!(tag_not_s!("]")) ~ 
+ arr: call_m!(self.array)       ,
+            ||{
+              arr
+            }
+      ))                                     => {|arr|   arr}             |
       complete!(call_m!(self.inline_table)) => {|it|    Rc::new(RefCell::new(Value::InlineTable(it)))}        |
       complete!(call_m!(self.date_time))    => {|dt|    Rc::new(RefCell::new(Value::DateTime(dt)))}           |
       complete!(call_m!(self.float))        => {|flt|   Rc::new(RefCell::new(Value::Float(Str::Str(flt))))}   |
@@ -465,7 +520,10 @@ impl<'a> Parser<'a> {
           }
           self.errors.borrow_mut().push(err);
         } else {
-            self.insert_keyval_into_map(res.val.clone());
+          match *res.val.borrow() {
+            Value::Array(_) => (),
+            _ => self.insert_keyval_into_map(res.val.clone()),
+          }
         }
         self.keychain.borrow_mut().pop();
         res

@@ -197,6 +197,14 @@ impl<'a> HashValue<'a> {
 			subkeys: Children::Keys(RefCell::new(HashSet::new())),
 		}
 	}
+  pub fn one_keys(key: String) -> HashValue<'a> {
+    let mut set = HashSet::new();
+    set.insert(key);
+    HashValue {
+      value: None,
+      subkeys: Children::Keys(RefCell::new(set)),
+    }
+  }
 	pub fn new_count(value: Rc<RefCell<Value<'a>>>) -> HashValue<'a> {
 		HashValue {
 			value: Some(value),
