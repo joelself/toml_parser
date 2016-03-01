@@ -20,13 +20,13 @@
 
 * objects.rs
 	- [x] In array_table when adding to existing table get_key_parent and add the new index as a child in the map, then add full_key to the map with None value
-	- [ ] Fix add_implicit_tables
-	- [ ] In array_table if table keys imply subtables that don't exist, add the implied tables as std_tables to the map with None value and add add their subkeys as children (partially done)
-	- [ ] In std_table if table keys imply subtables that don't exist, add the implied tables as std_tables to the map with None value and add add their subkeys as children
-	- [ ] In array_table if get_key_parent exists and has no indexed children, then it is an error (see toml-test/invalid/table_array_implicit)
-	- [ ] In array_table when encountering a new table that isn't a subtable of the last table, rebuild last_array_tables and last_array_tables_index by starting at the first subkey, looking up it's children and so-on, if the array_table already exists
+	- [x] Fix add_implicit_tables
+	- [x] In array_table if table keys imply subtables that don't exist, add the implied tables as std_tables to the map with None value and add add their subkeys as children (partially done)
+	- [x] In std_table if table keys imply subtables that don't exist, add the implied tables as std_tables to the map with None value and add add their subkeys as children
+	- [x] In array_table if get_key_parent exists and has no indexed children, then it is an error (see toml-test/invalid/table_array_implicit)
+	- [x] In array_table when encountering a new table that isn't a subtable of the last table, rebuild last_array_tables and last_array_tables_index by starting at the first subkey, looking up it's children and so-on, if the array_table already exists
 	- [x] In array_table always add new table to map with None value
-	- [ ] In std_table always add new table to map with None value
+	- [x] In std_table always add new table to map with None value
 	- [ ] In array_value insert_key_val_into_map
 
 * parser.rs

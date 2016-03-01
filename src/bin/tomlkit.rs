@@ -65,7 +65,7 @@ color = "gray"
 [[fruit]]
   name = "apple"
 
-  [fruit.physical]
+  [fruit.physical.fizzy.phys]]
     color = "red"
     shape = "round"
 
@@ -80,23 +80,6 @@ color = "gray"
 
   [[fruit.variety]]
     name = "plantain"
-[[albums]]
-name = "Born to Run"
-
-  [[albums.songs]]
-  name = "Jungleland"
-
-  [[albums.songs]]
-  name = "Meeting Across the River"
-
-[[albums]]
-name = "Born in the USA"
-  
-  [[albums.songs]]
-  name = "Glory Days"
-
-  [[albums.songs]]
-  name = "Dancing in the Dark"
 "#);
   // let mut new_owner = String::new();
   // new_owner.push_str("Joel Self");

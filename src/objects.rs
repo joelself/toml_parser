@@ -240,6 +240,8 @@ impl<'a> Parser<'a> {
               self.last_array_tables.borrow_mut().push(res.clone());
               self.last_array_tables_index.borrow_mut().push(0);
               table_key = Parser::get_array_table_key(&map, &self.last_array_tables, &self.last_array_tables_index);
+              self.last_array_tables.borrow_mut().pop();
+              self.last_array_tables_index.borrow_mut().pop();
               println!("Standard Table Key: {}", table_key);
               if map.borrow().contains_key(&table_key) {
                 let map_borrow = map.borrow();
@@ -271,6 +273,8 @@ impl<'a> Parser<'a> {
               &self.last_array_tables_index, str!(tbl.keys[keys_len - 1].key));
             self.array_error.set(false);
             map.borrow_mut().insert(table_key, HashValue::none_keys());
+            self.last_array_tables.borrow_mut().push(res.clone());
+            self.last_array_tables_index.borrow_mut().push(0);
             self.last_table = Some(res.clone());
           }
         }
