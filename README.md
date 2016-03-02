@@ -19,9 +19,9 @@ Next steps for the first release are:
 - [x] Unit tests for all parsers that don't have them yet
 - [x] ***Add macros to [nom](https://github.com/joelself/nom/tree/methods) that produce and consume methods***
 - [x] An integration test method that will iterate through each toml file in the assets directory (which includes the toml-test valid tests and the toml examples mentioned in the README), parse the file, then reconstruct it and compare it to the original.
-- [ ] Value look-up (*Finished, but reimplementing to allow direct look-up inside arrays and inline tables*)
-  - [ ] Sub-key list for arrays and inline tables only (*Finished, but reimplementing keying, see above*)
-- [ ] Value modification (*In progress*)
+- [x] Value look-up
+  - [x] Sub-key list ~~for arrays and inline tables only~~ *for **any** key or partial key*
+- [ ] Value modification (All values, except arrays and inline tables can be modified)
   - [ ] Value add/delete for arrays only
   - [ ] Key/Value add/delete for inline tables only
 - [ ] Key modification for inline tables (general key modification moved to 0.2)
