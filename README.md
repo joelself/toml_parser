@@ -1,5 +1,5 @@
 ![tomllib logo](https://dislocal.com/wp-content/uploads/2016/01/tomllib_logo1.svg)          ![tomlkit logo](https://dislocal.com/wp-content/uploads/2016/01/tomlkit_logo1.svg)
-
+#### I wrote a blog post about my adventures in creating method macros in __nom__. [Give it a read](https://wp.me/p6Zr8J-3g)!
 ## `tomllib` is a parser, modifier, and generator for TOML files ***that doesn't judge you***! 
 
 ######It is written in Rust using [nom](https://github.com/Geal/nom). `tomlkit` is the command line tool that has the same functionality as the library  (but doesn't actually exist yet, but then again neither does the library).
