@@ -11,6 +11,10 @@ features = ["regexp"]
 # Uncomment these, and comment out the regexp feature to turn on statically compiled regexes
 #features = ["regexp_macros"]
 #[dependencies.regex_macros]
+[dependencies.log]
+version = "^0.3.5"
+[dependencies.env_logger]
+version = "^0.3.2"
 
 [[bin]]
 name = "tomlkit"

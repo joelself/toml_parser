@@ -10,7 +10,6 @@ use std::collections::hash_map::Entry;
 use std::rc::Rc;
 use std::cell::Cell;
 use nom::IResult;
-use nom;
 
 #[inline(always)]
 fn map_val_to_array_type(val: &Value) -> ArrayType {
@@ -389,7 +388,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(ws_newline<Parser<'a>, &'a str, &'a str>, mut self, re_find!("^( |\t|\n|(\r\n))*"));
+  method!(ws_newline<Parser<'a>, &'a str, &'a str>, self, re_find!("^( |\t|\n|(\r\n))*"));
 
   method!(comment_nl<Parser<'a>, &'a str, CommentNewLines>, mut self,
     chain!(
@@ -446,7 +445,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  pub fn array(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, IResult<&'a str, Rc<RefCell<Value>>>) {
+  pub fn array(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, IResult<&'a str, Rc<RefCell<Array>>>) {
     // Initialize last array type to None, we need a stack because arrays can be nested
     println!("*** array called on input:\t\t\t{}", input);
     self.last_array_type.borrow_mut().push(ArrayType::None);
@@ -455,16 +454,7 @@ impl<'a> Parser<'a> {
     self = tmp; // Restore self
     self.keychain.borrow_mut().pop();
     self.last_array_type.borrow_mut().pop();
-    let new_res = match res {
-      IResult::Error(e) => IResult::Error(e),
-      IResult::Incomplete(needed) => IResult::Incomplete(needed),
-      IResult::Done(left, rc_rf_array) => {
-        let rc_rf_value = Rc::new(RefCell::new(Value::Array(rc_rf_array)));
-        //self.insert_keyval_into_map(rc_rf_value.clone());
-        IResult::Done(left, rc_rf_value)
-      },
-    };
-    (self, new_res)
+    (self, res)
   }
 
   method!(pub array_internal<Parser<'a>, &'a str, Rc<RefCell<Array>> >, mut self,

@@ -304,31 +304,31 @@ impl<'a> Parser<'a> {
   }
 
   // Integer
-  method!(integer<Parser<'a>, &'a str, &'a str>, mut self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
+  method!(integer<Parser<'a>, &'a str, &'a str>, self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
 
   // Float
-  method!(float<Parser<'a>, &'a str, &'a str>, mut self,
+  method!(float<Parser<'a>, &'a str, &'a str>, self,
          re_find!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
 
   // String
   // TODO: method!(string<&'a str, &'a str>, alt!(basic_string | ml_basic_string | literal_string | ml_literal_string));
 
   // Basic String
-  method!(raw_basic_string<Parser<'a>, &'a str, &'a str>, mut self,
+  method!(raw_basic_string<Parser<'a>, &'a str, &'a str>, self,
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*?\""));
   // Multiline Basic String
   // TODO: Convert this to take_while_s using a function that increments self.linecount
-  method!(raw_ml_basic_string<Parser<'a>, &'a str, &'a str>, mut self,
+  method!(raw_ml_basic_string<Parser<'a>, &'a str, &'a str>, self,
     chain!(
    string: re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*?\"\"\""),
       ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
     )
   );
   // Literal String
-  method!(raw_literal_string<Parser<'a>, &'a str, &'a str>, mut self, re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
+  method!(raw_literal_string<Parser<'a>, &'a str, &'a str>, self, re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
   // Multiline Literal String
   // TODO: Convert to take_while_s using a function that increments self.linecount
-  method!(raw_ml_literal_string<Parser<'a>, &'a str, &'a str>, mut self,
+  method!(raw_ml_literal_string<Parser<'a>, &'a str, &'a str>, self,
     chain!(
    string: re_find!("^'''(	|[ -􏿿]|\n|(\r\n))*?'''"),
       ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
@@ -390,14 +390,14 @@ impl<'a> Parser<'a> {
 
   // TODO: Allow alternate casing, but report it as an error
   // Boolean
-  method!(boolean<Parser<'a>, &'a str, Bool>, mut self, alt!(complete!(tag_s!("false")) => {|_| Bool::False} |
+  method!(boolean<Parser<'a>, &'a str, Bool>, self, alt!(complete!(tag_s!("false")) => {|_| Bool::False} |
                                                          complete!(tag_s!("true"))  => {|_| Bool::True}));
 
 
   // Datetime
   // I use re_capture here because I only want the number without the dot. It captures the entire match
   // in the 0th position and the first capture group in the 1st position
-  method!(fractional<Parser<'a>, &'a str, Vec<&'a str> >, mut self, re_capture!("^\\.([0-9]+)"));
+  method!(fractional<Parser<'a>, &'a str, Vec<&'a str> >, self, re_capture!("^\\.([0-9]+)"));
 
   method!(time<Parser<'a>, &'a str, Time>, mut self,
     chain!(
@@ -420,7 +420,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(time_offset_amount<Parser<'a>, &'a str, TimeOffsetAmount >, mut self,
+  method!(time_offset_amount<Parser<'a>, &'a str, TimeOffsetAmount >, self,
     chain!(
   pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
      hour: re_find!("^[0-9]{2}")                                  ~
@@ -439,7 +439,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(date<Parser<'a>, &'a str, Date>, mut self,
+  method!(date<Parser<'a>, &'a str, Date>, self,
     chain!(
      year: re_find!("^([0-9]{4})") ~
            tag_s!("-") ~
@@ -463,8 +463,8 @@ impl<'a> Parser<'a> {
   );
 
   // Key-Value pairs
-  method!(unquoted_key<Parser<'a>, &'a str, &'a str>, mut self, take_while1_s!(is_keychar));
-  method!(quoted_key<Parser<'a>, &'a str, &'a str>, mut self,
+  method!(unquoted_key<Parser<'a>, &'a str, &'a str>, self, take_while1_s!(is_keychar));
+  method!(quoted_key<Parser<'a>, &'a str, &'a str>, self,
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
   method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(
@@ -488,13 +488,7 @@ impl<'a> Parser<'a> {
 
   method!(pub val<Parser<'a>, &'a str, Rc<RefCell<Value>> >, mut self,
     alt!(
-      complete!(chain!(
-        peek!(tag_not_s!("]")) ~ 
- arr: call_m!(self.array)       ,
-            ||{
-              arr
-            }
-      ))                                     => {|arr|   arr}             |
+      complete!(call_m!(self.array))        => {|arr|   Rc::new(RefCell::new(Value::Array(arr)))}             |
       complete!(call_m!(self.inline_table)) => {|it|    Rc::new(RefCell::new(Value::InlineTable(it)))}        |
       complete!(call_m!(self.date_time))    => {|dt|    Rc::new(RefCell::new(Value::DateTime(dt)))}           |
       complete!(call_m!(self.float))        => {|flt|   Rc::new(RefCell::new(Value::Float(Str::Str(flt))))}   |
@@ -521,7 +515,6 @@ impl<'a> Parser<'a> {
           self.errors.borrow_mut().push(err);
         } else {
           match *res.val.borrow() {
-            Value::Array(_) => (),
             _ => self.insert_keyval_into_map(res.val.clone()),
           }
         }

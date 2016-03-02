@@ -696,7 +696,7 @@ impl<'a> Display for InlineTable<'a> {
 			try!(write!(f, "{},", self.keyvals[i]));
 		}
 		if self.keyvals.len() > 0 {
-			try!(write!(f, "{},", self.keyvals[self.keyvals.len() - 1]));
+			try!(write!(f, "{}", self.keyvals[self.keyvals.len() - 1]));
 		}
 		write!(f, "{}}}", self.ws.ws2)
   }

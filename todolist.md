@@ -27,7 +27,7 @@
 	- [x] In array_table when encountering a new table that isn't a subtable of the last table, rebuild last_array_tables and last_array_tables_index by starting at the first subkey, looking up it's children and so-on, if the array_table already exists
 	- [x] In array_table always add new table to map with None value
 	- [x] In std_table always add new table to map with None value
-	- [ ] In array_value insert_key_val_into_map
+	- [x] In array_value insert_key_val_into_map
 
 * parser.rs
 	- [x] Change Key::Str to just hold a Str

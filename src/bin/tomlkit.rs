@@ -1,10 +1,13 @@
 extern crate tomllib;
+#[macro_use] extern crate log;
+extern crate env_logger;
 //use std::rc::Rc;
 use tomllib::parser::Parser;
 //use tomllib::types::{StrType, TOMLValue, TimeOffsetAmount, TimeOffset,
 //                     DateTime, Date, Time, Str};
 
 fn main() {
+  env_logger::init().unwrap();
 	let parser = Parser::new();
 // 	let mut parser = parser.parse(r#"# This is a TOML document.
 
@@ -50,23 +53,23 @@ fn main() {
 //   "alpha",
 //   "omega"
 // ]"#);
-// let parser = parser.parse(
-// r#"[[products]]
-// name = "Hammer"
-// sku = 738594937
+let parser = parser.parse(
+r#"[[products]]
+name = { first = "Bob", last = "Jones" }
+sku = 738594937
 
-// [[products]]
+[[products]]
 
-// [[products]]
-// name = "Nail"
-// sku = 284758393
-// color = "gray"
+[[products]]
+name = "Nail"
+sku = 284758393
+colors = { one = "green", two = { some = "thing", any = [1.1, {deeply = "nested", twoplustwo = 5.5 }]}, three = 8.9 }
 
-// [[fruit]]
-//   name = "apple"
+ [[fruit]]
+   name = [4, 5]
 
-//   [fruit.physical.fizzy.phys]]
-//     color = "red"
+   [fruit.physical.fizzy.phys]
+     color = ["tree", {lego = "block", fun = [6.6, [7.7]]}]"#);
 //     shape = "round"
 
 //   [[fruit.variety]]
@@ -80,11 +83,11 @@ fn main() {
 
 //   [[fruit.variety]]
 //     name = "plantain"
+//"#);
+// let parser = parser.parse(
+// r#"[computers]
+// room_A = [[1], [[2, 5], [3, 4]]]
 // "#);
-let parser = parser.parse(
-r#"[computers]
-room_A = [[1], [[2, 5], [3, 4]]]
-"#);
   // let mut new_owner = String::new();
   // new_owner.push_str("Joel Self");
 	// println!("{}", parser.get_value("database.server".to_string()).unwrap());
