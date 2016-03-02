@@ -6,7 +6,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use nom::IResult;
 use ast::structs::{Toml, ArrayType, HashValue, TableType, Value, Array, InlineTable};
-use types::{ParseError, ParseResult, TOMLValue, Str};
+use types::{ParseError, ParseResult, TOMLValue, Str, Children};
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
 named!(all_lines<&str, Vec<&str> >, many0!(full_line));
@@ -46,8 +46,6 @@ pub struct Parser<'a> {
 	pub array_error: Cell<bool>,
 	pub mixed_array: Cell<bool>,
 	pub failure: Cell<bool>,
-	pub string: String,
-  pub tabs: String,
 }
 
 // TODO change this to return a parser result
@@ -62,7 +60,7 @@ impl<'a> Parser<'a> {
 						last_table: None, last_array_type: RefCell::new(vec![]),
 						keychain: RefCell::new(vec![]), 
 						array_error: Cell::new(false), mixed_array: Cell::new(false),
-						failure: Cell::new(false), string: String::new(), tabs: String::new()}
+						failure: Cell::new(false)}
 	}
 
 	pub fn parse(mut self: Parser<'a>, input: &'a str) -> Parser<'a> {
@@ -108,7 +106,7 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	pub fn get_value(self: &mut Parser<'a>, key: String) -> Option<TOMLValue<'a>> {
+	pub fn get_value(self: &Parser<'a>, key: String) -> Option<TOMLValue<'a>> {
 		if self.map.contains_key(&key) {
 			let hashval = self.map.get(&key).unwrap();
 			let clone = hashval.clone();
@@ -122,6 +120,14 @@ impl<'a> Parser<'a> {
 		}
 	}
 
+  pub fn get_children(self: &Parser<'a>, key: String) -> Option<&Children> {
+    if self.map.contains_key(&key) {
+      let hashval = self.map.get(&key).unwrap();
+      return Some(&hashval.subkeys);
+    } else {
+      None
+    }
+  }
 
 	pub fn set_value(self: &mut Parser<'a>, key: String, tval: TOMLValue<'a>) -> bool {
 		let rf_map = RefCell::new(&mut self.map);

@@ -33,17 +33,11 @@
 	- [x] Change Key::Str to just hold a Str
 	- [ ] Implement reconstruct_inline_table
 	- [ ] Need to rehash keys values when reconstituting tables and arrays when their keys or structure has changed and also change their parent's children
-		- [ ] Array is replaced with scalar => remove keys for replaced array values
-		- [ ] Scalar is replaced with array => add new keys for new array values
-		- [ ] Array is truncated => remove keys for values that were removed
-		- [ ] Array is lengthened => add keys for new values that were added
-		- [ ] Inline table is replaced with a scalar => remove keys for replaced inline table key/values
-		- [ ] Scalar is replaced with inline table => add new keys for new inline table key/values
-		- [ ] Inline table is truncated => remove keys for values that were removed
-		- [ ] inline table is lengthened => add keys for new values that were added
-		- [ ] Implement default formatting for lengthened arrays
-		- [ ] Implement default formatting for lengthened inline-tables (TOML already suggests a default formatting)
+		- [ ] For this version when changing an array or inline table, compare the structure of the original and new structures, if they are the same then just change values in the hash table
+		- [ ] If the structure of a new inline table or array is different than what it is replacing then traverse the hash table and remove the existing structure entirely, this will be easier to implement than trying to preserve the what structure we can
+			- [ ] Add the inline table or array with new structure as a fresh table/array with default formatting
 	- [ ] Implement get_errors
+	- [x] Implement get_children
 	- [ ] Add unit tests for getting values
 	- [ ] Add unit tests for setting values
 	- [ ] Add unit tests to check the map to make sure removed keys are gone

@@ -1,9 +1,9 @@
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    CommentOrNewLines, ArrayValue, Array, Value,
                    InlineTable, WSSep, TableKeyVal, ArrayType,
-                   HashValue, Children, format_tt_keys};
+                   HashValue, format_tt_keys};
 use parser::{Parser, Key};
-use types::{ParseError, Str};
+use types::{ParseError, Str, Children};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;

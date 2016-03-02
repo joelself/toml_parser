@@ -1,8 +1,8 @@
 use ast::structs::Value;
-use std::collections::HashMap;
+use std::collections::{HashSet, HashMap};
 use std::hash::Hasher;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::fmt::Display;
 
@@ -37,6 +37,12 @@ impl Display for Bool {
 			write!(f, "true")
 		}
 	}
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub enum Children {
+  Count(Cell<usize>),
+  Keys(RefCell<HashSet<String>>)
 }
 
 #[derive(Debug, PartialEq, Eq)]

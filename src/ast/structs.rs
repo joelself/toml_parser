@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::collections::HashSet;
 use std::option::Option;
-use ::types::{DateTime, StrType, Str, Bool};
+use ::types::{DateTime, StrType, Str, Bool, Children};
 
 
 /// Compares two Options that contain comparable structs
@@ -144,12 +144,6 @@ pub enum ArrayType {
 	String,
 	InlineTable,
 	None,
-}
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub enum Children {
-	Count(Cell<usize>),
-	Keys(RefCell<HashSet<String>>)
 }
 
 // impl PartialEq for Children {
@@ -665,7 +659,7 @@ impl<'a> PartialEq for TableKeyVal<'a> {
 
 impl<'a> Display for TableKeyVal<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	write!(f, "{}{}{}", self.keyval, self.kv_sep.ws1, self.kv_sep.ws2)
+    	write!(f, "{}{}{}", self.kv_sep.ws1, self.keyval, self.kv_sep.ws2)
     }
 }
 

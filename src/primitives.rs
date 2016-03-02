@@ -3,10 +3,10 @@ use std::rc::Rc;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use ast::structs::{KeyVal, WSSep, Value, ErrorCode,
-                   HashValue, TableType, Table, Children,
+                   HashValue, TableType, Table,
                    get_last_keys};
 use ::types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
-             Str, Bool};
+             Str, Bool, Children};
 use parser::{Parser, Key, count_lines};
 use nom;
 use nom::{IResult, InputLength};

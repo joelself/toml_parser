@@ -3,8 +3,8 @@ extern crate tomllib;
 extern crate env_logger;
 //use std::rc::Rc;
 use tomllib::parser::Parser;
-//use tomllib::types::{StrType, TOMLValue, TimeOffsetAmount, TimeOffset,
-//                     DateTime, Date, Time, Str};
+use tomllib::types::{StrType, TOMLValue, TimeOffsetAmount, TimeOffset,
+                     DateTime, Date, Time, Str};
 
 fn main() {
   env_logger::init().unwrap();
@@ -53,7 +53,7 @@ fn main() {
 //   "alpha",
 //   "omega"
 // ]"#);
-let parser = parser.parse(
+let mut parser = parser.parse(
 r#"[[products]]
 name = { first = "Bob", last = "Jones" }
 sku = 738594937
@@ -90,7 +90,37 @@ colors = { one = "green", two = { some = "thing", any = [1.1, {deeply = "nested"
 // "#);
   // let mut new_owner = String::new();
   // new_owner.push_str("Joel Self");
-	// println!("{}", parser.get_value("database.server".to_string()).unwrap());
+  println!("{}", parser.get_value("fruit[0].name[1]".to_string()).unwrap());
+  println!("{}", parser.get_value("fruit[0].physical.fizzy.phys.color".to_string()).unwrap());
+  println!("{}", parser.get_value("fruit[0].physical.fizzy.phys.color[1].fun[0]".to_string()).unwrap());
+  println!("{}", parser.get_value("products[2].colors.two.some".to_string()).unwrap());
+
+  println!("{}", parser.set_value("fruit[0].name[1]".to_string(),
+    TOMLValue::String(Str::String("brains".to_string()), StrType::MLLiteral)));
+  println!("{}", parser.set_value("fruit[0].physical.fizzy.phys.color".to_string(),
+    TOMLValue::Integer(Str::String("99".to_string()))));
+  println!("{}", parser.set_value("fruit[0].physical.fizzy.phys.color[1].fun[0]".to_string(),
+    TOMLValue::DateTime(DateTime::new(
+    Date::new_string("1981".to_string(), "04".to_string(), "15".to_string()),
+      Some(Time::new_string("08".to_string(), "08".to_string(), "00".to_string(), Some("005".to_string()),
+        Some(TimeOffset::Time(TimeOffsetAmount::new_string(
+          "+".to_string(), "05".to_string(), "30".to_string()
+        )))
+      ))
+    ))
+  ));
+  println!("{}", parser.set_value("products[2].colors.two.some".to_string(),
+    TOMLValue::Float(Str::String("99.999".to_string()))));
+
+
+  // println!("{}", parser.get_value("fruit[0].name[1]".to_string()).unwrap());
+  // println!("{}", parser.get_value("fruit[0].physical.fizzy.phys.color".to_string()).unwrap());
+  // println!("{}", parser.get_value("fruit[0].physical.fizzy.phys.color[1].fun[0]".to_string()).unwrap());
+  // println!("{}", parser.get_value("products[2].colors.two.some".to_string()).unwrap());
+  println!("{:?}", parser.get_children("fruit[0]".to_string()).unwrap());
+  println!("{:?}", parser.get_children("fruit[0].physical.fizzy.phys.color".to_string()).unwrap());
+  println!("{:?}", parser.get_children("products[2].colors".to_string()).unwrap());
+  println!("{:?}", parser.get_children("products[2].colors.two.any".to_string()).unwrap());
  //  parser.set_value("database.server".to_string(),
  //    TOMLValue::String(Str::String("localhost".to_string()), StrType::Basic));
  //  println!("{}", parser.get_value("database.server".to_string()).unwrap());
