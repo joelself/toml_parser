@@ -20,7 +20,7 @@ Next steps for the first release are:
 - [x] ***Add macros to [nom](https://github.com/joelself/nom/tree/methods) that produce and consume methods***
 - [x] An integration test method that will iterate through each toml file in the assets directory (which includes the toml-test valid tests and the toml examples mentioned in the README), parse the file, then reconstruct it and compare it to the original.
 - [x] Value look-up
-  - [x] Sub-key list ~~for arrays and inline tables only~~ *for **any** key or partial key*
+  - [x] Sub-key list ~~for arrays and inline tables only~~ *for __any__ key or partial key*
 - [ ] Value modification (All values, except arrays and inline tables can be modified)
   - [ ] Value add/delete for arrays only
   - [ ] Key/Value add/delete for inline tables only
