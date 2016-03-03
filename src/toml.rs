@@ -84,7 +84,7 @@ mod test {
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
                      TableType, Value, NLExpression, ArrayValue, Toml,
                      Array, CommentOrNewLines};
-  use types::{TimeOffsetAmount, DateTime, TimeOffset, StrType, Str, Bool};
+  use types::{TimeOffsetAmount, DateTime, Date, Time, TimeOffset, StrType, Str, Bool};
   use std::rc::Rc;
   use std::cell::RefCell;
   
@@ -149,11 +149,13 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", " "), Some(KeyVal::new_str(
-              "dob", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::DateTime(DateTime::new_str(
-                "1979", "05", "27", "07", "32", "00", None, TimeOffset::Time(TimeOffsetAmount::new_str(
-                  "-", "08", "00"
-                ))
-              ))))
+              "dob", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::DateTime(
+                DateTime::new(
+                  Date::new_str("1979", "05", "27"), Some(Time::new_str("07", "32", "00", None, Some(TimeOffset::Time(
+                    TimeOffsetAmount::new_str("-", "08", "00")
+                  ))))
+                )
+              )))
             )),
             None, Some(Comment::new_str(" Fïřƨƭ çℓáƨƨ δáƭèƨ"))
           )

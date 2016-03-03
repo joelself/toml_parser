@@ -517,10 +517,10 @@ mod test {
   use ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
                      KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table,
                      TableType, Value};
-  use ::types::{DateTime, TimeOffset, TimeOffsetAmount, StrType, Str};
-  use parser::Parser;
+  use ::types::{DateTime, Date, Time, TimeOffset, TimeOffsetAmount, StrType, Str};
+  use parser::{Parser, Key};
   use std::rc::Rc;
-  use std::cell::RefCell;
+  use std::cell::{RefCell, Cell};
 
   #[test]
   fn test_table() {
@@ -629,6 +629,7 @@ mod test {
   #[test]
   fn test_array_value() {
     let mut p = Parser::new();
+    p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("54.6, \n#çô₥₥èñƭ\n\n").1,
       Done("",ArrayValue::new(
         Rc::new(RefCell::new(Value::Float(Str::Str("54.6")))), Some(WSSep::new_str("", " ")),
@@ -638,12 +639,14 @@ mod test {
       ))
     );
     p = Parser::new();
+    p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("\"ƨƥáϱλèƭƭï\"").1,
       Done("",ArrayValue::new(
         Rc::new(RefCell::new(Value::String(Str::Str("ƨƥáϱλèƭƭï"), StrType::Basic))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
       ))
     );
     p = Parser::new();
+    p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("44_9 , ").1,
       Done("",ArrayValue::new(
         Rc::new(RefCell::new(Value::Integer(Str::Str("44_9")))), Some(WSSep::new_str(" ", " ")),
@@ -655,6 +658,7 @@ mod test {
   #[test]
   fn test_array_values() {
     let mut p = Parser::new();
+    p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_values("1, 2, 3").1, Done("", vec![
       ArrayValue::new(Rc::new(RefCell::new(Value::Integer(Str::Str("1")))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines(Str::Str(""))]),
@@ -663,6 +667,7 @@ mod test {
       ArrayValue::new(Rc::new(RefCell::new(Value::Integer(Str::Str("3")))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))])
     ]));
     p = Parser::new();
+    p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_values("1, 2, #çô₥₥èñƭ\n3, ").1, Done("", vec![
       ArrayValue::new(Rc::new(RefCell::new(Value::Integer(Str::Str("1")))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines(Str::Str(""))]),
@@ -679,16 +684,18 @@ mod test {
     assert_eq!(p.array("[2010-10-10T10:10:10.33Z, 1950-03-30T21:04:14.123+05:00]").1,
       Done("", Rc::new(RefCell::new(Array::new(
         vec![ArrayValue::new(
-          Rc::new(RefCell::new(Value::DateTime(DateTime::new_str("2010", "10", "10", "10", "10", "10", Some("33"),
-            TimeOffset::Zulu
-          )))),
+          Rc::new(RefCell::new(Value::DateTime(DateTime::new(
+            Date::new_str("2010", "10", "10"), Some(Time::new_str("10", "10", "10", Some("33"),
+              Some(TimeOffset::Zulu)
+          )))))),
           Some(WSSep::new_str("", " ")),
           vec![CommentOrNewLines::NewLines(Str::Str(""))]
         ),
         ArrayValue::new(
-          Rc::new(RefCell::new(Value::DateTime(DateTime::new_str("1950", "03", "30", "21", "04", "14", Some("123"),
-            TimeOffset::Time(TimeOffsetAmount::new_str("+", "05", "00"))
-          )))),
+          Rc::new(RefCell::new(Value::DateTime(DateTime::new(
+            Date::new_str("1950", "03", "30"), Some(Time::new_str("21", "04", "14", Some("123"),
+            Some(TimeOffset::Time(TimeOffsetAmount::new_str("+", "05", "00")))
+          )))))),
           None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
         )],
         vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]

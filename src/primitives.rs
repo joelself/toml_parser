@@ -528,10 +528,10 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use ast::structs::{Time, FullDate, WSSep, Array, ArrayValue, KeyVal,
+  use ast::structs::{WSSep, Array, ArrayValue, KeyVal,
                      InlineTable, TableKeyVal, Value,
                      CommentOrNewLines};
-  use ::types::{DateTime, TimeOffsetAmount, TimeOffset, StrType, Bool, Str};
+  use ::types::{DateTime, Time, Date, TimeOffsetAmount, TimeOffset, StrType, Bool, Str};
   use parser::Parser;
   use std::rc::Rc;
   use std::cell::RefCell;
@@ -623,14 +623,11 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
   #[test]
   fn test_time() {
     let mut p = Parser::new();
-    assert_eq!(p.time("11:22:33.456").1,
-      Done("", Time::new_str("11", "22", "33", Some("456")
-      ))
-    );
+    assert_eq!(p.time("T11:22:33.456").1,
+      Done("", Time::new_str("11", "22", "33", Some("456"), None)));
     p = Parser::new();
-    assert_eq!(p.time("04:05:06").1,
-      Done("", Time::new_str("04", "05", "06", None))
-    );
+    assert_eq!(p.time("T04:05:06").1,
+      Done("", Time::new_str("04", "05", "06", None, None)));
   }
 
   #[test]
@@ -654,18 +651,19 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
   #[test]
   fn test_full_date() {
     let p = Parser::new();
-    assert_eq!(p.full_date("1942-12-07").1,
-      Done("", FullDate::new_str("1942", "12", "07"))
+    assert_eq!(p.date("1942-12-07").1,
+      Done("", Date::new_str("1942", "12", "07"))
     );
   }
 
   #[test]
   fn test_date_time() {
-    let      p = Parser::new();
+    let p = Parser::new();
     assert_eq!(p.date_time("1999-03-21T20:15:44.5-07:00").1,
-      Done("", DateTime::new_str("1999", "03", "21", "20", "15", "44", Some("5"),
-        TimeOffset::Time(TimeOffsetAmount::new_str("-", "07", "00"))
-      ))
+      Done("", DateTime::new(Date::new_str("1999", "03", "21"),
+        Some(Time::new_str("20", "15", "44", Some("5"),
+          Some(TimeOffset::Time(TimeOffsetAmount::new_str("-", "07", "00")))
+      ))))
     );
   }
 
@@ -728,11 +726,10 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
         WSSep::new_str("", "")
     ))))))));
     p = Parser::new();
-    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Rc::new(RefCell::new(Value::DateTime(DateTime::new_str(
-      "2112", "09", "30", "12", "33", "01", Some("345"), TimeOffset::Time(TimeOffsetAmount::new_str(
-        "-", "11", "30"
-      ))
-    ))))));
+    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Rc::new(RefCell::new(Value::DateTime(
+      DateTime::new(Date::new_str("2112", "09", "30"), Some(Time::new_str("12", "33", "01", Some("345"),
+        Some(TimeOffset::Time(TimeOffsetAmount::new_str("-", "11", "30"))
+    )))))))));
     p = Parser::new();
     assert_eq!(p.val("3487.3289E+22").1, Done("", Rc::new(RefCell::new(Value::Float(Str::Str("3487.3289E+22"))))));
     p = Parser::new();
