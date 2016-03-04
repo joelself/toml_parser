@@ -14,8 +14,8 @@ named!(all_lines<&str, Vec<&str> >, many0!(full_line));
 pub fn count_lines(s: &str) -> u64 {
 	let r = all_lines(s);
 	match &r {
-    &IResult::Done(_, ref o) 	=> o.len() as u64,
-    _													=> 0 as u64,
+    &IResult::Done(_, ref o) => o.len() as u64,
+    _						 => 0 as u64,
 	}
 }
 
@@ -129,74 +129,141 @@ impl<'a> Parser<'a> {
     }
   }
 
-	pub fn set_value(self: &mut Parser<'a>, key: String, tval: TOMLValue<'a>) -> bool {
-		let rf_map = RefCell::new(&mut self.map);
-			let mut map_borrow = rf_map.borrow_mut();
-			let val = match map_borrow.entry(key) {
-				Entry::Occupied(entry) => entry.into_mut(),
-				_ => return false,
-			};
-			let opt_value: &mut Option<Rc<RefCell<Value<'a>>>> = &mut val.value;
-			let value_rf = match opt_value {
-				&mut Some(ref mut v) => v,
-				&mut None => return false,
-			};
-			let value = match tval {
-				TOMLValue::Integer(ref v) 	=> Value::Integer(v.clone()),
-				TOMLValue::Float(ref v)			=> Value::Float(v.clone()),
-				TOMLValue::Boolean(v) 			=> Value::Boolean(v),
-				TOMLValue::DateTime(v)			=> Value::DateTime(v.clone()),
-				TOMLValue::Array(arr)				=> return Parser::reconstruct_array(value_rf, arr),
-				TOMLValue::String(ref s, t)	=> Value::String(s.clone(), t),
-				TOMLValue::InlineTable(it)	=> return Parser::reconstruct_inline_table(value_rf, it),
-			};
-			*value_rf.borrow_mut() = value;
-			true
-	}
+  // TODO: ********* Need to figure out a way to borrow self or self.map and use it multiple
+  //       times.
+  // Move the borrow to the bottom where it is used, make reconstruct_vector a method again
+  pub fn set_value(self: &mut Parser<'a>, key: String, tval: TOMLValue<'a>) -> bool {
+    let self_rc = RefCell::new(self);
+    let mut borrow = self_rc.borrow_mut();
+    let val = match borrow.map.entry(key.clone()) {
+      Entry::Occupied(entry) => entry.into_mut(),
+      _ => return false,
+    };
+    let opt_value: &mut Option<Rc<RefCell<Value<'a>>>> = &mut val.value;
+    let value_rf = match opt_value {
+      &mut Some(ref mut v) => v,
+      &mut None => return false,
+    };
+    let value = match tval {
+      TOMLValue::Integer(ref v) 	=> Value::Integer(v.clone()),
+      TOMLValue::Float(ref v)			=> Value::Float(v.clone()),
+      TOMLValue::Boolean(v) 			=> Value::Boolean(v),
+      TOMLValue::DateTime(v)			=> Value::DateTime(v.clone()),
+      TOMLValue::Array(_)				=> return Parser::reconstruct_vector(&self_rc, key, value_rf, &tval),
+      TOMLValue::String(ref s, t)	=> Value::String(s.clone(), t),
+      TOMLValue::InlineTable(_)	=> return Parser::reconstruct_vector(&self_rc, key, value_rf, &tval),
+    };
+    *value_rf.borrow_mut() = value;
+    true
+  }
 
 	// TODO: BIG TODO: Need to rehash keys values when reconstituting inline tables and arrays if their keys
 	//                 or their structure has changed.
-	// 1. Array is replaced with scalar => remove keys for replaced array values
-	// 2. Scalar is replaced with array => add new keys for new array values
-	// 3. Array is truncated => remove keys for values that were removed
-	// 4. Array is lengthened => add keys for new values that were added
-	// 5. Inline table is replaced with a scalar => remove keys for replaced inline table key/values
-	// 6. Scalar is replaced with inline table => add new keys for new inline table key/values
-	// 7. Inline table is truncated => remove keys for values that were removed
-	// 8. inline table is lengthened => add keys for new values that were added
+  // This is is a simplified version of my previous plan:
+  // 1. Check the structure of the inline table/array
+  //   1. If the structure is the same, just go through it and replace values
+  //   2. If the structure is different, wipe out the whole array/inline table from the map
+  //      and then rebuild it, using default whitespace scheme
+  
+  fn same_structure(val_rf: &Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) -> bool {
+    match (&*val_rf.borrow(), tval) {
+      (&Value::Array(ref arr), &TOMLValue::Array(ref t_arr)) => {
+        let borrow = arr.borrow();
+        if borrow.values.len() != t_arr.len() {
+          return false;
+        }
+        let len = borrow.values.len();
+        for i in 0..len {
+          if !Parser::same_structure(&borrow.values[i].val, &t_arr[i]) {
+            return false;
+          }
+        }
+        return true;
+      },
+      (&Value::InlineTable(ref it), &TOMLValue::InlineTable(ref t_it)) => {
+        let borrow = it.borrow();
+        if borrow.keyvals.len() != t_it.len() {
+          return false;
+        }
+        let len = borrow.keyvals.len();
+        for i in 0..len {
+          if borrow.keyvals[i].keyval.key != t_it[i].0 ||
+            !Parser::same_structure(&borrow.keyvals[i].keyval.val, &t_it[i].1) {
+            return false;
+          }
+        }
+        return true;
+      },
+      (&Value::Array(_), _)           => return false, // Array replaced with scalar
+      (&Value::InlineTable(_), _)     => return false, // InlineTable replaced with scalar
+      (_, &TOMLValue::Array(_))       => return false, // scalar replaced with an Array
+      (_, &TOMLValue::InlineTable(_)) => return false, // scalar replaced with an InlineTable
+      (_,_)                           => return true,  // scalar replaced with any other scalar
+    }
+  }
 
-	fn reconstruct_array(val_rf: &mut Rc<RefCell<Value<'a>>>,
-		tval: Rc<Vec<TOMLValue<'a>>>) -> bool {
-		match *val_rf.borrow_mut() {
-			Value::Array(ref mut arr_rf) 	=> {
-				let len = tval.len();
-				if arr_rf.borrow().values.len() != len {
-					return false; // TODO: implement default formatting for replacement arrays that are
-												//       longer than the arrays they are replacing and simple array
-												//       truncation for arrays that are shorter than what they are
-												//       replacing
-				}
-				for i in 0..len {
-					let value = match tval[i] {
-						TOMLValue::Integer(ref v) 			=> Value::Integer(v.clone()),
-						TOMLValue::Float(ref v)					=> Value::Float(v.clone()),
-						TOMLValue::Boolean(v) 					=> Value::Boolean(v),
-						TOMLValue::DateTime(ref v)			=> Value::DateTime(v.clone()),
-						TOMLValue::Array(ref arr)				=> 
-							return Parser::reconstruct_array(&mut arr_rf.borrow_mut().values[i].val, arr.clone()),
-						TOMLValue::String(ref s, t)			=> Value::String(s.clone(), t),
-						TOMLValue::InlineTable(ref it)	=>
-							return Parser::reconstruct_inline_table(&mut arr_rf.borrow_mut().values[i].val, it.clone()),
-					};
-					let mut array_borrow = arr_rf.borrow_mut();
-					let array_val_rc = &mut array_borrow.values[i].val;
-					*array_val_rc.borrow_mut() = value;
-				}
-				return true;
-			},
-			_ => return false, // TODO: implement Parser::construct_array with some default formatting
+	fn reconstruct_vector(self_rc: &RefCell<&mut Parser<'a>>, key: String,
+    val_rf: &mut Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) -> bool {
+    if Parser::same_structure(val_rf, tval) {
+      Parser::replace_values(val_rf, tval);
+      true
+    } else {
+      Parser::wipe_out_key(self_rc, key);
+      true
 		}
 	}
+  
+  fn wipe_out_key(self_rc: &RefCell<&mut Parser<'a>>, key: String) {
+    let borrow = self_rc.borrow();
+    let hv_opt = borrow.map.get(&key);
+    if let Some(hv) = hv_opt {
+      let children = &hv.subkeys;
+      match children {
+        &Children::Count(ref cell) => {
+          for i in 0..cell.get() {
+            let subkey = format!("{}[{}]", key, i);
+            Parser::wipe_out_key(self_rc, subkey.clone());
+            self_rc.borrow_mut().map.remove(&subkey);
+          }
+        },
+        &Children::Keys(ref rc_hs) => {
+          for childkey in rc_hs.borrow().iter(){
+            let subkey = format!("{}.{}", key, childkey);
+            Parser::wipe_out_key(self_rc, subkey.clone());
+            self_rc.borrow_mut().map.remove(&subkey);
+          }
+        },
+      }
+    }
+  }
+  
+  fn replace_values(val_rf: &Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) {
+    let value = match (&*val_rf.borrow(), tval) {
+      (&Value::Array(ref arr), &TOMLValue::Array(ref t_arr)) => {
+        let borrow = arr.borrow();
+        let len = borrow.values.len();
+        for i in 0..len {
+          Parser::replace_values(&borrow.values[i].val, &t_arr[i]);
+        }
+        return;
+      },
+      (&Value::InlineTable(ref it), &TOMLValue::InlineTable(ref t_it)) => {
+        let borrow = it.borrow();
+        let len = borrow.keyvals.len();
+        for i in 0..len {
+          Parser::replace_values(&borrow.keyvals[i].keyval.val, &t_it[i].1);
+        }
+        return;
+      },
+      (_, &TOMLValue::Integer(ref v)) 	=> Value::Integer(v.clone()),
+      (_, &TOMLValue::Float(ref v))			=> Value::Float(v.clone()),
+      (_, &TOMLValue::Boolean(v)) 			=> Value::Boolean(v),
+      (_, &TOMLValue::DateTime(ref v))	=> Value::DateTime(v.clone()),
+      (_, &TOMLValue::String(ref s, t))	=> Value::String(s.clone(), t),
+      (_,_)                             => panic!("This code should be unreachable."),
+    };
+    *val_rf.borrow_mut() = value;
+  }
 
 	fn sanitize_array(arr: Rc<RefCell<Array<'a>>>) -> TOMLValue<'a> {
 		let mut result: Vec<TOMLValue> = vec![];
@@ -204,41 +271,6 @@ impl<'a> Parser<'a> {
 			result.push(to_tval!(&*av.val.borrow()));
 		}
 		TOMLValue::Array(Rc::new(result))
-	}
-
-	// TODO: Implement reconstruct_inline_table, remembering to rehash values
-	fn reconstruct_inline_table(_val_rf: &mut Rc<RefCell<Value<'a>>>,
-		_tit: Rc<Vec<(Str, TOMLValue<'a>)>>) -> bool {
-		// match *val_rf.borrow_mut() {
-		// 	Value::InlineTable(ref mut it_rf) 	=> {
-		// 		let len = tit.len();
-		// 		if it_rf.borrow().keyvals.len() != len {
-		// 			return false; // TODO: implement default formatting for replacement tables that are
-		// 										//       longer than the tables they are replacing and simple table
-		// 										//       truncation for tables that are shorter than what they are
-		// 										//       replacing
-		// 		}
-		// 		for i in 0..len {
-		// 			let (key, value) = match tval[i] {
-		// 				(k, TOMLValue::Integer(ref v)) 			=> (k, Value::Integer(v.clone())),
-		// 				(k, TOMLValue::Float(ref v))				=> (k, Value::Float(v.clone())),
-		// 				(k, TOMLValue::Boolean(v)) 					=> (k, Value::Boolean(v)),
-		// 				(k, TOMLValue::DateTime(ref v))			=> (k, Value::DateTime(v.clone())),
-		// 				(k, TOMLValue::Array(ref arr))			=> 
-		// 					return Parser::reconstruct_array(&mut arr_rf.borrow_mut().values[i].val, arr.clone()),
-		// 				(k, TOMLValue::String(ref s, t))		=> Value::String(s.clone(), t),
-		// 				(k, TOMLValue::InlineTable(ref it))	=>
-		// 					return Parser::reconstruct_inline_table(&mut arr_rf.borrow_mut().values[i].val, it.clone()),
-		// 			};
-		// 			let mut it_borrow = it_rf.borrow_mut();
-		// 			let mut array_val_rc = &mut it_borrow.keyvalues[i].keyval;
-		// 			*array_val_rc.borrow_mut() = value;
-		// 		}
-		// 		return true;
-		// 	},
-		// 	_ => return false, // TODO: implement Parser::construct_table with some default formatting
-		// }
-		return false;
 	}
 	
 	fn sanitize_inline_table(it: Rc<RefCell<InlineTable<'a>>>) -> TOMLValue<'a> {
