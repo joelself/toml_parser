@@ -67,11 +67,11 @@ impl<'a> Parser<'a> {
     //       be part of the key
     if len == 0 {
       tables.borrow_mut().push(Rc::new(TableType::Standard(
-        Table::new_str(WSSep::new_str("", ""), "$TableRoot$", vec![])
+        Table::new_str(WSSep::new_str("", ""), "$Root$", vec![])
       )));
       pop = true;
       len = 1;
-      last_key.push_str("$TableRoot$");
+      last_key.push_str("$Root$");
     }
     match *tables.borrow()[len - 1] {
       TableType::Array(ref last_at) | TableType::Standard(ref last_at) => {
@@ -85,7 +85,7 @@ impl<'a> Parser<'a> {
               println!("key {}: {}", i, last_at.keys[i].key);
             }
             let mut start = last_at.keys.len();
-            if last_key == "$TableRoot$" {
+            if last_key == "$Root$" {
               start -= 1;
             }
             for i in start..tb.keys.len() {
@@ -106,7 +106,7 @@ impl<'a> Parser<'a> {
                   };
                 }
               }
-              if last_key != "$TableRoot$" {
+              if last_key != "$Root$" {
                 last_key.push_str(".");
               } else {
                 last_key.truncate(0);

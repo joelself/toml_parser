@@ -31,11 +31,11 @@
 
 * parser.rs
 	- [x] Change Key::Str to just hold a Str
-	- [ ] Implement reconstruct_inline_table
-	- [ ] Need to rehash keys values when reconstituting tables and arrays when their keys or structure has changed and also change their parent's children
-		- [ ] For this version when changing an array or inline table, compare the structure of the original and new structures, if they are the same then just change values in the hash table
-		- [ ] If the structure of a new inline table or array is different than what it is replacing then traverse the hash table and remove the existing structure entirely, this will be easier to implement than trying to preserve the what structure we can
-			- [ ] Add the inline table or array with new structure as a fresh table/array with default formatting
+	- [x] Implement reconstructing InlineTables and Arrays with different structures than previous values
+    - [x] Implement wiping out all keys and values of InlineTables and Arrays with changed structure
+    - [x] Implement converting TOMLValue Arrays and InlineTables to Value Arrays and Tables
+    - [x] Implement inserting new keys and values into map
+    - [x] Implement inserting new Array or InlineTable value into AST
 	- [ ] Implement get_errors
 	- [x] Implement get_children
 	- [ ] Add unit tests for getting values

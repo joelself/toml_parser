@@ -37,7 +37,7 @@ impl<'a> Parser<'a> {
         }
         let keys = get_last_keys(last_table, t);
         for j in prev_end..keys.len() {
-          if keys[j] != "$TableRoot$" {
+          if keys[j] != "$Root$" {
             key_parent.push_str(&keys[j]);
             if j < keys.len() - 1 {
               key_parent.push('.');
@@ -76,7 +76,7 @@ impl<'a> Parser<'a> {
               Some(hash_value) =>  {
                 match hash_value.subkeys {
                   Children::Count(ref c) => {
-                    if full_key == "$TableRoot$" {
+                    if full_key == "$Root$" {
                       full_key.truncate(0);
                     } else {
                       full_key.push_str(&format!("[{}].", c.get()))
@@ -84,7 +84,7 @@ impl<'a> Parser<'a> {
                   },
                   Children::Keys(ref hs_rf) => {
                     if hs_rf.borrow().contains(&keys[j+1]) {
-                      if full_key == "$TableRoot$" {
+                      if full_key == "$Root$" {
                         full_key.truncate(0);
                       } else {
                         full_key.push('.');
@@ -111,7 +111,7 @@ impl<'a> Parser<'a> {
           // Standard tables can't be nested so this has to be the last table in the vector
           let keys = get_last_keys(last_table, t);
           for j in prev_end..keys.len() - 1 {
-            if keys[j] == "$TableRoot$" {
+            if keys[j] == "$Root$" {
               continue;
             }
             full_key.push_str(&keys[j]);

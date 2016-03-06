@@ -53,7 +53,7 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
 	pub fn new() -> Parser<'a> {
 		let mut map = HashMap::new();
-		map.insert("$TableRoot$".to_string(), HashValue::none_keys());
+		map.insert("$Root$".to_string(), HashValue::none_keys());
 		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: map,
 						errors: RefCell::new(vec![]), leftover: "",
 						line_count: Cell::new(0), last_array_tables: RefCell::new(vec![]),
@@ -147,16 +147,36 @@ impl<'a> Parser<'a> {
         return true;
       }
     }
-    println!("wipe out key");
     // if the inline table/array has a different structure, delete the existing
     // array/inline table from the map and rebuild it from the new value
     let all_keys = self.get_all_subkeys(&key);
     for key in all_keys.iter() {
-      println!("remove key: {}", key);
       self.map.remove(key);
     }
     let new_value = Parser::convert_vector(&tval);
-    self.rebuild_vector(key, Rc::new(RefCell::new(new_value)));
+    let new_value_clone = match new_value {
+      Value::Array(ref rc_rc) => {
+        Value::Array(rc_rc.clone())
+      },
+      Value::InlineTable(ref rc_rc) => {
+        Value::InlineTable(rc_rc.clone())
+      },
+      unknown => panic!("In Parser.set_value, new_value should only be an Array or InlineTable. Instead it's a {:?}", unknown),
+    };
+    if self.map.contains_key(&key) {
+      let existing_value = match self.map.entry(key.clone()) {
+        Entry::Occupied(entry) => entry.into_mut(),
+        _ => panic!("Unreachable code in rebuild vector!"),
+      };
+      let opt_value: &mut Option<Rc<RefCell<Value<'a>>>> = &mut existing_value.value;
+      let val_rf = match opt_value {
+        &mut Some(ref mut v) => v,
+        &mut None => panic!("Unreachable code in rebuild vector!"),
+      };
+      *val_rf.borrow_mut() = new_value;
+    }
+    let new_value_rc = Rc::new(RefCell::new(new_value_clone));
+    self.rebuild_vector(key.clone(), new_value_rc.clone());
     true
   }
   

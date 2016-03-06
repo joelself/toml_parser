@@ -396,7 +396,7 @@ impl<'a> WSKeySep<'a> {
 pub fn get_last_keys(last_table: Option<&Table>, t: &Table) -> Vec<String> {
 	match last_table {
 		None => {
-			let mut last_keys = vec!["$TableRoot$".to_string()];
+			let mut last_keys = vec!["$Root$".to_string()];
 			for i in 0..t.keys.len() {
 				last_keys.push(string!(t.keys[i].key));
 			}
