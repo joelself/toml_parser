@@ -21,18 +21,22 @@ Next steps for the first release are:
 - [x] An integration test method that will iterate through each toml file in the assets directory (which includes the toml-test valid tests and the toml examples mentioned in the README), parse the file, then reconstruct it and compare it to the original.
 - [x] Value look-up
   - [x] Sub-key list ~~for arrays and inline tables only~~ *for __any__ key or partial key*
-- [ ] Value modification (All values, except arrays and inline tables can be modified)
-  - [ ] Value add/delete for arrays only
-  - [ ] Key/Value add/delete for inline tables only
-- [ ] Key modification for inline tables (general key modification moved to 0.2)
-- [ ] Content validation, and non-failure error reporting (currently the parser doesn't fail on heterogeneous arrays, duplicate keys, or invalid tables because it wants to give you a chance to correct them rather than  force you to fix the original TOML by hand.) (*Mostly done*)
+- [x] Value modification
+  - [x] Value add/delete for arrays only
+  - [x] Key/Value add/delete for inline tables only
+- [x] Key modification for inline tables (general key modification moved to 0.2)
+- [ ] Content validation, and non-failure error reporting (currently the parser doesn't fail on heterogeneous arrays, duplicate keys, or invalid tables because it wants to give you a chance to correct them rather than  force you to fix the original TOML by hand.) (*I lied, not mostly done* just somewhat done)
+  - [ ] DateTime validation
+  - [ ] Value parsing on set_value (currently set_value accepts whatever you give it). "Foo Bar" is an Integer? Ok.
+- [ ] Convenience functions
+  - [ ] For creating TOMLValues, especially DateTime
+  - [ ] Combining a key and a subkey to a new key
+- [ ] Logging
 - [ ] Unit tests for key look-up
 - [ ] Unit tests for key modification
 - [ ] An integration test that fails or returns errors for each invalid toml-test
 
-It looks like a lot of stuff is left to do, but most of it is in various stages of completion, so I'm actually getting close to being done with v0.1.0
-
-The difference between this toml library and others is that I'll preserve the exact formatting at all times unless told not to.
+The basics are done. You can parse any TOML document, lookup any value, get the sub-keys of any key, and modify any value to be any other value of any type. And throughout it all, it will preserve the original formatting and comments, with the exception of changes to the structure of an Array or InlineTable.
 
 Some other things I will probably add for future realeses:
 * Element addition and deletion
