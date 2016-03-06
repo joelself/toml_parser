@@ -8,6 +8,8 @@ version = "^1.2.0"
 features = ["regexp"]
 
 [dependencies.regex]
+version = "^0.1.48"
+
 # Uncomment these, and comment out the regexp feature to turn on statically compiled regexes
 #features = ["regexp_macros"]
 #[dependencies.regex_macros]

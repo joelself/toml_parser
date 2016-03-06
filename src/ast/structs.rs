@@ -560,12 +560,12 @@ impl<'a> PartialEq for CommentOrNewLines<'a> {
 }
 
 impl<'a> Display for CommentOrNewLines<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	match self {
-    		&CommentOrNewLines::Comment(ref c) => write!(f, "{}", c),
-    		&CommentOrNewLines::NewLines(ref n) => write!(f, "{}", n),
-    	}
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      &CommentOrNewLines::Comment(ref c) => write!(f, "{}", c),
+      &CommentOrNewLines::NewLines(ref n) => write!(f, "{}", n),
     }
+  }
 }
 
 // <val><<array_sep.ws1>,<array_sep.ws2>?><comment_nl?><array_vals?>
@@ -601,6 +601,12 @@ impl<'a> ArrayValue<'a> {
   pub fn new(val: Rc<RefCell<Value<'a>>>, array_sep: Option<WSSep<'a>>,
   	comment_nls: Vec<CommentOrNewLines<'a>>) -> ArrayValue<'a> {
   	ArrayValue{val: val, array_sep: array_sep, comment_nls: comment_nls}
+  }
+  pub fn default(val: Rc<RefCell<Value<'a>>>) -> ArrayValue<'a> {
+    ArrayValue{val: val, array_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
+  }
+  pub fn last(val: Rc<RefCell<Value<'a>>>) -> ArrayValue<'a> {
+    ArrayValue{val: val, array_sep: None, comment_nls: vec![]}
   }
 }
 
@@ -666,6 +672,30 @@ impl<'a> Display for TableKeyVal<'a> {
 impl<'a> TableKeyVal<'a> {
     pub fn new(keyval: KeyVal<'a>, kv_sep: WSSep<'a>) -> TableKeyVal<'a> {
     	TableKeyVal{keyval: keyval, kv_sep: kv_sep}
+    }
+    pub fn default(key: &Str<'a>, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> {
+      match key {
+        &Str::Str(s) => {
+          let keyval = KeyVal::new_str(s, WSSep::new_str(" ", " "), val);
+          TableKeyVal{keyval: keyval, kv_sep: WSSep::new_str(" ", "")}
+        },
+        &Str::String(ref s) => {
+          let keyval = KeyVal::new_string(s.clone(), WSSep::new_str(" ", " "), val);
+          TableKeyVal{keyval: keyval, kv_sep: WSSep::new_str(" ", "")}
+        }
+      }
+    }
+    pub fn first(key: &Str<'a>, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> {
+      match key {
+        &Str::Str(s) => {
+          let keyval = KeyVal::new_str(s, WSSep::new_str(" ", " "), val);
+          TableKeyVal{keyval: keyval, kv_sep: WSSep::new_str("", "")}
+        },
+        &Str::String(ref s) => {
+          let keyval = KeyVal::new_string(s.clone(), WSSep::new_str(" ", " "), val);
+          TableKeyVal{keyval: keyval, kv_sep: WSSep::new_str("", "")}
+        }
+      }
     }
 }
 

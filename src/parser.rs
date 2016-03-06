@@ -5,7 +5,8 @@ use std::cell::{RefCell, Cell};
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use nom::IResult;
-use ast::structs::{Toml, ArrayType, HashValue, TableType, Value, Array, InlineTable};
+use ast::structs::{Toml, ArrayType, HashValue, TableType, Value, Array, InlineTable,
+                   ArrayValue, WSSep, TableKeyVal};
 use types::{ParseError, ParseResult, TOMLValue, Str, Children};
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
@@ -133,27 +134,30 @@ impl<'a> Parser<'a> {
   //       times.
   // Move the borrow to the bottom where it is used, make reconstruct_vector a method again
   pub fn set_value(self: &mut Parser<'a>, key: String, tval: TOMLValue<'a>) -> bool {
-    let self_rc = RefCell::new(self);
-    let mut borrow = self_rc.borrow_mut();
-    let val = match borrow.map.entry(key.clone()) {
-      Entry::Occupied(entry) => entry.into_mut(),
-      _ => return false,
-    };
-    let opt_value: &mut Option<Rc<RefCell<Value<'a>>>> = &mut val.value;
-    let value_rf = match opt_value {
-      &mut Some(ref mut v) => v,
-      &mut None => return false,
-    };
-    let value = match tval {
-      TOMLValue::Integer(ref v) 	=> Value::Integer(v.clone()),
-      TOMLValue::Float(ref v)			=> Value::Float(v.clone()),
-      TOMLValue::Boolean(v) 			=> Value::Boolean(v),
-      TOMLValue::DateTime(v)			=> Value::DateTime(v.clone()),
-      TOMLValue::Array(_)				=> return Parser::reconstruct_vector(&self_rc, key, value_rf, &tval),
-      TOMLValue::String(ref s, t)	=> Value::String(s.clone(), t),
-      TOMLValue::InlineTable(_)	=> return Parser::reconstruct_vector(&self_rc, key, value_rf, &tval),
-    };
-    *value_rf.borrow_mut() = value;
+    {
+      let val = match self.map.entry(key.clone()) {
+        Entry::Occupied(entry) => entry.into_mut(),
+        _ => return false,
+      };
+      let opt_value: &mut Option<Rc<RefCell<Value<'a>>>> = &mut val.value;
+      let val_rf = match opt_value {
+        &mut Some(ref mut v) => v,
+        &mut None => return false,
+      };
+      // if the inline table/array has the same structure the just replace the values
+      if Parser::same_structure(val_rf, &tval) {
+        Parser::replace_values(val_rf, &tval);
+        return true;
+      }
+    }
+    // if the inline table/array has a different structure, delete the existing
+    // array/inline table from the map and rebuild it from the new value
+    let all_keys = self.get_all_subkeys(&key);
+    for key in all_keys.iter() {
+      self.map.remove(key);
+    }
+    let new_value = Parser::convert_vector(&tval);
+    self.rebuild_vector(key, Rc::new(RefCell::new(new_value)));
     true
   }
 
@@ -161,9 +165,54 @@ impl<'a> Parser<'a> {
 	//                 or their structure has changed.
   // This is is a simplified version of my previous plan:
   // 1. Check the structure of the inline table/array
-  //   1. If the structure is the same, just go through it and replace values
-  //   2. If the structure is different, wipe out the whole array/inline table from the map
-  //      and then rebuild it, using default whitespace scheme
+  //   - [x] If the structure is the same, just go through it and replace values
+  //   - [x] If the structure is different, wipe out the whole array/inline table from the map
+  //     - [x] Convert the TOMLValue to a Value
+  //     - [ ] Insert the new Value into the map
+  
+  fn convert_vector(tval: &TOMLValue<'a>) -> Value<'a> {
+     match tval {
+      &TOMLValue::Array(ref arr) => {
+        let mut values = vec![];
+        for i in 0..arr.len() {
+          let subval = &arr[i];
+          let value = Parser::convert_vector(subval);
+          let array_value;
+          if i < arr.len() - 1 {
+            array_value = ArrayValue::default(Rc::new(RefCell::new(value)));
+          } else {
+            array_value = ArrayValue::last(Rc::new(RefCell::new(value)));
+          }
+          values.push(array_value);
+        }
+        return Value::Array(Rc::new(RefCell::new(
+          Array::new(values, vec![], vec![])
+        )));
+      },
+      &TOMLValue::InlineTable(ref it) => {
+        let mut key_values = vec![];
+        for i in 0..it.len() {
+          let subval = &it[i].1;
+          let value = Parser::convert_vector(subval);
+          let key_value;
+          if i == 0 {
+            key_value = TableKeyVal::first(&it[i].0, Rc::new(RefCell::new(value)));
+          } else {
+            key_value = TableKeyVal::default(&it[i].0, Rc::new(RefCell::new(value)));
+          }
+          key_values.push(key_value);
+        }
+        return Value::InlineTable(Rc::new(RefCell::new(
+          InlineTable::new(key_values, WSSep::new_str(" ", " "))
+        )));
+      },
+      &TOMLValue::Integer(ref s) => return Value::Integer(s.clone()),
+      &TOMLValue::Float(ref s) => return Value::Float(s.clone()),
+      &TOMLValue::Boolean(b) => return Value::Boolean(b),
+      &TOMLValue::DateTime(ref dt) => return Value::DateTime(dt.clone()),
+      &TOMLValue::String(ref s, st) => return Value::String(s.clone(), st),
+    }
+  }
   
   fn same_structure(val_rf: &Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) -> bool {
     match (&*val_rf.borrow(), tval) {
@@ -201,40 +250,56 @@ impl<'a> Parser<'a> {
       (_,_)                           => return true,  // scalar replaced with any other scalar
     }
   }
-
-	fn reconstruct_vector(self_rc: &RefCell<&mut Parser<'a>>, key: String,
-    val_rf: &mut Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) -> bool {
-    if Parser::same_structure(val_rf, tval) {
-      Parser::replace_values(val_rf, tval);
-      true
-    } else {
-      Parser::wipe_out_key(self_rc, key);
-      true
-		}
-	}
   
-  fn wipe_out_key(self_rc: &RefCell<&mut Parser<'a>>, key: String) {
-    let borrow = self_rc.borrow();
-    let hv_opt = borrow.map.get(&key);
+  fn rebuild_vector(self: &mut Parser<'a>, key: String, val: Rc<RefCell<Value<'a>>>) {
+    // ******** TODO: Implement this method ***********
+    // insert the val into the map
+    
+    // match tval {
+    //   &TOMLValue::Array(ref arr) => {
+    //     let val = self.map.entry(key.clone()).or_insert(
+    //       Some(Rc::new(RefCell::new(Array::new())))
+    //     );
+    //     val.subkeys = Children::Count(Cell::new(arr.values.len()));
+    //     for subval in arr.values.iter() {
+          
+    //     }
+        
+    //   },
+    //   &TOMLValue::InlineTable(ref it) => {
+        
+    //   },
+    //   &TOMLValue::Integer(ref s) => {},
+    //   &TOMLValue::Float(ref s) => {},
+    //   &TOMLValue::Boolean(b) => {},
+    //   &TOMLValue::DateTime(ref dt) => {},
+    //   &TOMLValue::String(ref s, st) => {},
+    // }
+  }
+  
+  fn get_all_subkeys(self: &Parser<'a>, key: &str) -> Vec<String>{
+    let hv_opt = self.map.get(key);
+    let mut all_keys = vec![];
     if let Some(hv) = hv_opt {
       let children = &hv.subkeys;
       match children {
         &Children::Count(ref cell) => {
           for i in 0..cell.get() {
             let subkey = format!("{}[{}]", key, i);
-            Parser::wipe_out_key(self_rc, subkey.clone());
-            self_rc.borrow_mut().map.remove(&subkey);
+            all_keys.push(subkey.clone());
+            all_keys.append(&mut self.get_all_subkeys(&subkey));
           }
         },
         &Children::Keys(ref rc_hs) => {
           for childkey in rc_hs.borrow().iter(){
             let subkey = format!("{}.{}", key, childkey);
-            Parser::wipe_out_key(self_rc, subkey.clone());
-            self_rc.borrow_mut().map.remove(&subkey);
+            all_keys.push(subkey.clone());
+            all_keys.append(&mut self.get_all_subkeys(&subkey));
           }
         },
       }
     }
+    all_keys
   }
   
   fn replace_values(val_rf: &Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) {

@@ -3,5 +3,5 @@
     "rust.rustLangSrcPath": "/Users/joel.self/Projects/joel/rust/src",
     "editor.tabSize": 2,
     "editor.insertSpaces": true,
-    "editor.renderWhitespace": false
+    "editor.renderWhitespace": true
 }
