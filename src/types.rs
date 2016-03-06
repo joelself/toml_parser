@@ -1,10 +1,10 @@
-use ast::structs::Value;
 use std::collections::{HashSet, HashMap};
 use std::hash::Hasher;
 use std::rc::Rc;
 use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::fmt::Display;
+use std::str::FromStr;
 
 
 pub enum ParseResult<'a> {
@@ -162,6 +162,21 @@ impl<'a> Display for TimeOffset<'a> {
   }
 }
 
+impl<'a> TimeOffset<'a> {
+  pub fn validate_string(&self) -> bool {
+    match self {
+      &TimeOffset::Zulu => return true,
+      &TimeOffset::Time(ref amount) => return amount.validate_string(),
+    }
+  }
+  pub fn validate(&self) -> bool {
+    match self {
+      &TimeOffset::Zulu => return true,
+      &TimeOffset::Time(ref amount) => return amount.validate(),
+    }
+  }
+}
+
 // (+|-)<hour>:<minute>
 #[derive(Debug, Eq, Clone)]
 pub struct TimeOffsetAmount<'a> {
@@ -200,6 +215,31 @@ impl<'a> TimeOffsetAmount<'a> {
   	}
   	TimeOffsetAmount{pos_neg: pn, hour: Str::String(hour), minute: Str::String(minute)}
   }
+  
+  pub fn validate_string(&self) -> bool {
+    if string!(self.hour).len() != 2 || string!(self.minute).len() != 2 {
+      return false;
+    }
+    return self.validate();
+  }
+  
+  pub fn validate(&self) -> bool {
+    if let Ok(h) = usize::from_str(str!(self.hour)) {
+      if h > 23 {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    if let Ok(m) = usize::from_str(str!(self.minute)) {
+      if m > 59 {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    return true;
+  }
 }
 
 // <year>-<month>-<day>
@@ -230,6 +270,59 @@ impl<'a> Date<'a> {
   }
   pub fn new_string(year: String, month: String, day: String) -> Date<'a> {
   	Date{year: Str::String(year), month: Str::String(month), day: Str::String(day)}
+  }
+  
+  pub fn validate_string(&self) -> bool {
+    if string!(self.year).len() != 4 || string!(self.month).len() != 2 || string!(self.day).len() != 2 {
+      return false;
+    }
+    return self.validate();
+  }
+  
+  pub fn validate(&self) -> bool {
+    if let Ok(y) = usize::from_str(str!(self.year)) {
+      if y == 0 {
+        return false;
+      }
+      if let Ok(m) = usize::from_str(str!(self.month)) {
+        if m < 1 || m > 12 {
+          return false;
+        }
+        if let Ok(d) = usize::from_str(str!(self.day)) {
+          if d < 1 {
+            return false;
+          }
+          match d {
+            2 => {
+              let leap_year;
+              if y % 4 != 0 {
+                leap_year = false;
+              } else if y % 100 != 0 {
+                leap_year = true;
+              } else if y % 400 != 0 {
+                leap_year = false;
+              } else {
+                leap_year = true;
+              }
+              if leap_year && d > 29 {
+                return false;
+              } else if !leap_year && d > 28 {
+                return false;
+              }
+            },
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => { if d > 31 { return false; } },
+            _ => { if d > 30 { return false; } },
+          }
+        } else {
+          return false;
+        }
+      } else {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    return true;
   }
 }
 
@@ -285,6 +378,48 @@ impl<'a> Time<'a> {
   			fraction: None, offset: offset}
   	}
   }
+  
+  pub fn validate_string(&self) -> bool {
+    if string!(self.hour).len() != 2 || string!(self.minute).len() != 2 || string!(self.second).len() != 2 {
+      return false;
+    }
+    return self.validate(true); 
+  }
+  
+  pub fn validate(&self, validate_string: bool) -> bool {
+    if let Ok(h) = usize::from_str(str!(self.hour)) {
+      if h > 23 {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    if let Ok(m) = usize::from_str(str!(self.minute)) {
+      if m > 59 {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    if let Ok(s) = usize::from_str(str!(self.second)) {
+      if s > 59 {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    if let Some(ref frac) = self.fraction {
+      if usize::from_str(str_ref!(frac)).is_err() {
+        return false;
+      }
+    }
+    if let Some(ref off) = self.offset {
+      if validate_string && !off.validate_string() || !off.validate() {
+        return false;
+      }
+    }
+    return true;
+  }
 }
 
 #[derive(Debug, Eq, Clone)]
@@ -313,11 +448,22 @@ impl<'a> DateTime<'a> {
 	pub fn new(date: Date<'a>, time: Option<Time<'a>>) -> DateTime<'a> {
 		DateTime{date: date, time: time}
 	}
+  
+  pub fn validate(&self, validate_string: bool) -> bool {
+    if validate_string && self.date.validate_string() || self.date.validate() {
+      if let Some(ref time) = self.time {
+        return validate_string && !time.validate_string() || time.validate(false);
+      }
+    } else {
+      return false;
+    }
+    return true;
+  }
 }
 
 pub enum ParseError<'a> {
-	MixedArray(Vec<Rc<RefCell<Value<'a>>>>),
-	DuplicateKey(String, Rc<RefCell<Value<'a>>>),
-	DuplicateArrayOfTableKey(String, String, Rc<Value<'a>>),
-	InvalidTable(String, RefCell<HashMap<String, Rc<RefCell<Value<'a>>>>>)
+	MixedArray(String),
+	DuplicateKey(String, TOMLValue<'a>),
+	InvalidTable(String, RefCell<HashMap<String, TOMLValue<'a>>>),
+  InvalidDateTime(String)
 }

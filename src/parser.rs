@@ -143,8 +143,7 @@ impl<'a> Parser<'a> {
       };
       // if the inline table/array has the same structure the just replace the values
       if Parser::same_structure(val_rf, &tval) {
-        Parser::replace_values(val_rf, &tval);
-        return true;
+        return Parser::replace_values(val_rf, &tval);
       }
     }
     // if the inline table/array has a different structure, delete the existing
@@ -153,7 +152,11 @@ impl<'a> Parser<'a> {
     for key in all_keys.iter() {
       self.map.remove(key);
     }
-    let new_value = Parser::convert_vector(&tval);
+    let new_value_opt = Parser::convert_vector(&tval);
+    if new_value_opt.is_none() {
+      return false;
+    }
+    let new_value = new_value_opt.unwrap();
     let new_value_clone = match new_value {
       Value::Array(ref rc_rc) => {
         Value::Array(rc_rc.clone())
@@ -180,13 +183,20 @@ impl<'a> Parser<'a> {
     true
   }
   
-  fn convert_vector(tval: &TOMLValue<'a>) -> Value<'a> {
+  fn convert_vector(tval: &TOMLValue<'a>) -> Option<Value<'a>> {
      match tval {
       &TOMLValue::Array(ref arr) => {
         let mut values = vec![];
         for i in 0..arr.len() {
           let subval = &arr[i];
-          let value = Parser::convert_vector(subval);
+          let value_opt = Parser::convert_vector(subval);
+          if value_opt.is_none() {
+            return None;
+          }
+          let value = value_opt.unwrap();
+          if !value.validate_string() {
+            return None;
+          }
           let array_value;
           if i < arr.len() - 1 {
             array_value = ArrayValue::default(Rc::new(RefCell::new(value)));
@@ -195,15 +205,22 @@ impl<'a> Parser<'a> {
           }
           values.push(array_value);
         }
-        return Value::Array(Rc::new(RefCell::new(
+        return Some(Value::Array(Rc::new(RefCell::new(
           Array::new(values, vec![], vec![])
-        )));
+        ))));
       },
       &TOMLValue::InlineTable(ref it) => {
         let mut key_values = vec![];
         for i in 0..it.len() {
           let subval = &it[i].1;
-          let value = Parser::convert_vector(subval);
+          let value_opt = Parser::convert_vector(subval);
+          if value_opt.is_none() {
+            return None;
+          }
+          let value = value_opt.unwrap();
+          if !value.validate_string() {
+            return None;
+          }
           let key_value;
           if i == 0 {
             key_value = TableKeyVal::first(&it[i].0, Rc::new(RefCell::new(value)));
@@ -212,15 +229,15 @@ impl<'a> Parser<'a> {
           }
           key_values.push(key_value);
         }
-        return Value::InlineTable(Rc::new(RefCell::new(
+        return Some(Value::InlineTable(Rc::new(RefCell::new(
           InlineTable::new(key_values, WSSep::new_str(" ", " "))
-        )));
+        ))));
       },
-      &TOMLValue::Integer(ref s) => return Value::Integer(s.clone()),
-      &TOMLValue::Float(ref s) => return Value::Float(s.clone()),
-      &TOMLValue::Boolean(b) => return Value::Boolean(b),
-      &TOMLValue::DateTime(ref dt) => return Value::DateTime(dt.clone()),
-      &TOMLValue::String(ref s, st) => return Value::String(s.clone(), st),
+      &TOMLValue::Integer(ref s) => return Some(Value::Integer(s.clone())),
+      &TOMLValue::Float(ref s) => return Some(Value::Float(s.clone())),
+      &TOMLValue::Boolean(b) => return Some(Value::Boolean(b)),
+      &TOMLValue::DateTime(ref dt) => return Some(Value::DateTime(dt.clone())),
+      &TOMLValue::String(ref s, st) => return Some(Value::String(s.clone(), st)),
     }
   }
   
@@ -326,23 +343,27 @@ impl<'a> Parser<'a> {
     all_keys
   }
   
-  fn replace_values(val_rf: &Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) {
+  fn replace_values(val_rf: &Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) -> bool {
     let value = match (&*val_rf.borrow(), tval) {
       (&Value::Array(ref arr), &TOMLValue::Array(ref t_arr)) => {
         let borrow = arr.borrow();
         let len = borrow.values.len();
         for i in 0..len {
-          Parser::replace_values(&borrow.values[i].val, &t_arr[i]);
+          if !Parser::replace_values(&borrow.values[i].val, &t_arr[i]) {
+            return false;
+          }
         }
-        return;
+        return true;
       },
       (&Value::InlineTable(ref it), &TOMLValue::InlineTable(ref t_it)) => {
         let borrow = it.borrow();
         let len = borrow.keyvals.len();
         for i in 0..len {
-          Parser::replace_values(&borrow.keyvals[i].keyval.val, &t_it[i].1);
+          if !Parser::replace_values(&borrow.keyvals[i].keyval.val, &t_it[i].1) {
+            return false;
+          }
         }
-        return;
+        return true;
       },
       (_, &TOMLValue::Integer(ref v)) 	=> Value::Integer(v.clone()),
       (_, &TOMLValue::Float(ref v))			=> Value::Float(v.clone()),
@@ -351,10 +372,14 @@ impl<'a> Parser<'a> {
       (_, &TOMLValue::String(ref s, t))	=> Value::String(s.clone(), t),
       (_,_)                             => panic!("This code should not be unreachable."),
     };
+    if !value.validate_string() {
+      return false;
+    }
     *val_rf.borrow_mut() = value;
+    return true;
   }
 
-	fn sanitize_array(arr: Rc<RefCell<Array<'a>>>) -> TOMLValue<'a> {
+	pub fn sanitize_array(arr: Rc<RefCell<Array<'a>>>) -> TOMLValue<'a> {
 		let mut result: Vec<TOMLValue> = vec![];
 		for av in arr.borrow().values.iter() {
 			result.push(to_tval!(&*av.val.borrow()));
@@ -362,7 +387,7 @@ impl<'a> Parser<'a> {
 		TOMLValue::Array(Rc::new(result))
 	}
 	
-	fn sanitize_inline_table(it: Rc<RefCell<InlineTable<'a>>>) -> TOMLValue<'a> {
+	pub fn sanitize_inline_table(it: Rc<RefCell<InlineTable<'a>>>) -> TOMLValue<'a> {
 		let mut result: Vec<(Str<'a>, TOMLValue)> = vec![];
 		for kv in it.borrow().keyvals.iter() {
 			result.push((kv.keyval.key.clone(), to_tval!(&*kv.keyval.val.borrow())));

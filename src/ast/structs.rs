@@ -134,6 +134,21 @@ pub enum Value<'a> {
 	InlineTable(Rc<RefCell<InlineTable<'a>>>),
 }
 
+impl<'a> Value<'a> {
+  pub fn validate_string(&self) -> bool {
+    // TODO: ********* Implement Integer, Float, and String **********
+    // Turn the Integer, Float and String parsers into static methods
+    // and make sure they're called with call_s! by the parser
+    match self {
+      &Value::Integer(ref s) => {return true},
+      &Value::Float(ref s) => {return true},
+      &Value::DateTime(ref dt) => {dt.validate(true)},
+      &Value::String(ref s, st) => {return true},
+      _ => return true,
+    }
+  }
+}
+
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum ArrayType {
 	Integer,

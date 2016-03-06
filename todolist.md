@@ -1,5 +1,7 @@
 * Everywhere
 	- [x] Switch back to using nom now that the new version has been released
+  - [ ] Logging
+  - [ ] Add line numbers to errors
 
 * primitives.rs
 	- [x] Implement get_keychain_key
@@ -11,6 +13,7 @@
 	- [x] Change '+'/'-' to enum
 	- [x] Inserting a value insert's its key in it's parent's children 
 	- [x] Re-implement get_array_table_key to take into account implicit tables are always standard tables
+  - [x] DateTime validation
 
 * ast/structs.rs
 	- [x] Re-implement HashValue to have a list of children or max index of children
@@ -37,7 +40,11 @@
     - [x] Implement inserting new keys and values into map
     - [x] Implement inserting new Array or InlineTable value into AST
 	- [ ] Implement get_errors
+  - [ ] Value parsing on set_value (currently set_value accepts whatever you give it). *In progress, almost finished*
 	- [x] Implement get_children
+  - [ ] Convenience functions
+    - [ ] For creating TOMLValues, especially DateTime
+    - [ ] Combining a key and a subkey or index to a new key
 	- [ ] Add unit tests for getting values
 	- [ ] Add unit tests for setting values
 	- [ ] Add unit tests to check the map to make sure removed keys are gone

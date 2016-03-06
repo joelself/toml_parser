@@ -452,6 +452,14 @@ impl<'a> Parser<'a> {
     self.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     let (tmp, res) = self.array_internal(input);
     self = tmp; // Restore self
+    if self.mixed_array.get() {
+      self.mixed_array.set(false);
+      self.errors.borrow_mut().push(ParseError::MixedArray(
+        Parser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
+          &self.last_array_tables_index, &self.keychain
+        ).0
+      ));
+    }
     self.keychain.borrow_mut().pop();
     self.last_array_type.borrow_mut().pop();
     (self, res)
@@ -467,14 +475,6 @@ impl<'a> Parser<'a> {
       ||{
         println!("Close array");
        let array_result = Rc::new(RefCell::new(Array::new(array_vals, cn1, cn2)));
-        if self.mixed_array.get() {
-          self.mixed_array.set(false);
-          let mut vals: Vec<Rc<RefCell<Value<'a>>>> = vec![]; 
-          for x in 0..array_result.borrow().values.len() {
-            vals.push(array_result.borrow().values[x].val.clone());
-          }
-          self.errors.borrow_mut().push(ParseError::MixedArray(vals));
-        }
         array_result
       }
     )

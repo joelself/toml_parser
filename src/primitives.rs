@@ -6,7 +6,7 @@ use ast::structs::{KeyVal, WSSep, Value, ErrorCode,
                    HashValue, TableType, Table,
                    get_last_keys};
 use ::types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
-             Str, Bool, Children};
+             Str, Bool, Children, TOMLValue};
 use parser::{Parser, Key, count_lines};
 use nom;
 use nom::{IResult, InputLength};
@@ -146,7 +146,7 @@ impl<'a> Parser<'a> {
     return (key, parent_key);
   }
 
-  fn get_full_key(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
+  pub fn get_full_key(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,
     keychain: &RefCell<Vec<Key<'a>>>) -> (String, String) {
 
@@ -250,7 +250,7 @@ impl<'a> Parser<'a> {
     if error {
       println!("Error: {}", *(*val).borrow());
       self.errors.borrow_mut().push(ParseError::DuplicateKey(
-        full_key, val.clone()
+        full_key, to_tval!(&*val.borrow())
       ));
     } else if setvalue  || insert {
       if setvalue {
@@ -410,6 +410,7 @@ impl<'a> Parser<'a> {
  fraction: complete!(call_m!(self.fractional)) ?  ~
    offset: complete!(call_m!(self.time_offset)) ? ,
       ||{
+        
         Time::new_str(hour, minute, second, match fraction {
             Some(ref x) => Some(x[1]),
             None        => None,
@@ -457,7 +458,15 @@ impl<'a> Parser<'a> {
      date: call_m!(self.date)       ~
      time: call_m!(self.time) ?     ,
         ||{
-          DateTime::new(date, time)
+          let res = DateTime::new(date, time);
+          if !res.validate(false) {
+            self.errors.borrow_mut().push(ParseError::InvalidDateTime(
+              Parser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
+                &self.last_array_tables_index, &self.keychain
+              ).0
+            ));
+          }
+          res
         }
     )
   );
@@ -510,7 +519,7 @@ impl<'a> Parser<'a> {
           let err = self.errors.borrow_mut().pop().unwrap();
           if let ParseError::InvalidTable(_, ref map) = err {
             println!("InvalidTable");
-            map.borrow_mut().insert(res.key.to_string(), res.val.clone());
+            map.borrow_mut().insert(res.key.to_string(), to_tval!(&*res.val.borrow()));
           }
           self.errors.borrow_mut().push(err);
         } else {
