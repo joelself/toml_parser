@@ -129,10 +129,7 @@ impl<'a> Parser<'a> {
       None
     }
   }
-
-  // TODO: ********* Need to figure out a way to borrow self or self.map and use it multiple
-  //       times.
-  // Move the borrow to the bottom where it is used, make reconstruct_vector a method again
+  
   pub fn set_value(self: &mut Parser<'a>, key: String, tval: TOMLValue<'a>) -> bool {
     {
       let val = match self.map.entry(key.clone()) {
@@ -150,25 +147,18 @@ impl<'a> Parser<'a> {
         return true;
       }
     }
+    println!("wipe out key");
     // if the inline table/array has a different structure, delete the existing
     // array/inline table from the map and rebuild it from the new value
     let all_keys = self.get_all_subkeys(&key);
     for key in all_keys.iter() {
+      println!("remove key: {}", key);
       self.map.remove(key);
     }
     let new_value = Parser::convert_vector(&tval);
     self.rebuild_vector(key, Rc::new(RefCell::new(new_value)));
     true
   }
-
-	// TODO: BIG TODO: Need to rehash keys values when reconstituting inline tables and arrays if their keys
-	//                 or their structure has changed.
-  // This is is a simplified version of my previous plan:
-  // 1. Check the structure of the inline table/array
-  //   - [x] If the structure is the same, just go through it and replace values
-  //   - [x] If the structure is different, wipe out the whole array/inline table from the map
-  //     - [x] Convert the TOMLValue to a Value
-  //     - [ ] Insert the new Value into the map
   
   fn convert_vector(tval: &TOMLValue<'a>) -> Value<'a> {
      match tval {
@@ -252,29 +242,43 @@ impl<'a> Parser<'a> {
   }
   
   fn rebuild_vector(self: &mut Parser<'a>, key: String, val: Rc<RefCell<Value<'a>>>) {
-    // ******** TODO: Implement this method ***********
-    // insert the val into the map
-    
-    // match tval {
-    //   &TOMLValue::Array(ref arr) => {
-    //     let val = self.map.entry(key.clone()).or_insert(
-    //       Some(Rc::new(RefCell::new(Array::new())))
-    //     );
-    //     val.subkeys = Children::Count(Cell::new(arr.values.len()));
-    //     for subval in arr.values.iter() {
-          
-    //     }
-        
-    //   },
-    //   &TOMLValue::InlineTable(ref it) => {
-        
-    //   },
-    //   &TOMLValue::Integer(ref s) => {},
-    //   &TOMLValue::Float(ref s) => {},
-    //   &TOMLValue::Boolean(b) => {},
-    //   &TOMLValue::DateTime(ref dt) => {},
-    //   &TOMLValue::String(ref s, st) => {},
-    // }
+    match *val.borrow() {
+      Value::Array(ref arr) => {
+        {
+          let value = self.map.entry(key.clone()).or_insert(
+            HashValue::new_count(val.clone())
+          );
+          value.value = Some(val.clone());
+          value.subkeys = Children::Count(Cell::new(arr.borrow().values.len()));
+        }
+        for i in 0..arr.borrow().values.len() {
+          let subkey = format!("{}[{}]", key, i);
+          self.rebuild_vector(subkey, arr.borrow().values[i].val.clone());
+        }
+      },
+      Value::InlineTable(ref it) => {
+        {
+          let value = self.map.entry(key.clone()).or_insert(
+            HashValue::new_keys(val.clone())
+          );
+          value.value = Some(val.clone());
+          if let Children::Keys(ref child_keys) = value.subkeys {
+            for i in 0..it.borrow().keyvals.len() {
+              child_keys.borrow_mut().insert(string!(it.borrow().keyvals[i].keyval.key));
+            }
+          }
+        }
+        for i in 0..it.borrow().keyvals.len() {
+          let subkey = format!("{}.{}", key, &it.borrow().keyvals[i].keyval.key);
+          self.rebuild_vector(subkey, it.borrow().keyvals[i].keyval.val.clone());
+        }
+      },
+      _ => {
+        self.map.entry(key.clone()).or_insert(
+          HashValue::new_count(val.clone())
+        );
+      },
+    }
   }
   
   fn get_all_subkeys(self: &Parser<'a>, key: &str) -> Vec<String>{
@@ -325,7 +329,7 @@ impl<'a> Parser<'a> {
       (_, &TOMLValue::Boolean(v)) 			=> Value::Boolean(v),
       (_, &TOMLValue::DateTime(ref v))	=> Value::DateTime(v.clone()),
       (_, &TOMLValue::String(ref s, t))	=> Value::String(s.clone(), t),
-      (_,_)                             => panic!("This code should be unreachable."),
+      (_,_)                             => panic!("This code should not be unreachable."),
     };
     *val_rf.borrow_mut() = value;
   }

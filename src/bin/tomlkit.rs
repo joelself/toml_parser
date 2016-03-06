@@ -174,21 +174,31 @@ enabled = true
 // ports = [   8001, 8003  ,  [8004  , 8005] ]
 // servers = {main = "juice", failover1 = "soda", failover2 = { something = 25   , nothing = 2.5 }    }
   parser.set_value("database.ports".to_string(), TOMLValue::Array(Rc::new(vec![
-    TOMLValue::String(Str::String("1 thousand".to_string()), StrType::MLLiteral),
-    TOMLValue::String(Str::String("3 hundred 4".to_string()), StrType::MLBasic),
+    TOMLValue::Array(Rc::new(vec![
+      TOMLValue::String(Str::String("1 thousand".to_string()), StrType::MLLiteral),
+      TOMLValue::String(Str::String("3 hundred 4".to_string()), StrType::MLBasic)
+    ])),
     TOMLValue::Array(Rc::new(vec![
       TOMLValue::String(Str::String("five 100 7".to_string()), StrType::Basic),
       TOMLValue::Integer(Str::String("100".to_string()))
-    ]))
+    ])),
+    TOMLValue::String(Str::String("element".to_string()), StrType::Basic),
+    TOMLValue::Integer(Str::String("99".to_string())),
+    TOMLValue::String(Str::String("index".to_string()), StrType::Basic),
+    TOMLValue::Integer(Str::String("98".to_string())),
   ])));
   
   parser.set_value("database.servers".to_string(), TOMLValue::InlineTable(Rc::new(vec![
-    (Str::String(String::new()), TOMLValue::Integer(Str::String("1928".to_string()))),
-    (Str::String(String::new()), TOMLValue::Float(Str::String("321.987".to_string()))),
-    (Str::String(String::new()), TOMLValue::InlineTable(Rc::new(vec![
-      (Str::String(String::new()), TOMLValue::String(Str::String("new value".to_string()), StrType::Literal)),
-      (Str::String(String::new()), TOMLValue::String(Str::String("another new value".to_string()), StrType::Basic))
-    ])))
+    (Str::String("woo".to_string()), TOMLValue::Integer(Str::String("1928".to_string()))),
+    (Str::String("hoo".to_string()), TOMLValue::Float(Str::String("321.987".to_string()))),
+    (Str::String("key1".to_string()), TOMLValue::InlineTable(Rc::new(vec![
+      (Str::String("key2".to_string()), TOMLValue::String(Str::String("new value".to_string()), StrType::Literal)),
+      (Str::String("key3".to_string()), TOMLValue::String(Str::String("another new value".to_string()), StrType::Basic)),
+      (Str::String("key4".to_string()), TOMLValue::String(Str::String("A third new value".to_string()), StrType::Literal)),
+      (Str::String("key5".to_string()), TOMLValue::String(Str::String("fourth value".to_string()), StrType::Basic))
+    ]))),
+    (Str::String("key6".to_string()), TOMLValue::Integer(Str::String("2010".to_string()))),
+    (Str::String("key7".to_string()), TOMLValue::Float(Str::String("3.14159".to_string())))
   ])));
   
   println!("after: {}", parser.get_value("title".to_string()).unwrap());

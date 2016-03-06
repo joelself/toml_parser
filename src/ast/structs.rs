@@ -146,12 +146,6 @@ pub enum ArrayType {
 	None,
 }
 
-// impl PartialEq for Children {
-// 	fn eq(&self, other: &Children) -> bool {
-// 		self.value == other.value
-// 	}
-// }
-
 #[derive(Debug, Eq, Clone)]
 pub struct HashValue<'a> {
 	pub value: Option<Rc<RefCell<Value<'a>>>>, 
@@ -586,14 +580,21 @@ impl<'a> PartialEq for ArrayValue<'a> {
 
 impl<'a> Display for ArrayValue<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-  	match self.array_sep {
-  		Some(ref s) => try!(write!(f, "{}{},{}", *self.val.borrow(), s.ws1, s.ws2)),
-  		None => try!(write!(f, "{}", *self.val.borrow())),
-  	}
-  	for i in 0..self.comment_nls.len() - 1 {
-  		try!(write!(f, "{}", self.comment_nls[i]));
-  	}
-  	write!(f, "{}", self.comment_nls[self.comment_nls.len() - 1])
+    if self.comment_nls.len() > 0 {
+      match self.array_sep {
+        Some(ref s) => try!(write!(f, "{}{},{}", *self.val.borrow(), s.ws1, s.ws2)),
+        None => try!(write!(f, "{}", *self.val.borrow())),
+      }
+      for i in 0..self.comment_nls.len() - 1 {
+        try!(write!(f, "{}", self.comment_nls[i]));
+      }
+      write!(f, "{}", self.comment_nls[self.comment_nls.len() - 1])
+    } else {
+      match self.array_sep {
+        Some(ref s) => write!(f, "{}{},{}", *self.val.borrow(), s.ws1, s.ws2),
+        None => write!(f, "{}", *self.val.borrow()),
+      }
+    }
   }
 }
 
