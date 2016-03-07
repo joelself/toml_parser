@@ -42,8 +42,8 @@
 	- [ ] Implement get_errors
   - [ ] Value parsing on set_value (currently set_value accepts whatever you give it). *In progress, almost finished*
 	- [x] Implement get_children
-  - [ ] Convenience functions
-    - [ ] For creating TOMLValues, especially DateTime
+  - [x] Convenience functions
+    - [x] For creating TOMLValues, especially DateTime
     - [ ] Combining a key and a subkey or index to a new key
 	- [ ] Add unit tests for getting values
 	- [ ] Add unit tests for setting values
