@@ -453,7 +453,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(date_time<Parser<'a>, &'a str, DateTime>, mut self,
+  method!(pub date_time<Parser<'a>, &'a str, DateTime>, mut self,
     chain!(
      date: call_m!(self.date)       ~
      time: call_m!(self.time) ?     ,
