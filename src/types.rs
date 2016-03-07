@@ -102,14 +102,22 @@ impl<'a> TOMLValue<'a> {
   pub fn int(int: i64) -> TOMLValue<'a> {
     TOMLValue::Integer(Str::String(format!("{}", int)))
   }
-  pub fn int_str(int: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    Result::Ok(TOMLValue::Integer(Str::String(int.to_string())))
+  pub fn int_str(int: &'a str) -> Result<TOMLValue<'a>, TOMLError> {
+    let p = Parser::new();
+    match p.integer(int) {
+      (_, IResult::Done(_, o)) => return Result::Ok(TOMLValue::Integer(Str::String(o.to_string()))),
+      (_, _) => return Result::Err(TOMLError{message: format!("Error parsing int. Argument: {}", int)}),
+    }
   }
   pub fn float(float: f64) -> TOMLValue<'a> {
     TOMLValue::Float(Str::String(format!("{}", float)))
   }
   pub fn float_str(float: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    Result::Ok(TOMLValue::Float(Str::String(float.to_string())))
+    let p = Parser::new();
+    match p.float(float) {
+      (_, IResult::Done(_, o)) => return Result::Ok(TOMLValue::Float(Str::String(o.to_string()))),
+      (_, _) => return Result::Err(TOMLError{message: format!("Error parsing float. Argument: {}", float)}),
+    }
   }
   pub fn bool(b: bool) -> TOMLValue<'a> {
     if b {
@@ -324,7 +332,7 @@ impl<'a> TOMLValue<'a> {
   pub fn datetime_parse(dt: &'a str) -> Result<TOMLValue<'a>, TOMLError> {
     let p = Parser::new();
     match p.date_time(dt) {
-      (_, IResult::Done(i, o)) => {
+      (_, IResult::Done(_, o)) => {
         if !o.validate(false) {
           return Result::Err(TOMLError{message: format!("Error parsing &str as datetime. Argument: {}", dt)});
         } else {
@@ -332,6 +340,30 @@ impl<'a> TOMLValue<'a> {
         }
       },
       (_,_) => return Result::Err(TOMLError{message: format!("Error parsing &str as datetime. Argument: {}", dt)}),
+    }
+  }
+  pub fn basic_string(s: &str) -> Result<TOMLValue<'a>, TOMLError> {
+    match Parser::quoteless_basic_string(s) {
+      IResult::Done(_,o) => return Result::Ok(TOMLValue::String(Str::String(o.to_string()), StrType::Basic)),
+      _ => return Result::Err(TOMLError{message: format!("Error parsing &str as basic_string. Argument: {}", s)})
+    }
+  }
+  pub fn ml_basic_string(s: &str) -> Result<TOMLValue<'a>, TOMLError> {
+    match Parser::quoteless_ml_basic_string(s) {
+      IResult::Done(_,o) => return Result::Ok(TOMLValue::String(Str::String(o.to_string()), StrType::MLBasic)),
+      _ => return Result::Err(TOMLError{message: format!("Error parsing &str as ml_basic_string. Argument: {}", s)})
+    }
+  }
+  pub fn literal_string(s: &str) -> Result<TOMLValue<'a>, TOMLError> {
+    match Parser::quoteless_literal_string(s) {
+      IResult::Done(_,o) => return Result::Ok(TOMLValue::String(Str::String(o.to_string()), StrType::Literal)),
+      _ => return Result::Err(TOMLError{message: format!("Error parsing &str as literal_string. Argument: {}", s)})
+    }
+  }
+  pub fn ml_literal_string(s: &str) -> Result<TOMLValue<'a>, TOMLError> {
+    match Parser::quoteless_ml_literal_string(s) {
+      IResult::Done(_,o) => return Result::Ok(TOMLValue::String(Str::String(o.to_string()), StrType::MLLiteral)),
+      _ => return Result::Err(TOMLError{message: format!("Error parsing &str as ml_literal_string. Argument: {}", s)})
     }
   }
 }

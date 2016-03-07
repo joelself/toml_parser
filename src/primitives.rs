@@ -304,14 +304,24 @@ impl<'a> Parser<'a> {
   }
 
   // Integer
-  method!(integer<Parser<'a>, &'a str, &'a str>, self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
+  method!(pub integer<Parser<'a>, &'a str, &'a str>, self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
 
   // Float
-  method!(float<Parser<'a>, &'a str, &'a str>, self,
+  method!(pub float<Parser<'a>, &'a str, &'a str>, self,
          re_find!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
 
-  // String
-  // TODO: method!(string<&'a str, &'a str>, alt!(basic_string | ml_basic_string | literal_string | ml_literal_string));
+  // Basic String
+  named!(pub quoteless_basic_string<&'a str, &'a str>,
+    re_find!("^( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*?"));
+  // Multiline Basic String
+  // TODO: Convert this to take_while_s using a function that increments self.linecount
+  named!(pub quoteless_ml_basic_string<&'a str, &'a str>,
+    re_find!("^([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*?"));
+  // Literal String
+  named!(pub quoteless_literal_string<&'a str, &'a str>, re_find!("^(	|[ -&]|[\\(-􏿿])*?"));
+  // Multiline Literal String
+  // TODO: Convert to take_while_s using a function that increments self.linecount
+  named!(pub quoteless_ml_literal_string<&'a str, &'a str>, re_find!("^(	|[ -􏿿]|\n|(\r\n))*?"));
 
   // Basic String
   method!(raw_basic_string<Parser<'a>, &'a str, &'a str>, self,
