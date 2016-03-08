@@ -2,6 +2,7 @@
 	- [x] Switch back to using nom now that the new version has been released
   - [x] Logging
   - [x] Add line numbers to errors
+  - [ ] Add documentation to public enums, structs, functions, methods and macros
 
 * primitives.rs
 	- [x] Implement get_keychain_key
@@ -46,9 +47,10 @@
     - [x] For creating TOMLValues, especially DateTime
     - [x] Combining a key and a subkey or index to a new key
 	- [ ] Add unit tests for getting values
+    - [ ] Add unit tests for getting sub-keys
 	- [ ] Add unit tests for setting values
 	- [ ] Add unit tests to check the map to make sure removed keys are gone
-
+  
 * tests/assets.rs
 	- [ ] Add failure/error tests for invalid toml-test's
 	- [ ] Add toml/examples/example-v0.4.0.toml to success tests
