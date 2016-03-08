@@ -25,18 +25,21 @@ Next steps for the first release are:
   - [x] Value add/delete for arrays only
   - [x] Key/Value add/delete for inline tables only
 - [x] Key modification for inline tables (general key modification moved to 0.2)
-- [ ] Content validation, and non-failure error reporting (currently the parser doesn't fail on heterogeneous arrays, duplicate keys, or invalid tables because it wants to give you a chance to correct them rather than  force you to fix the original TOML by hand.) (*I lied, not mostly done* just somewhat done)
-  - [ ] DateTime validation
-  - [ ] Value parsing on set_value (currently set_value accepts whatever you give it). "Foo Bar" is an Integer? Ok.
-- [ ] Convenience functions
-  - [ ] For creating TOMLValues, especially DateTime
-  - [ ] Combining a key and a subkey to a new key
-- [ ] Logging
+- [x] Content validation, and non-failure error reporting (currently the parser doesn't fail on heterogeneous arrays, duplicate keys, or invalid tables because it wants to give you a chance to correct them rather than  force you to fix the original TOML by hand.)
+  - [x] DateTime validation
+  - [x] Value parsing on set_value
+- [x] Convenience functions
+  - [x] For creating TOMLValues, especially DateTime
+  - [x] Combining a key and a subkey to a new key
+- [x] Logging
 - [ ] Unit tests for key look-up
+  - [ ] Unit tests for sub-key look-up
 - [ ] Unit tests for key modification
 - [ ] An integration test that fails or returns errors for each invalid toml-test
+- [ ] Add documentation on public structs, enums, functions, methods, and macros
+- [ ] Add example code somewhere, possibly part of the documentation, probably some in the README too.
 
-The basics are done. You can parse any TOML document, lookup any value, get the sub-keys of any key, and modify any value to be any other value of any type. And throughout it all, it will preserve the original formatting and comments, with the exception of changes to the structure of an Array or InlineTable.
+The Parser's first release is done. You can parse any TOML document, lookup any value, get the sub-keys of any key, and modify any value to be any other value of any type. And throughout it all, it will preserve the original formatting and comments, with the exception of changes to the structure of an Array or InlineTable. All that remains is to add unit tests for key look-up, sub-key look-up, key modification, failure integration tests, and documentation.
 
 Some other things I will probably add for future realeses:
 * Element addition and deletion
