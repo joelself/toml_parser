@@ -134,17 +134,17 @@ pub enum Value<'a> {
 	InlineTable(Rc<RefCell<InlineTable<'a>>>),
 }
 
-impl<'a> Value<'a> {
-  pub fn validate_string(&self) -> bool {
-    match self {
-      &Value::Integer(ref s) => {return true},
-      &Value::Float(ref s) => {return true},
-      &Value::DateTime(ref dt) => {dt.validate(true)},
-      &Value::String(ref s, st) => {return true},
-      _ => return true,
-    }
-  }
-}
+// impl<'a> Value<'a> {
+//   pub fn validate_string(&self) -> bool {
+//     match self {
+//       &Value::Integer(ref s) => {return true},
+//       &Value::Float(ref s) => {return true},
+//       &Value::DateTime(ref dt) => {dt.validate(true)},
+//       &Value::String(ref s, st) => {return true},
+//       _ => return true,
+//     }
+//   }
+// }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum ArrayType {

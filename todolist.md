@@ -1,7 +1,7 @@
 * Everywhere
 	- [x] Switch back to using nom now that the new version has been released
-  - [ ] Logging
-  - [ ] Add line numbers to errors
+  - [x] Logging
+  - [x] Add line numbers to errors
 
 * primitives.rs
 	- [x] Implement get_keychain_key
@@ -39,12 +39,12 @@
     - [x] Implement converting TOMLValue Arrays and InlineTables to Value Arrays and Tables
     - [x] Implement inserting new keys and values into map
     - [x] Implement inserting new Array or InlineTable value into AST
-	- [ ] Implement get_errors
-  - [ ] Value parsing on set_value (currently set_value accepts whatever you give it). *In progress, almost finished*
+	- [x] Implement ~~get_errors~~ Errors are returned as part of pars result if there are any
+  - [x] Value parsing on set_value (currently set_value accepts whatever you give it). *In progress, almost finished*
 	- [x] Implement get_children
   - [x] Convenience functions
     - [x] For creating TOMLValues, especially DateTime
-    - [ ] Combining a key and a subkey or index to a new key
+    - [x] Combining a key and a subkey or index to a new key
 	- [ ] Add unit tests for getting values
 	- [ ] Add unit tests for setting values
 	- [ ] Add unit tests to check the map to make sure removed keys are gone

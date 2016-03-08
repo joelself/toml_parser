@@ -75,14 +75,12 @@ impl<'a> Parser<'a> {
     }
     match *tables.borrow()[len - 1] {
       TableType::Array(ref last_at) | TableType::Standard(ref last_at) => {
-    // if let TableType::Array(ref last_at) = *tables.borrow()[len - 1] || let TableType::Standard(ref last_at) = *tables.borrow()[len - 1]
-    // {
         match *table {
           TableType::Array(ref tb) | TableType::Standard(ref tb) => {
             let mut first = true;
-            println!("last_at.keys.len() - 1: {}, tb.keys.len() - 1: {}", last_at.keys.len() - 1, tb.keys.len() - 1);
+            debug!("last_at.keys.len() - 1: {}, tb.keys.len() - 1: {}", last_at.keys.len() - 1, tb.keys.len() - 1);
             for i in 0..last_at.keys.len() {
-              println!("key {}: {}", i, last_at.keys[i].key);
+              debug!("key {}: {}", i, last_at.keys[i].key);
             }
             let mut start = last_at.keys.len();
             if last_key == "$Root$" {
@@ -91,7 +89,7 @@ impl<'a> Parser<'a> {
             for i in start..tb.keys.len() {
               let mut borrow = map.borrow_mut();
               let mut insert = false;
-              println!("index: {}, last_key: {}", i, last_key);
+              debug!("index: {}, last_key: {}", i, last_key);
               if let Entry::Occupied(mut o) = borrow.entry(last_key.clone()) {
                 if first {
                   insert = match &o.get_mut().subkeys {
@@ -113,7 +111,7 @@ impl<'a> Parser<'a> {
               }
               last_key.push_str(str!(tb.keys[i].key));
               if insert {
-                println!("insert last_key {}", last_key);
+                debug!("insert last_key {}", last_key);
                 if i == tb.keys.len() - 1 {
                   if let TableType::Array(_) = *table {
                     borrow.insert(last_key.clone(), HashValue::one_count());
@@ -132,13 +130,13 @@ impl<'a> Parser<'a> {
     if pop {
       tables.borrow_mut().pop();
     }
-    println!("Returning from add_implicit_tables");
+    debug!("Returning from add_implicit_tables");
   }
 
   fn increment_array_table_index(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,) {
     let parent_key = Parser::get_key_parent(tables, tables_index);
-    println!("increment_array_table_index: {}", parent_key);
+    debug!("increment_array_table_index: {}", parent_key);
     let mut borrow = map.borrow_mut();
     let entry = borrow.entry(parent_key);
     if let Entry::Occupied(mut o) = entry {
@@ -154,17 +152,17 @@ impl<'a> Parser<'a> {
   fn add_to_table_set(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>, key: &str) -> bool{
     let parent_key = Parser::get_key_parent(tables, tables_index);
-    println!("add_to_table_set: {}", parent_key);
+    debug!("add_to_table_set: {}", parent_key);
     let mut borrow = map.borrow_mut();
     let entry = borrow.entry(parent_key);
     if let Entry::Occupied(mut o) = entry {
       if let &Children::Keys(ref keys) = &o.get_mut().subkeys {
         let contains = keys.borrow().contains(key);
         if contains {
-          println!("key already exists");
+          debug!("key already exists");
           return false;
         } else {
-          println!("add_to_table_set--> {}", key);
+          debug!("add_to_table_set--> {}", key);
           keys.borrow_mut().insert(key.to_string());
         }
       }
@@ -216,7 +214,7 @@ impl<'a> Parser<'a> {
         }
         let map = RefCell::new(&mut self.map);
         let mut table_key = "".to_string();
-        println!("Before get len");
+        debug!("Before get len");
         let mut len = self.last_array_tables.borrow().len();
         if len > 0 {
           let current_key = format_tt_keys(&*res);
@@ -224,15 +222,15 @@ impl<'a> Parser<'a> {
           if current_key == last_key {
             error = true;
           } else {
-            println!("Check if subtable");
+            debug!("Check if subtable");
             let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
             if !subtable {
               loop {
-                println!("Not subtable pop {}", self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1]);
+                debug!("Not subtable pop {}", self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1]);
                 self.last_array_tables.borrow_mut().pop();
                 self.last_array_tables_index.borrow_mut().pop();
                 len -= 1;
-                println!("check array_tables len and subtable");
+                debug!("check array_tables len and subtable");
                 if len == 0 || res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]) {
                   break;
                 }
@@ -246,7 +244,7 @@ impl<'a> Parser<'a> {
               table_key = Parser::get_array_table_key(&map, &self.last_array_tables, &self.last_array_tables_index);
               self.last_array_tables.borrow_mut().pop();
               self.last_array_tables_index.borrow_mut().pop();
-              println!("Standard Table Key: {}", table_key);
+              debug!("Standard Table Key: {}", table_key);
               if map.borrow().contains_key(&table_key) {
                 let map_borrow = map.borrow();
                 let hash_val_opt = map_borrow.get(&table_key);
@@ -263,11 +261,17 @@ impl<'a> Parser<'a> {
             }
           }
         }
-        println!("Before error check");
+        debug!("Before error check");
         if error {
-          self.errors.borrow_mut().push(ParseError::InvalidTable (
-            format_tt_keys(&res), RefCell::new(HashMap::new())
+          self.last_array_tables.borrow_mut().push(res.clone());
+          self.last_array_tables_index.borrow_mut().push(0);
+          self.errors.borrow_mut().push(ParseError::InvalidTable(
+            Parser::get_array_table_key(&map, &self.last_array_tables,
+            &self.last_array_tables_index), self.line_count.get(),
+            RefCell::new(HashMap::new())
           ));
+          self.last_array_tables.borrow_mut().pop();
+          self.last_array_tables_index.borrow_mut().pop();
           self.array_error.set(true);
         } else {
           Parser::add_implicit_tables(&map, &self.last_array_tables,
@@ -315,34 +319,34 @@ impl<'a> Parser<'a> {
           if len > 0 {
             let mut len = self.last_array_tables.borrow().len();
             let last_key = format_tt_keys(&self.last_array_tables.borrow()[len - 1]);
-            println!("current_key: {}, last_key: {}", current_key, last_key);
+            debug!("current_key: {}, last_key: {}", current_key, last_key);
             if current_key == last_key {
-              println!("Increment array table index");
+              debug!("Increment array table index");
               Parser::increment_array_table_index(&map, &self.last_array_tables,
                 &self.last_array_tables_index);
             } else {
               let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
               if subtable {
-                println!("Is subtable");
+                debug!("Is subtable");
                 Parser::add_implicit_tables(&map, &self.last_array_tables,
                   &self.last_array_tables_index, res.clone());
                 self.last_array_tables.borrow_mut().push(res.clone());
                 self.last_array_tables_index.borrow_mut().push(0);
               } else {
-                println!("NOT subtable");
+                debug!("NOT subtable");
                 while self.last_array_tables.borrow().len() > 0 &&
                   current_key != format_tt_keys(&self.last_array_tables.borrow()[self.last_array_tables.borrow().len() - 1]) {
-                  println!("pop table");
+                  debug!("pop table");
                   self.last_array_tables.borrow_mut().pop();
                   self.last_array_tables_index.borrow_mut().pop();
                 }
                 len = self.last_array_tables.borrow().len();
                 if len > 0 {
-                  println!("Increment array table index the second");
+                  debug!("Increment array table index the second");
                   Parser::increment_array_table_index(&map, &self.last_array_tables,
                     &self.last_array_tables_index);
                 } else {
-                  println!("Add implicit tables");
+                  debug!("Add implicit tables");
                   Parser::add_implicit_tables(&map, &self.last_array_tables,
                     &self.last_array_tables_index,  res.clone());
                   self.last_array_tables.borrow_mut().push(res.clone());
@@ -351,16 +355,16 @@ impl<'a> Parser<'a> {
               }
             }
           } else {
-            println!("Len == 0 add implicit tables");
+            debug!("Len == 0 add implicit tables");
             Parser::add_implicit_tables(&map, &self.last_array_tables,
               &self.last_array_tables_index, res.clone());
             self.last_array_tables.borrow_mut().push(res.clone());
             self.last_array_tables_index.borrow_mut().push(0);
           }
-          println!("Before call to get_array_table_key");
+          debug!("Before call to get_array_table_key");
           let full_key = Parser::get_array_table_key(&map, &self.last_array_tables,
             &self.last_array_tables_index);
-          println!("After call to get_array_table_key");
+          debug!("After call to get_array_table_key");
           let contains_key = map.borrow().contains_key(&full_key);
           if !contains_key {
             map.borrow_mut().insert(full_key, HashValue::none_keys());
@@ -437,7 +441,7 @@ impl<'a> Parser<'a> {
     chain!(
      vals: many0!(call_m!(self.array_value)) ,
      ||{
-        println!("Finished array values");
+        debug!("Finished array values");
         let mut tmp = vec![];
         tmp.extend(vals);
         tmp
@@ -447,7 +451,7 @@ impl<'a> Parser<'a> {
 
   pub fn array(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, IResult<&'a str, Rc<RefCell<Array>>>) {
     // Initialize last array type to None, we need a stack because arrays can be nested
-    println!("*** array called on input:\t\t\t{}", input);
+    debug!("*** array called on input:\t\t\t{}", input);
     self.last_array_type.borrow_mut().push(ArrayType::None);
     self.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     let (tmp, res) = self.array_internal(input);
@@ -457,7 +461,7 @@ impl<'a> Parser<'a> {
       self.errors.borrow_mut().push(ParseError::MixedArray(
         Parser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
           &self.last_array_tables_index, &self.keychain
-        ).0
+        ).0, self.line_count.get()
       ));
     }
     self.keychain.borrow_mut().pop();
@@ -473,7 +477,7 @@ impl<'a> Parser<'a> {
          cn2: call_m!(self.comment_or_nls)  ~
               tag_s!("]")                   ,
       ||{
-        println!("Close array");
+        debug!("Close array");
        let array_result = Rc::new(RefCell::new(Array::new(array_vals, cn1, cn2)));
         array_result
       }

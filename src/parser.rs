@@ -12,11 +12,11 @@ use types::{ParseError, ParseResult, TOMLValue, Str, Children};
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
 named!(all_lines<&str, Vec<&str> >, many0!(full_line));
 
-pub fn count_lines(s: &str) -> u64 {
+pub fn count_lines(s: &str) -> usize {
 	let r = all_lines(s);
 	match &r {
-    &IResult::Done(_, ref o) => o.len() as u64,
-    _						 => 0 as u64,
+    &IResult::Done(_, ref o) => o.len() as usize,
+    _						 => 0 as usize,
 	}
 }
 
@@ -38,7 +38,7 @@ pub struct Parser<'a> {
 	pub map: HashMap<String, HashValue<'a>>,
 	pub errors: RefCell<Vec<ParseError<'a>>>,
 	pub leftover: &'a str,
-	pub line_count: Cell<u64>,
+	pub line_count: Cell<usize>,
 	pub last_array_tables: RefCell<Vec<Rc<TableType<'a>>>>,
 	pub last_array_tables_index: RefCell<Vec<usize>>,
 	pub keychain: RefCell<Vec<Key<'a>>>,
@@ -84,23 +84,23 @@ impl<'a> Parser<'a> {
       btree.insert(k, v);
 		}
     for (k, v) in btree.iter() {
-      println!("key: {} - {}", k, v);
+      debug!("key: {} - {}", k, v);
     }
 	}
 
-	pub fn get_result(self: &Parser<'a>) -> ParseResult<'a> {
+	pub fn get_result(self: &'a Parser<'a>) -> ParseResult<'a> {
 		if self.failure.get() == true {
-			return ParseResult::Failure(0, 0);
+			return ParseResult::Failure(self.line_count.get(), 0);
 		}
 		if self.leftover.len() > 0 {
 			if self.errors.borrow().len() > 0 {
-				return ParseResult::PartialError(Str::Str(self.leftover), self.get_errors());
+				return ParseResult::PartialError(Str::Str(self.leftover), &self.errors);
 			} else {
 				return ParseResult::Partial(Str::Str(self.leftover))
 			}
 		} else {
 			if self.errors.borrow().len() > 0 {
-				return ParseResult::FullError(self.get_errors());
+				return ParseResult::FullError(&self.errors);
 			} else {
 				return ParseResult::Full;
 			}
@@ -169,12 +169,12 @@ impl<'a> Parser<'a> {
     if self.map.contains_key(&key) {
       let existing_value = match self.map.entry(key.clone()) {
         Entry::Occupied(entry) => entry.into_mut(),
-        _ => panic!("Unreachable code in rebuild vector!"),
+        _ => panic!("Map contains key, but map.entry returned a Vacant entry is set_value."),
       };
       let opt_value: &mut Option<Rc<RefCell<Value<'a>>>> = &mut existing_value.value;
       let val_rf = match opt_value {
         &mut Some(ref mut v) => v,
-        &mut None => panic!("Unreachable code in rebuild vector!"),
+        &mut None => panic!("existing_value's value is None, when this should've returned false earlier in the function."),
       };
       *val_rf.borrow_mut() = new_value;
     }
@@ -184,6 +184,9 @@ impl<'a> Parser<'a> {
   }
   
   fn convert_vector(tval: &TOMLValue<'a>) -> Option<Value<'a>> {
+    if !tval.validate() {
+      return None;
+    }
      match tval {
       &TOMLValue::Array(ref arr) => {
         let mut values = vec![];
@@ -194,9 +197,6 @@ impl<'a> Parser<'a> {
             return None;
           }
           let value = value_opt.unwrap();
-          if !value.validate_string() {
-            return None;
-          }
           let array_value;
           if i < arr.len() - 1 {
             array_value = ArrayValue::default(Rc::new(RefCell::new(value)));
@@ -214,13 +214,7 @@ impl<'a> Parser<'a> {
         for i in 0..it.len() {
           let subval = &it[i].1;
           let value_opt = Parser::convert_vector(subval);
-          if value_opt.is_none() {
-            return None;
-          }
           let value = value_opt.unwrap();
-          if !value.validate_string() {
-            return None;
-          }
           let key_value;
           if i == 0 {
             key_value = TableKeyVal::first(&it[i].0, Rc::new(RefCell::new(value)));
@@ -233,15 +227,42 @@ impl<'a> Parser<'a> {
           InlineTable::new(key_values, WSSep::new_str(" ", " "))
         ))));
       },
-      &TOMLValue::Integer(ref s) => return Some(Value::Integer(s.clone())),
-      &TOMLValue::Float(ref s) => return Some(Value::Float(s.clone())),
+      &TOMLValue::Integer(ref s) => {
+        if tval.validate() {
+          return Some(Value::Integer(s.clone()))
+        } else {
+          return None;
+        }
+      },
+      &TOMLValue::Float(ref s) => {
+        if tval.validate() {
+          return Some(Value::Float(s.clone()))
+        } else {
+          return None;
+        }
+      },
       &TOMLValue::Boolean(b) => return Some(Value::Boolean(b)),
-      &TOMLValue::DateTime(ref dt) => return Some(Value::DateTime(dt.clone())),
-      &TOMLValue::String(ref s, st) => return Some(Value::String(s.clone(), st)),
+      &TOMLValue::DateTime(ref dt) => {
+        if tval.validate() {
+          return Some(Value::DateTime(dt.clone()))
+        } else {
+          return None;
+        }
+      },
+      &TOMLValue::String(ref s, st) => {
+        if tval.validate() {
+          return Some(Value::String(s.clone(), st))
+        } else {
+          return None;
+        }
+      },
     }
   }
   
   fn same_structure(val_rf: &Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) -> bool {
+    if !tval.validate() {
+      return false;
+    }
     match (&*val_rf.borrow(), tval) {
       (&Value::Array(ref arr), &TOMLValue::Array(ref t_arr)) => {
         let borrow = arr.borrow();
@@ -370,11 +391,8 @@ impl<'a> Parser<'a> {
       (_, &TOMLValue::Boolean(v)) 			=> Value::Boolean(v),
       (_, &TOMLValue::DateTime(ref v))	=> Value::DateTime(v.clone()),
       (_, &TOMLValue::String(ref s, t))	=> Value::String(s.clone(), t),
-      (_,_)                             => panic!("This code should not be unreachable."),
+      (v, tv)                             => panic!("Check for the same structure should have eliminated the possibility of replacing {} with {}", v, tv),
     };
-    if !value.validate_string() {
-      return false;
-    }
     *val_rf.borrow_mut() = value;
     return true;
   }
@@ -393,10 +411,6 @@ impl<'a> Parser<'a> {
 			result.push((kv.keyval.key.clone(), to_tval!(&*kv.keyval.val.borrow())));
 		}
 		return TOMLValue::InlineTable(Rc::new(result));
-	}
-
-	pub fn get_errors(self: &Parser<'a>) -> Vec<ParseError<'a>> {
-		unimplemented!{}
 	}
 }
 

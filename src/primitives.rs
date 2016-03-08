@@ -64,11 +64,11 @@ impl<'a> Parser<'a> {
     for i in 0..tables_len {
       match  &*tables.borrow()[i] {
         &TableType::Array(ref t) => {
-          println!("Array Table: {}", t);
+          debug!("Array Table: {}", t);
           let keys = get_last_keys(last_table, t);
           let len = keys.len();
           for j in prev_end..len - 1 {
-            println!("keys[{}] = {}", j, keys[j]);
+            debug!("keys[{}] = {}", j, keys[j]);
             full_key.push_str(&keys[j]);
             let map_borrow = map.borrow();
             let hash_value_opt = map_borrow.get(&full_key);
@@ -121,7 +121,7 @@ impl<'a> Parser<'a> {
         }
       }
     }
-    println!("full_key: {}", full_key);
+    debug!("full_key: {}", full_key);
     full_key
   }
 
@@ -152,7 +152,7 @@ impl<'a> Parser<'a> {
 
     let array_key = Parser::get_array_table_key(map, tables, tables_index);
     let (chain_key, parent_chain_key) = Parser::get_keychain_key(keychain);
-    println!("array_key: {}, chain_key: {}, parent_chain_key: {}", array_key, chain_key, parent_chain_key);
+    debug!("array_key: {}, chain_key: {}, parent_chain_key: {}", array_key, chain_key, parent_chain_key);
     let mut full_key = String::new();
     let mut parent_key = String::new();
     if array_key.len() > 0 {
@@ -165,12 +165,12 @@ impl<'a> Parser<'a> {
     }
     full_key.push_str(&chain_key);
     parent_key.push_str(&parent_chain_key);
-    println!("full_key: {}, parent_key: {}", full_key, parent_key);
+    debug!("full_key: {}, parent_key: {}", full_key, parent_key);
     return (full_key, parent_key);
   }
 
   pub fn insert_keyval_into_map(&mut self, val: Rc<RefCell<Value<'a>>>) {
-    println!("Insert val: {}", *(*val).borrow());
+    debug!("Insert val: {}", *(*val).borrow());
     let map = RefCell::new(&mut self.map);
     let mut insert = false;
     let mut error = false;
@@ -248,24 +248,24 @@ impl<'a> Parser<'a> {
     }
 
     if error {
-      println!("Error: {}", *(*val).borrow());
+      debug!("Error: {}", *(*val).borrow());
       self.errors.borrow_mut().push(ParseError::DuplicateKey(
-        full_key, to_tval!(&*val.borrow())
+        full_key, self.line_count.get() ,to_tval!(&*val.borrow())
       ));
     } else if setvalue  || insert {
       if setvalue {
-        println!("Set existing hash value. full_key: {}, parent_key: {}, val: {}", full_key, parent_key, *(*val).borrow());
+        debug!("Set existing hash value. full_key: {}, parent_key: {}, val: {}", full_key, parent_key, *(*val).borrow());
         let mut borrow = map.borrow_mut();
         let entry = borrow.entry(full_key.clone());
         match entry {
           Entry::Occupied(mut o) => {
-            println!("Children: {:?}", &o.get_mut().subkeys);
+            debug!("Children: {:?}", &o.get_mut().subkeys);
             o.get_mut().value = Some(val.clone());
           },
           _ => panic!("Unreachable! Set existing hash value has no exisiting hash value."),
         }
       } else if insert {
-        println!("Insert full_key: {}, parent_key: {}, val: {}", full_key, parent_key, *(*val).borrow());
+        debug!("Insert full_key: {}, parent_key: {}, val: {}", full_key, parent_key, *(*val).borrow());
         match *val.borrow() {
           Value::InlineTable(_) => map.borrow_mut().insert(full_key.clone(), HashValue::new_keys(val.clone())),
           _                     => map.borrow_mut().insert(full_key.clone(), HashValue::new_count(val.clone())),
@@ -278,9 +278,9 @@ impl<'a> Parser<'a> {
         let entry = borrow.entry(parent_key.clone());
         match entry {
           Entry::Occupied(mut o) => {
-            println!("Children: {:?}", &o.get_mut().subkeys);
+            debug!("Children: {:?}", &o.get_mut().subkeys);
             match &o.get_mut().subkeys {
-              &Children::Count(ref c) => { println!("parent inc to {}", c.get() + 1); c.set(c.get() + 1) },
+              &Children::Count(ref c) => { debug!("parent inc to {}", c.get() + 1); c.set(c.get() + 1) },
               &Children::Keys(ref hs_rf) => {
                 if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
                   hs_rf.borrow_mut().insert(string_ref!(s));
@@ -289,12 +289,12 @@ impl<'a> Parser<'a> {
             }
           },
           Entry::Vacant(v) => {
-            println!("vacant parent");
+            debug!("vacant parent");
             if let Key::Index(_) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
-              println!("initialize to 1");
+              debug!("initialize to 1");
               v.insert(HashValue::one_count());
             } else if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
-              println!("initialize to string: {}", s);
+              debug!("initialize to string: {}", s);
               v.insert(HashValue::one_keys(string_ref!(s)));
             }
           },
@@ -473,7 +473,7 @@ impl<'a> Parser<'a> {
             self.errors.borrow_mut().push(ParseError::InvalidDateTime(
               Parser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
                 &self.last_array_tables_index, &self.keychain
-              ).0
+              ).0, self.line_count.get()
             ));
           }
           res
@@ -525,10 +525,10 @@ impl<'a> Parser<'a> {
       || {
         let res = KeyVal::new_str(key, ws, val);
         if self.array_error.get() {
-          println!("array_error");
+          debug!("array_error");
           let err = self.errors.borrow_mut().pop().unwrap();
-          if let ParseError::InvalidTable(_, ref map) = err {
-            println!("InvalidTable");
+          if let ParseError::InvalidTable(_, _, ref map) = err {
+            debug!("InvalidTable");
             map.borrow_mut().insert(res.key.to_string(), to_tval!(&*res.val.borrow()));
           }
           self.errors.borrow_mut().push(err);
