@@ -32,7 +32,7 @@ Next steps for the first release are:
   - [x] For creating TOMLValues, especially DateTime
   - [x] Combining a key and a subkey to a new key
 - [x] Logging
-- [ ] Unit tests for key look-up
+- [x] Unit tests for key look-up
   - [ ] Unit tests for sub-key look-up
 - [ ] Unit tests for key modification
 - [ ] An integration test that fails or returns errors for each invalid toml-test
