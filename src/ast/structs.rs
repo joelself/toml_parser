@@ -2,7 +2,6 @@ use std::fmt;
 use std::fmt::Display;
 use std::rc::Rc;
 use std::cell::{RefCell, Cell};
-use std::collections::HashSet;
 use std::option::Option;
 use ::types::{DateTime, StrType, Str, Bool, Children};
 
@@ -176,21 +175,19 @@ impl<'a> HashValue<'a> {
 	pub fn new_keys(value: Rc<RefCell<Value<'a>>>) -> HashValue<'a> {
 		HashValue {
 			value: Some(value),
-			subkeys: Children::Keys(RefCell::new(HashSet::new())),
+			subkeys: Children::Keys(RefCell::new(vec![])),
 		}
 	}
 	pub fn none_keys() -> HashValue<'a> {
 		HashValue {
 			value: None,
-			subkeys: Children::Keys(RefCell::new(HashSet::new())),
+			subkeys: Children::Keys(RefCell::new(vec![])),
 		}
 	}
   pub fn one_keys(key: String) -> HashValue<'a> {
-    let mut set = HashSet::new();
-    set.insert(key);
     HashValue {
       value: None,
-      subkeys: Children::Keys(RefCell::new(set)),
+      subkeys: Children::Keys(RefCell::new(vec![key])),
     }
   }
 	pub fn new_count(value: Rc<RefCell<Value<'a>>>) -> HashValue<'a> {

@@ -1,4 +1,4 @@
-use std::collections::{HashSet, HashMap};
+use std::collections::HashMap;
 use std::hash::Hasher;
 use std::rc::Rc;
 use std::cell::{Cell, RefCell};
@@ -45,7 +45,7 @@ impl Display for Bool {
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Children {
   Count(Cell<usize>),
-  Keys(RefCell<HashSet<String>>)
+  Keys(RefCell<Vec<String>>)
 }
 
 impl Children {

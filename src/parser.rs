@@ -132,8 +132,14 @@ impl<'a> Parser<'a> {
 	}
 
   pub fn get_children(self: &Parser<'a>, key: String) -> Option<&Children> {
-    if self.map.contains_key(&key) {
-      let hashval = self.map.get(&key).unwrap();
+    let k;
+    if key == "" {
+      k = "$Root$".to_string();
+    } else {
+      k = key;
+    }
+    if self.map.contains_key(&k) {
+      let hashval = self.map.get(&k).unwrap();
       return Some(&hashval.subkeys);
     } else {
       None
@@ -332,7 +338,7 @@ impl<'a> Parser<'a> {
           value.value = Some(val.clone());
           if let Children::Keys(ref child_keys) = value.subkeys {
             for i in 0..it.borrow().keyvals.len() {
-              child_keys.borrow_mut().insert(string!(it.borrow().keyvals[i].keyval.key));
+              Parser::insert(child_keys, string!(it.borrow().keyvals[i].keyval.key));
             }
           }
         }
@@ -432,8 +438,9 @@ impl<'a> Display for Parser<'a> {
 
 #[cfg(test)]
 mod test {
+  use std::cell::{Cell, RefCell};
   use parser::Parser;
-  use types::TOMLValue;
+  use types::{TOMLValue, Children};
   struct TT;
   impl TT {
     fn get<'a>() -> &'a str {
@@ -494,7 +501,6 @@ Age = 44"#;
   fn test_key_array() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.print_keys_and_values();
     assert_eq!(p.get_value("car.drivers[0]".to_string()), res2opt!(TOMLValue::basic_string("Bob")));
     assert_eq!(p.get_value("car.drivers[1]".to_string()), res2opt!(TOMLValue::basic_string("Jane")));
     assert_eq!(p.get_value("car.drivers[2]".to_string()), res2opt!(TOMLValue::basic_string("John")));
@@ -519,7 +525,6 @@ Age = 44"#;
     
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.print_keys_and_values();
     assert_eq!(p.get_value("car.interior.seats.type".to_string()), res2opt!(TOMLValue::ml_literal_string("fabric")));
     assert_eq!(p.get_value("car.interior.seats.count".to_string()), res2opt!(TOMLValue::int_str("5")));
   }
@@ -532,5 +537,83 @@ Age = 44"#;
     assert_eq!(p.get_value("car.owners[0].Age".to_string()), Some(TOMLValue::int(25)));
     assert_eq!(p.get_value("car.owners[1].Name".to_string()), res2opt!(TOMLValue::literal_string("Jane Doe")));
     assert_eq!(p.get_value("car.owners[1].Age".to_string()), Some(TOMLValue::int(44)));
+  }
+  
+  #[test]
+  fn test_get_root_children() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_children("".to_string()), Some(&Children::Keys(RefCell::new(vec!["animal".to_string(), "car".to_string()]))));
+  }
+  
+  #[test]
+  fn test_get_table_children() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_children("car".to_string()),
+      Some(&Children::Keys(RefCell::new(vec!["model".to_string(), "\"ωλèèℓƨ\"".to_string(), "\"ƭôƥ ƨƥèèδ\"".to_string(),
+        "\"Date of Manufacture\"".to_string(), "drivers".to_string(), "properties".to_string(), "interior".to_string(),
+        "owners".to_string()]))));
+  }
+  
+  #[test]
+  fn test_get_array_children() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_children("car.drivers".to_string()), Some(&Children::Count(Cell::new(5))));
+  }
+  
+  #[test]
+  fn test_get_inline_table_children() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_children("car.properties".to_string()),
+      Some(&Children::Keys(RefCell::new(vec!["color".to_string(), "\"plate number\"".to_string(), "accident_dates".to_string()]))));
+  }
+  
+  #[test]
+  fn test_get_nested_inline_table_children() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_children("car.drivers[4]".to_string()),
+      Some(&Children::Keys(RefCell::new(vec!["disallowed".to_string(), "banned".to_string()]))));
+  }
+  
+  #[test]
+  fn test_get_nested_array_children() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_children("car.properties.accident_dates".to_string()), Some(&Children::Count(Cell::new(3))));
+  }
+  
+  #[test]
+  fn test_implicit_table_children() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_children("car.interior.seats".to_string()),
+      Some(&Children::Keys(RefCell::new(vec!["type".to_string(), "count".to_string()]))));
+  }
+  
+  #[test]
+  fn test_get_array_of_table_children() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_children("car.owners".to_string()), Some(&Children::Count(Cell::new(2))));
+  }
+  
+  #[test]
+  fn test_get_array_of_table0_children() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_children("car.owners[0]".to_string()),
+      Some(&Children::Keys(RefCell::new(vec!["Name".to_string(), "Age".to_string()]))));
+  }
+  
+  #[test]
+  fn test_get_array_of_table1_children() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_children("car.owners[1]".to_string()),
+      Some(&Children::Keys(RefCell::new(vec!["Name".to_string(), "Age".to_string()]))));
   }
 }

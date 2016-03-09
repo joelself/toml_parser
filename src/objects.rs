@@ -25,6 +25,25 @@ fn map_val_to_array_type(val: &Value) -> ArrayType {
 }
 
 impl<'a> Parser<'a> {
+  
+  pub fn insert(vector: &RefCell<Vec<String>>, insert: String) -> bool {
+    for s in vector.borrow().iter() {
+      if s == &insert {
+        return false;
+      }
+    }
+    vector.borrow_mut().push(insert);
+    return true;
+  }
+  
+  fn contains(vector: &RefCell<Vec<String>>, find: &str) -> bool {
+    for s in vector.borrow().iter() {
+      if s == find {
+        return true;
+      }
+    }
+    return false;
+  }
 
   fn is_top_std_table(tables: &RefCell<Vec<Rc<TableType<'a>>>>) -> bool {
     if tables.borrow().len() ==  0 {
@@ -93,13 +112,13 @@ impl<'a> Parser<'a> {
               if let Entry::Occupied(mut o) = borrow.entry(last_key.clone()) {
                 if first {
                   insert = match &o.get_mut().subkeys {
-                    &Children::Keys(ref hs_rf) => hs_rf.borrow_mut().insert(string!(tb.keys[i].key)),
+                    &Children::Keys(ref vec_rf) => Parser::insert(vec_rf, string!(tb.keys[i].key)),
                     &Children::Count(ref cell) => { cell.set(cell.get() + 1); true },
                   };
                   first = false;
                 } else {
                   insert = match &o.get_mut().subkeys {
-                    &Children::Keys(ref hs_rf) => hs_rf.borrow_mut().insert(string!(tb.keys[i].key)),
+                    &Children::Keys(ref vec_rf) => Parser::insert(vec_rf, string!(tb.keys[i].key)),
                     _ => panic!("Implicit tables can only be Standard Tables: \"{}\"", format!("{}.{}", last_key, str!(tb.keys[i].key))),
                   };
                 }
@@ -157,13 +176,13 @@ impl<'a> Parser<'a> {
     let entry = borrow.entry(parent_key);
     if let Entry::Occupied(mut o) = entry {
       if let &Children::Keys(ref keys) = &o.get_mut().subkeys {
-        let contains = keys.borrow().contains(key);
+        let contains = Parser::contains(keys, key);
         if contains {
           debug!("key already exists");
           return false;
         } else {
           debug!("add_to_table_set--> {}", key);
-          keys.borrow_mut().insert(key.to_string());
+          Parser::insert(keys, key.to_string());
         }
       }
     }

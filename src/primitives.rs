@@ -176,7 +176,7 @@ impl<'a> Parser<'a> {
     let mut error = false;
     let mut setvalue = false;
     let full_key: String;
-    let parent_key: String;
+    let mut parent_key: String;
     match &self.last_table {
       // If the last table is None
       //  If the key exists
@@ -187,6 +187,9 @@ impl<'a> Parser<'a> {
         let tuple = Parser::get_keychain_key(&self.keychain);
         full_key = tuple.0;
         parent_key = tuple.1;
+        if parent_key == "" {
+          parent_key.push_str("$Root$");
+        }
         let map_borrow = map.borrow();
         let hv_opt = map_borrow.get(&full_key);
         if let Some(hv) = hv_opt {
@@ -281,9 +284,9 @@ impl<'a> Parser<'a> {
             debug!("Children: {:?}", &o.get_mut().subkeys);
             match &o.get_mut().subkeys {
               &Children::Count(ref c) => { debug!("parent inc to {}", c.get() + 1); c.set(c.get() + 1) },
-              &Children::Keys(ref hs_rf) => {
+              &Children::Keys(ref vec_rf) => {
                 if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
-                  hs_rf.borrow_mut().insert(string_ref!(s));
+                  Parser::insert(vec_rf,string_ref!(s));
                 }
               },
             }
@@ -438,7 +441,6 @@ impl<'a> Parser<'a> {
            tag_s!(":")                                            ~
    minute: re_find!("^[0-9]{2}")                                  ,
       ||{
-        println!("TimeOffsetAmount: {} {} {}", pos_neg, hour, minute);
         TimeOffsetAmount::new_str(pos_neg, hour, minute)
       }
     )
