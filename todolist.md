@@ -48,7 +48,7 @@
     - [x] Combining a key and a subkey or index to a new key
 	- [x] Add unit tests for getting values
     - [x] Add unit tests for getting sub-keys
-	- [ ] Add unit tests for setting values
+	- [x] Add unit tests for setting values
 	- [ ] Add unit tests to check the map to make sure removed keys are gone
   
 * tests/assets.rs
