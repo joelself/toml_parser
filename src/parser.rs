@@ -78,13 +78,23 @@ impl<'a> Parser<'a> {
 		self
 	}
 
-	pub fn print_keys_and_values(self: &Parser<'a>) {
+	pub fn print_keys_and_values_debug(self: &Parser<'a>) {
     let mut btree = BTreeMap::new();
 		for (k, v) in self.map.iter() {
       btree.insert(k, v);
 		}
     for (k, v) in btree.iter() {
       debug!("key: {} - {}", k, v);
+    }
+	}
+
+	pub fn print_keys_and_values(self: &Parser<'a>) {
+    let mut btree = BTreeMap::new();
+		for (k, v) in self.map.iter() {
+      btree.insert(k, v);
+		}
+    for (k, v) in btree.iter() {
+      println!("key: {} - {}", k, v);
     }
 	}
 
@@ -216,10 +226,10 @@ impl<'a> Parser<'a> {
           let value_opt = Parser::convert_vector(subval);
           let value = value_opt.unwrap();
           let key_value;
-          if i == 0 {
-            key_value = TableKeyVal::first(&it[i].0, Rc::new(RefCell::new(value)));
-          } else {
+          if i < it.len() - 1 {
             key_value = TableKeyVal::default(&it[i].0, Rc::new(RefCell::new(value)));
+          } else {
+            key_value = TableKeyVal::last(&it[i].0, Rc::new(RefCell::new(value)));
           }
           key_values.push(key_value);
         }
@@ -397,7 +407,7 @@ impl<'a> Parser<'a> {
     return true;
   }
 
-	pub fn sanitize_array(arr: Rc<RefCell<Array<'a>>>) -> TOMLValue<'a> {
+  pub fn sanitize_array(arr: Rc<RefCell<Array<'a>>>) -> TOMLValue<'a> {
 		let mut result: Vec<TOMLValue> = vec![];
 		for av in arr.borrow().values.iter() {
 			result.push(to_tval!(&*av.val.borrow()));
@@ -418,4 +428,109 @@ impl<'a> Display for Parser<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "{}", *self.root.borrow())
 	}
+}
+
+#[cfg(test)]
+mod test {
+  use parser::Parser;
+  use types::TOMLValue;
+  struct TT;
+  impl TT {
+    fn get<'a>() -> &'a str {
+      return r#"animal = "bear"
+
+[car]
+model = "Civic"
+"ωλèèℓƨ" = 4
+"ƭôƥ ƨƥèèδ" = 124.56
+"Date of Manufacture" = 2007-05-16T10:12:13.2324+04:00
+drivers = ["Bob", "Jane", "John", "Michael", { disallowed = "Chris", banned="Sally"}]
+properties = { color = "red", "plate number" = "ABC 345",
+               accident_dates = [2008-09-29, 2011-01-16, 2014-11-30T03:13:54]}
+
+[car.interior.seats]
+type = '''fabric'''
+count = 5
+
+[[car.owners]]
+Name = """Bob Jones"""
+Age = 25
+[[car.owners]]
+Name = 'Jane Doe'
+Age = 44"#;
+    }
+  }
+  
+
+  #[test]
+  fn test_bare_key() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_value("animal".to_string()), res2opt!(TOMLValue::basic_string("bear")));
+  }
+
+  #[test]
+  fn test_key_val() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_value("car.model".to_string()), res2opt!(TOMLValue::basic_string("Civic")));
+  }
+
+  #[test]
+  fn test_quoted_key_val_int() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_value("car.\"ωλèèℓƨ\"".to_string()), res2opt!(TOMLValue::int_str("4")));
+  }
+
+  #[test]
+  fn test_quoted_key_val_float() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_value("car.\"ƭôƥ ƨƥèèδ\"".to_string()), res2opt!(TOMLValue::float_str("124.56")));
+  }
+
+  #[test]
+  fn test_key_array() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    p.print_keys_and_values();
+    assert_eq!(p.get_value("car.drivers[0]".to_string()), res2opt!(TOMLValue::basic_string("Bob")));
+    assert_eq!(p.get_value("car.drivers[1]".to_string()), res2opt!(TOMLValue::basic_string("Jane")));
+    assert_eq!(p.get_value("car.drivers[2]".to_string()), res2opt!(TOMLValue::basic_string("John")));
+    assert_eq!(p.get_value("car.drivers[3]".to_string()), res2opt!(TOMLValue::basic_string("Michael")));
+    assert_eq!(p.get_value("car.drivers[4].disallowed".to_string()), res2opt!(TOMLValue::basic_string("Chris")));
+    assert_eq!(p.get_value("car.drivers[4].banned".to_string()), res2opt!(TOMLValue::basic_string("Sally")));
+  }
+
+  #[test]
+  fn test_key_inline_table() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_value("car.properties.color".to_string()), res2opt!(TOMLValue::basic_string("red")));
+    assert_eq!(p.get_value("car.properties.\"plate number\"".to_string()), res2opt!(TOMLValue::basic_string("ABC 345")));
+    assert_eq!(p.get_value("car.properties.accident_dates[0]".to_string()), res2opt!(TOMLValue::date_str("2008", "09", "29")));
+    assert_eq!(p.get_value("car.properties.accident_dates[1]".to_string()), res2opt!(TOMLValue::date_int(2011, 1, 16)));
+    assert_eq!(p.get_value("car.properties.accident_dates[2]".to_string()), res2opt!(TOMLValue::datetime_str("2014", "11", "30", "03", "13", "54")));
+  }
+
+  #[test]
+  fn test_implicit_table() {
+    
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    p.print_keys_and_values();
+    assert_eq!(p.get_value("car.interior.seats.type".to_string()), res2opt!(TOMLValue::ml_literal_string("fabric")));
+    assert_eq!(p.get_value("car.interior.seats.count".to_string()), res2opt!(TOMLValue::int_str("5")));
+  }
+
+  #[test]
+  fn test_array_table() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    assert_eq!(p.get_value("car.owners[0].Name".to_string()), res2opt!(TOMLValue::ml_basic_string("Bob Jones")));
+    assert_eq!(p.get_value("car.owners[0].Age".to_string()), Some(TOMLValue::int(25)));
+    assert_eq!(p.get_value("car.owners[1].Name".to_string()), res2opt!(TOMLValue::literal_string("Jane Doe")));
+    assert_eq!(p.get_value("car.owners[1].Age".to_string()), Some(TOMLValue::int(44)));
+  }
 }

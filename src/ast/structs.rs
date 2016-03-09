@@ -134,18 +134,6 @@ pub enum Value<'a> {
 	InlineTable(Rc<RefCell<InlineTable<'a>>>),
 }
 
-// impl<'a> Value<'a> {
-//   pub fn validate_string(&self) -> bool {
-//     match self {
-//       &Value::Integer(ref s) => {return true},
-//       &Value::Float(ref s) => {return true},
-//       &Value::DateTime(ref dt) => {dt.validate(true)},
-//       &Value::String(ref s, st) => {return true},
-//       _ => return true,
-//     }
-//   }
-// }
-
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum ArrayType {
 	Integer,
@@ -666,47 +654,63 @@ impl<'a> Array<'a> {
 #[derive(Debug, Eq)]
 pub struct TableKeyVal<'a> {
 	pub keyval: KeyVal<'a>,
-	pub kv_sep: WSSep<'a>,
+	pub kv_sep: Option<WSSep<'a>>,
+	pub comment_nls: Vec<CommentOrNewLines<'a>>,
 }
 
 impl<'a> PartialEq for TableKeyVal<'a> {
 	fn eq(&self, other: &TableKeyVal<'a>) -> bool {
 		self.keyval == other.keyval &&
-		self.kv_sep == other.kv_sep
+		self.kv_sep == other.kv_sep &&
+    self.comment_nls == self.comment_nls
 	}
 }
 
 impl<'a> Display for TableKeyVal<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    	write!(f, "{}{}{}", self.kv_sep.ws1, self.keyval, self.kv_sep.ws2)
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    if self.comment_nls.len() > 0 {
+      match self.kv_sep {
+        Some(ref s) => try!(write!(f, "{}{},{}", self.keyval, s.ws1, s.ws2)),
+        None => try!(write!(f, "{}", self.keyval)),
+      }
+      for i in 0..self.comment_nls.len() - 1 {
+        try!(write!(f, "{}", self.comment_nls[i]));
+      }
+      write!(f, "{}", self.comment_nls[self.comment_nls.len() - 1])
+    } else {
+      match self.kv_sep {
+        Some(ref s) => write!(f, "{}{},{}", self.keyval, s.ws1, s.ws2),
+        None => write!(f, "{}", self.keyval),
+      }
     }
+  }
 }
 
 impl<'a> TableKeyVal<'a> {
-    pub fn new(keyval: KeyVal<'a>, kv_sep: WSSep<'a>) -> TableKeyVal<'a> {
-    	TableKeyVal{keyval: keyval, kv_sep: kv_sep}
+    pub fn new(keyval: KeyVal<'a>, kv_sep: Option<WSSep<'a>>, comment_nls: Vec<CommentOrNewLines<'a>>) -> TableKeyVal<'a> {
+    	TableKeyVal{keyval: keyval, kv_sep: kv_sep, comment_nls: comment_nls}
     }
     pub fn default(key: &Str<'a>, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> {
       match key {
         &Str::Str(s) => {
           let keyval = KeyVal::new_str(s, WSSep::new_str(" ", " "), val);
-          TableKeyVal{keyval: keyval, kv_sep: WSSep::new_str(" ", "")}
+          TableKeyVal{keyval: keyval, kv_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
         },
         &Str::String(ref s) => {
           let keyval = KeyVal::new_string(s.clone(), WSSep::new_str(" ", " "), val);
-          TableKeyVal{keyval: keyval, kv_sep: WSSep::new_str(" ", "")}
+          TableKeyVal{keyval: keyval, kv_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
         }
       }
     }
-    pub fn first(key: &Str<'a>, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> {
+    pub fn last(key: &Str<'a>, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> {
       match key {
         &Str::Str(s) => {
           let keyval = KeyVal::new_str(s, WSSep::new_str(" ", " "), val);
-          TableKeyVal{keyval: keyval, kv_sep: WSSep::new_str("", "")}
+          TableKeyVal{keyval: keyval, kv_sep: None, comment_nls: vec![]}
         },
         &Str::String(ref s) => {
           let keyval = KeyVal::new_string(s.clone(), WSSep::new_str(" ", " "), val);
-          TableKeyVal{keyval: keyval, kv_sep: WSSep::new_str("", "")}
+          TableKeyVal{keyval: keyval, kv_sep: None, comment_nls: vec![]}
         }
       }
     }
@@ -730,7 +734,7 @@ impl<'a> Display for InlineTable<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
   	try!(write!(f, "{{{}", self.ws.ws1));
 		for i in 0..self.keyvals.len() - 1 {
-			try!(write!(f, "{},", self.keyvals[i]));
+			try!(write!(f, "{}", self.keyvals[i]));
 		}
 		if self.keyvals.len() > 0 {
 			try!(write!(f, "{}", self.keyvals[self.keyvals.len() - 1]));

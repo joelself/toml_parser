@@ -438,6 +438,7 @@ impl<'a> Parser<'a> {
            tag_s!(":")                                            ~
    minute: re_find!("^[0-9]{2}")                                  ,
       ||{
+        println!("TimeOffsetAmount: {} {} {}", pos_neg, hour, minute);
         TimeOffsetAmount::new_str(pos_neg, hour, minute)
       }
     )
@@ -739,7 +740,8 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
               "\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"", WSSep::new_str("", ""),
               Rc::new(RefCell::new(Value::String(Str::Str("TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™"), StrType::Literal)))
             ),
-            WSSep::new_str("", "")
+            None,
+            vec![]
           )
         ],
         WSSep::new_str("", "")

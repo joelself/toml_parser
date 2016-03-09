@@ -411,7 +411,7 @@ impl<'a> TOMLValue<'a> {
     }
   }
   pub fn ml_literal_string(s: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    let result = TOMLValue::String(Str::String(s.to_string()), StrType::Basic);
+    let result = TOMLValue::String(Str::String(s.to_string()), StrType::MLLiteral);
     if result.validate() {
       return Result::Ok(result);
     } else {

@@ -148,7 +148,7 @@ enabled = true
  //      ),
  //    ])
  //  ));
-  parser.print_keys_and_values();
+  parser.print_keys_and_values_debug();
   
   
   println!("before: {}", parser.get_value("title".to_string()).unwrap());

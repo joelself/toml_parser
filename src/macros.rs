@@ -63,3 +63,13 @@ macro_rules! to_tval(
 macro_rules! call_s(
   ($i:expr, $method:path) => ( $method( $i ) );
 );
+
+#[macro_export]
+macro_rules! res2opt(
+  ($i:expr) => (
+    match $i {
+      Result::Ok(t) => Some(t),
+      Result::Err(_) => None,  
+    }
+  );
+);

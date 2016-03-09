@@ -374,7 +374,6 @@ impl<'a> Parser<'a> {
           }
           self.last_table = Some(res.clone());
         }
-        self.print_keys_and_values();
         res
       }
     )
@@ -486,16 +485,16 @@ impl<'a> Parser<'a> {
 
   method!(table_keyval<Parser<'a>, &'a str, TableKeyVal>, mut self,
         chain!(
-          ws1: call_m!(self.ws)     ~
-       keyval: call_m!(self.keyval) ~
-          ws2: call_m!(self.ws)     ,
+       keyval: call_m!(self.keyval)                     ~
+   keyval_sep: complete!(call_m!(self.array_sep))?      ~
+  comment_nls: complete!(call_m!(self.comment_or_nls))  ,
           ||{
-            TableKeyVal::new(keyval, WSSep::new_str(ws1, ws2))
+            TableKeyVal::new(keyval, keyval_sep, comment_nls)
           }
         )
   );
 
-  method!(inline_table_keyvals_non_empty<Parser<'a>, &'a str, Vec<TableKeyVal> >, mut self, separated_list!(tag_s!(","), call_m!(self.table_keyval)));
+  method!(inline_table_keyvals_non_empty<Parser<'a>, &'a str, Vec<TableKeyVal> >, mut self, many0!(call_m!(self.table_keyval)));
 
   method!(pub inline_table<Parser<'a>, &'a str, Rc<RefCell<InlineTable>> >, mut self,
     chain!(
@@ -769,28 +768,31 @@ mod test {
       KeyVal::new_str(
         "\"Ì WúƲ Húϱƨ!\"", WSSep::new_str("\t", "\t"), Rc::new(RefCell::new(Value::String(Str::Str("Mè ƭôô!"), StrType::Literal)))
       ),
-      WSSep::new_str("", " "),
+      None,
+      vec![]
     )));
   }
 
   #[test]
   fn test_inline_table_keyvals_non_empty() {
     let p = Parser::new();
-    assert_eq!(p.inline_table_keyvals_non_empty(" Key =\t54,\"Key2\" = '34.99'\t").1,
+    assert_eq!(p.inline_table_keyvals_non_empty("Key =\t54,\"Key2\" = '34.99'").1,
       Done("", vec![
         TableKeyVal::new(
           KeyVal::new_str(
             "Key", WSSep::new_str(" ", "\t"),
             Rc::new(RefCell::new(Value::Integer(Str::Str("54"))))
           ),
-          WSSep::new_str(" ", "")
+          Some(WSSep::new_str("", "")),
+          vec![]
         ),
         TableKeyVal::new(
           KeyVal::new_str(
             "\"Key2\"", WSSep::new_str( " ", " "),
             Rc::new(RefCell::new(Value::String(Str::Str("34.99"), StrType::Literal)))
           ),
-          WSSep::new_str("", "\t")
+          None,
+          vec![]
         )
       ])
     );
@@ -807,13 +809,15 @@ mod test {
               "Key", WSSep::new_str(" ", " "),
               Rc::new(RefCell::new(Value::Float(Str::Str("3.14E+5"))))
             ),
-            WSSep::new_str("", " ")
+            Some(WSSep::new_str(" ", " ")),
+            vec![CommentOrNewLines::NewLines(Str::Str(""))]
           ),
           TableKeyVal::new(
             KeyVal::new_str("\"Key2\"", WSSep::new_str(" ", " "),
               Rc::new(RefCell::new(Value::String(Str::Str("New\nLine"), StrType::MLLiteral)))
             ),
-            WSSep::new_str(" ", "\t")
+            None,
+            vec![CommentOrNewLines::NewLines(Str::Str("\t"))]
           )
         ],
         WSSep::new_str("\t", "")
