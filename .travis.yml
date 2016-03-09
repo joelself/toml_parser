@@ -37,10 +37,3 @@ env:
     # - TRAVIS_CARGO_NIGHTLY_FEATURE=nightly
     # encrypted github token for doc upload (see `GH_TOKEN` link above)
     # - secure: "..."
-  make install && cd ../.. &&
-
-  kcov --verify \
-       --coveralls-id=$TRAVIS_JOB_ID \
-       --exclude-pattern=/.cargo \
-       target/kcov target/debug/$PKGNAME-*
-
