@@ -2,13 +2,13 @@
 macro_rules! to_tval(
   ($tval:expr) => (
     match $tval {
-      &Value::Integer(ref v) => TOMLValue::Integer(v.clone()),
-      &Value::Float(ref v) => TOMLValue::Float(v.clone()),
-      &Value::Boolean(v) => TOMLValue::Boolean(v),
-      &Value::DateTime(ref v) => TOMLValue::DateTime(v.clone()),
-      &Value::Array(ref arr) => Parser::sanitize_array(arr.clone()),
-      &Value::String(ref s, t) => TOMLValue::String(s.clone(), t.clone()),
-      &Value::InlineTable(ref it) => Parser::sanitize_inline_table(it.clone()),
+      &TOMLValue::Integer(ref v) => Value::Integer(v.clone()),
+      &TOMLValue::Float(ref v) => Value::Float(v.clone()),
+      &TOMLValue::Boolean(v) => Value::Boolean(v),
+      &TOMLValue::DateTime(ref v) => Value::DateTime(v.clone()),
+      &TOMLValue::Array(ref arr) => TOMLParser::sanitize_array(arr.clone()),
+      &TOMLValue::String(ref s, t) => Value::String(s.clone(), t.clone()),
+      &TOMLValue::InlineTable(ref it) => TOMLParser::sanitize_inline_table(it.clone()),
     }
   );
 );

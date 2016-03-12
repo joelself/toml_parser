@@ -6,9 +6,9 @@ use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use std::borrow::Cow;
 use nom::IResult;
-use ast::structs::{Toml, ArrayType, HashValue, TableType, Value, Array, InlineTable,
-                   ArrayValue, WSSep, TableKeyVal};
-use types::{ParseError, ParseResult, TOMLValue, Children};
+use ast::structs::{Toml, ArrayType, HashTOMLValue, TableType, TOMLValue, Array, InlineTable,
+                   ArrayTOMLValue, WSSep, TableKeyVal};
+use types::{ParseError, ParseResult, Value, Children};
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
 named!(all_lines<&str, Vec<&str> >, many0!(full_line));
@@ -34,9 +34,9 @@ impl<'a> Key<'a> {
 	}
 }
 
-pub struct Parser<'a> {
+pub struct TOMLParser<'a> {
 	pub root: RefCell<Toml<'a>>,
-	pub map: HashMap<String, HashValue<'a>>,
+	pub map: HashMap<String, HashTOMLValue<'a>>,
 	pub errors: RefCell<Vec<ParseError<'a>>>,
 	pub leftover: &'a str,
 	pub line_count: Cell<usize>,
@@ -51,11 +51,11 @@ pub struct Parser<'a> {
 }
 
 // TODO change this to return a parser result
-impl<'a> Parser<'a> {
-	pub fn new() -> Parser<'a> {
+impl<'a> TOMLParser<'a> {
+	pub fn new() -> TOMLParser<'a> {
 		let mut map = HashMap::new();
-		map.insert("$Root$".to_string(), HashValue::none_keys());
-		Parser{ root: RefCell::new(Toml{ exprs: vec![] }), map: map,
+		map.insert("$Root$".to_string(), HashTOMLValue::none_keys());
+		TOMLParser{ root: RefCell::new(Toml{ exprs: vec![] }), map: map,
 						errors: RefCell::new(vec![]), leftover: "",
 						line_count: Cell::new(0), last_array_tables: RefCell::new(vec![]),
 						last_array_tables_index: RefCell::new(vec![]),
@@ -65,7 +65,7 @@ impl<'a> Parser<'a> {
 						failure: Cell::new(false)}
 	}
 
-	pub fn parse(mut self: Parser<'a>, input: &'a str) -> Parser<'a> {
+	pub fn parse(mut self: TOMLParser<'a>, input: &'a str) -> TOMLParser<'a> {
 		let (tmp, res) = self.toml(input);
 		self = tmp;
 		//let mut res = self.result;
@@ -79,7 +79,7 @@ impl<'a> Parser<'a> {
 		self
 	}
 
-	pub fn print_keys_and_values_debug(self: &Parser<'a>) {
+	pub fn print_keys_and_values_debug(self: &TOMLParser<'a>) {
     let mut btree = BTreeMap::new();
 		for (k, v) in self.map.iter() {
       btree.insert(k, v);
@@ -89,7 +89,7 @@ impl<'a> Parser<'a> {
     }
 	}
 
-	pub fn print_keys_and_values(self: &Parser<'a>) {
+	pub fn print_keys_and_values(self: &TOMLParser<'a>) {
     let mut btree = BTreeMap::new();
 		for (k, v) in self.map.iter() {
       btree.insert(k, v);
@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
     }
 	}
 
-	pub fn get_result(self: &'a Parser<'a>) -> ParseResult<'a> {
+	pub fn get_result(self: &'a TOMLParser<'a>) -> ParseResult<'a> {
 		if self.failure.get() == true {
 			return ParseResult::Failure(self.line_count.get(), 0);
 		}
@@ -118,7 +118,7 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	pub fn get_value<S>(self: &Parser<'a>, key: S) -> Option<TOMLValue<'a>> where S: Into<String> {
+	pub fn get_value<S>(self: &TOMLParser<'a>, key: S) -> Option<Value<'a>> where S: Into<String> {
 		let s_key = key.into();
     if self.map.contains_key(&s_key) {
 			let hashval = self.map.get(&s_key).unwrap();
@@ -133,7 +133,7 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-  pub fn get_children<S>(self: &Parser<'a>, key: S) -> Option<&Children> where S: Into<String> {
+  pub fn get_children<S>(self: &TOMLParser<'a>, key: S) -> Option<&Children> where S: Into<String> {
     let s_key = key.into();
     let k;
     if s_key == "" {
@@ -149,21 +149,21 @@ impl<'a> Parser<'a> {
     }
   }
   
-  pub fn set_value<S>(self: &mut Parser<'a>, key: S, tval: TOMLValue<'a>) -> bool where S: Into<String> {
+  pub fn set_value<S>(self: &mut TOMLParser<'a>, key: S, tval: Value<'a>) -> bool where S: Into<String> {
     let s_key = key.into();
     {
       let val = match self.map.entry(s_key.clone()) {
         Entry::Occupied(entry) => entry.into_mut(),
         _ => return false,
       };
-      let opt_value: &mut Option<Rc<RefCell<Value<'a>>>> = &mut val.value;
+      let opt_value: &mut Option<Rc<RefCell<TOMLValue<'a>>>> = &mut val.value;
       let val_rf = match opt_value {
         &mut Some(ref mut v) => v,
         &mut None => return false,
       };
       // if the inline table/array has the same structure the just replace the values
-      if Parser::same_structure(val_rf, &tval) {
-        return Parser::replace_values(val_rf, &tval);
+      if TOMLParser::same_structure(val_rf, &tval) {
+        return TOMLParser::replace_values(val_rf, &tval);
       }
     }
     // if the inline table/array has a different structure, delete the existing
@@ -172,26 +172,26 @@ impl<'a> Parser<'a> {
     for key in all_keys.iter() {
       self.map.remove(key);
     }
-    let new_value_opt = Parser::convert_vector(&tval);
+    let new_value_opt = TOMLParser::convert_vector(&tval);
     if new_value_opt.is_none() {
       return false;
     }
     let new_value = new_value_opt.unwrap();
     let new_value_clone = match new_value {
-      Value::Array(ref rc_rc) => {
-        Value::Array(rc_rc.clone())
+      TOMLValue::Array(ref rc_rc) => {
+        TOMLValue::Array(rc_rc.clone())
       },
-      Value::InlineTable(ref rc_rc) => {
-        Value::InlineTable(rc_rc.clone())
+      TOMLValue::InlineTable(ref rc_rc) => {
+        TOMLValue::InlineTable(rc_rc.clone())
       },
-      unknown => panic!("In Parser.set_value, new_value should only be an Array or InlineTable. Instead it's a {:?}", unknown),
+      unknown => panic!("In TOMLParser.set_value, new_value should only be an Array or InlineTable. Instead it's a {:?}", unknown),
     };
     if self.map.contains_key(&s_key) {
       let existing_value = match self.map.entry(s_key.clone()) {
         Entry::Occupied(entry) => entry.into_mut(),
         _ => panic!("Map contains key, but map.entry returned a Vacant entry is set_value."),
       };
-      let opt_value: &mut Option<Rc<RefCell<Value<'a>>>> = &mut existing_value.value;
+      let opt_value: &mut Option<Rc<RefCell<TOMLValue<'a>>>> = &mut existing_value.value;
       let val_rf = match opt_value {
         &mut Some(ref mut v) => v,
         &mut None => panic!("existing_value's value is None, when this should've returned false earlier in the function."),
@@ -203,37 +203,37 @@ impl<'a> Parser<'a> {
     true
   }
   
-  fn convert_vector(tval: &TOMLValue<'a>) -> Option<Value<'a>> {
+  fn convert_vector(tval: &Value<'a>) -> Option<TOMLValue<'a>> {
     if !tval.validate() {
       return None;
     }
      match tval {
-      &TOMLValue::Array(ref arr) => {
+      &Value::Array(ref arr) => {
         let mut values = vec![];
         for i in 0..arr.len() {
           let subval = &arr[i];
-          let value_opt = Parser::convert_vector(subval);
+          let value_opt = TOMLParser::convert_vector(subval);
           if value_opt.is_none() {
             return None;
           }
           let value = value_opt.unwrap();
           let array_value;
           if i < arr.len() - 1 {
-            array_value = ArrayValue::default(Rc::new(RefCell::new(value)));
+            array_value = ArrayTOMLValue::default(Rc::new(RefCell::new(value)));
           } else {
-            array_value = ArrayValue::last(Rc::new(RefCell::new(value)));
+            array_value = ArrayTOMLValue::last(Rc::new(RefCell::new(value)));
           }
           values.push(array_value);
         }
-        return Some(Value::Array(Rc::new(RefCell::new(
+        return Some(TOMLValue::Array(Rc::new(RefCell::new(
           Array::new(values, vec![], vec![])
         ))));
       },
-      &TOMLValue::InlineTable(ref it) => {
+      &Value::InlineTable(ref it) => {
         let mut key_values = vec![];
         for i in 0..it.len() {
           let subval = &it[i].1;
-          let value_opt = Parser::convert_vector(subval);
+          let value_opt = TOMLParser::convert_vector(subval);
           let value = value_opt.unwrap();
           let key_value;
           if i < it.len() - 1 {
@@ -243,35 +243,35 @@ impl<'a> Parser<'a> {
           }
           key_values.push(key_value);
         }
-        return Some(Value::InlineTable(Rc::new(RefCell::new(
+        return Some(TOMLValue::InlineTable(Rc::new(RefCell::new(
           InlineTable::new(key_values, WSSep::new_str(" ", " "))
         ))));
       },
-      &TOMLValue::Integer(ref s) => {
+      &Value::Integer(ref s) => {
         if tval.validate() {
-          return Some(Value::Integer(s.clone()))
+          return Some(TOMLValue::Integer(s.clone()))
         } else {
           return None;
         }
       },
-      &TOMLValue::Float(ref s) => {
+      &Value::Float(ref s) => {
         if tval.validate() {
-          return Some(Value::Float(s.clone()))
+          return Some(TOMLValue::Float(s.clone()))
         } else {
           return None;
         }
       },
-      &TOMLValue::Boolean(b) => return Some(Value::Boolean(b)),
-      &TOMLValue::DateTime(ref dt) => {
+      &Value::Boolean(b) => return Some(TOMLValue::Boolean(b)),
+      &Value::DateTime(ref dt) => {
         if tval.validate() {
-          return Some(Value::DateTime(dt.clone()))
+          return Some(TOMLValue::DateTime(dt.clone()))
         } else {
           return None;
         }
       },
-      &TOMLValue::String(ref s, st) => {
+      &Value::String(ref s, st) => {
         if tval.validate() {
-          return Some(Value::String(s.clone(), st))
+          return Some(TOMLValue::String(s.clone(), st))
         } else {
           return None;
         }
@@ -279,25 +279,25 @@ impl<'a> Parser<'a> {
     }
   }
   
-  fn same_structure(val_rf: &Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) -> bool {
+  fn same_structure(val_rf: &Rc<RefCell<TOMLValue<'a>>>, tval: &Value<'a>) -> bool {
     if !tval.validate() {
       return false;
     }
     match (&*val_rf.borrow(), tval) {
-      (&Value::Array(ref arr), &TOMLValue::Array(ref t_arr)) => {
+      (&TOMLValue::Array(ref arr), &Value::Array(ref t_arr)) => {
         let borrow = arr.borrow();
         if borrow.values.len() != t_arr.len() {
           return false;
         }
         let len = borrow.values.len();
         for i in 0..len {
-          if !Parser::same_structure(&borrow.values[i].val, &t_arr[i]) {
+          if !TOMLParser::same_structure(&borrow.values[i].val, &t_arr[i]) {
             return false;
           }
         }
         return true;
       },
-      (&Value::InlineTable(ref it), &TOMLValue::InlineTable(ref t_it)) => {
+      (&TOMLValue::InlineTable(ref it), &Value::InlineTable(ref t_it)) => {
         let borrow = it.borrow();
         if borrow.keyvals.len() != t_it.len() {
           return false;
@@ -305,23 +305,23 @@ impl<'a> Parser<'a> {
         let len = borrow.keyvals.len();
         for i in 0..len {
           if borrow.keyvals[i].keyval.key != t_it[i].0 ||
-            !Parser::same_structure(&borrow.keyvals[i].keyval.val, &t_it[i].1) {
+            !TOMLParser::same_structure(&borrow.keyvals[i].keyval.val, &t_it[i].1) {
             return false;
           }
         }
         return true;
       },
-      (&Value::Array(_), _)           => return false, // Array replaced with scalar
-      (&Value::InlineTable(_), _)     => return false, // InlineTable replaced with scalar
-      (_, &TOMLValue::Array(_))       => return false, // scalar replaced with an Array
-      (_, &TOMLValue::InlineTable(_)) => return false, // scalar replaced with an InlineTable
+      (&TOMLValue::Array(_), _)           => return false, // Array replaced with scalar
+      (&TOMLValue::InlineTable(_), _)     => return false, // InlineTable replaced with scalar
+      (_, &Value::Array(_))       => return false, // scalar replaced with an Array
+      (_, &Value::InlineTable(_)) => return false, // scalar replaced with an InlineTable
       (_,_)                           => return true,  // scalar replaced with any other scalar
     }
   }
   
-  fn rebuild_vector(self: &mut Parser<'a>, key: String, val: Rc<RefCell<Value<'a>>>, skip: bool) {
+  fn rebuild_vector(self: &mut TOMLParser<'a>, key: String, val: Rc<RefCell<TOMLValue<'a>>>, skip: bool) {
     match *val.borrow() {
-      Value::Array(ref arr) => {
+      TOMLValue::Array(ref arr) => {
         {
           let value = match self.map.entry(key.clone()) {
             Entry::Occupied(entry) => entry.into_mut(),
@@ -337,7 +337,7 @@ impl<'a> Parser<'a> {
           self.rebuild_vector(subkey, arr.borrow().values[i].val.clone(), false);
         }
       },
-      Value::InlineTable(ref it) => {
+      TOMLValue::InlineTable(ref it) => {
         {
           let value = match self.map.entry(key.clone()) {
             Entry::Occupied(entry) => entry.into_mut(),
@@ -348,7 +348,7 @@ impl<'a> Parser<'a> {
           }
           if let Children::Keys(ref child_keys) = value.subkeys {
             for i in 0..it.borrow().keyvals.len() {
-              Parser::insert(child_keys, it.borrow().keyvals[i].keyval.key.clone().into_owned());
+              TOMLParser::insert(child_keys, it.borrow().keyvals[i].keyval.key.clone().into_owned());
             }
           }
         }
@@ -359,13 +359,13 @@ impl<'a> Parser<'a> {
       },
       _ => {
         self.map.entry(key.clone()).or_insert(
-          HashValue::new_count(val.clone())
+          HashTOMLValue::new_count(val.clone())
         );
       },
     }
   }
   
-  fn get_all_subkeys(self: &Parser<'a>, key: &str) -> Vec<String>{
+  fn get_all_subkeys(self: &TOMLParser<'a>, key: &str) -> Vec<String>{
     let hv_opt = self.map.get(key);
     let mut all_keys = vec![];
     if let Some(hv) = hv_opt {
@@ -390,57 +390,57 @@ impl<'a> Parser<'a> {
     all_keys
   }
   
-  fn replace_values(val_rf: &Rc<RefCell<Value<'a>>>, tval: &TOMLValue<'a>) -> bool {
+  fn replace_values(val_rf: &Rc<RefCell<TOMLValue<'a>>>, tval: &Value<'a>) -> bool {
     let value = match (&*val_rf.borrow(), tval) {
-      (&Value::Array(ref arr), &TOMLValue::Array(ref t_arr)) => {
+      (&TOMLValue::Array(ref arr), &Value::Array(ref t_arr)) => {
         let borrow = arr.borrow();
         let len = borrow.values.len();
         for i in 0..len {
-          if !Parser::replace_values(&borrow.values[i].val, &t_arr[i]) {
+          if !TOMLParser::replace_values(&borrow.values[i].val, &t_arr[i]) {
             return false;
           }
         }
         return true;
       },
-      (&Value::InlineTable(ref it), &TOMLValue::InlineTable(ref t_it)) => {
+      (&TOMLValue::InlineTable(ref it), &Value::InlineTable(ref t_it)) => {
         let borrow = it.borrow();
         let len = borrow.keyvals.len();
         for i in 0..len {
-          if !Parser::replace_values(&borrow.keyvals[i].keyval.val, &t_it[i].1) {
+          if !TOMLParser::replace_values(&borrow.keyvals[i].keyval.val, &t_it[i].1) {
             return false;
           }
         }
         return true;
       },
-      (_, &TOMLValue::Integer(ref v)) 	=> Value::Integer(v.clone()),
-      (_, &TOMLValue::Float(ref v))			=> Value::Float(v.clone()),
-      (_, &TOMLValue::Boolean(v)) 			=> Value::Boolean(v),
-      (_, &TOMLValue::DateTime(ref v))	=> Value::DateTime(v.clone()),
-      (_, &TOMLValue::String(ref s, t))	=> Value::String(s.clone(), t),
+      (_, &Value::Integer(ref v)) 	=> TOMLValue::Integer(v.clone()),
+      (_, &Value::Float(ref v))			=> TOMLValue::Float(v.clone()),
+      (_, &Value::Boolean(v)) 			=> TOMLValue::Boolean(v),
+      (_, &Value::DateTime(ref v))	=> TOMLValue::DateTime(v.clone()),
+      (_, &Value::String(ref s, t))	=> TOMLValue::String(s.clone(), t),
       (v, tv)                             => panic!("Check for the same structure should have eliminated the possibility of replacing {} with {}", v, tv),
     };
     *val_rf.borrow_mut() = value;
     return true;
   }
 
-  pub fn sanitize_array(arr: Rc<RefCell<Array<'a>>>) -> TOMLValue<'a> {
-		let mut result: Vec<TOMLValue> = vec![];
+  pub fn sanitize_array(arr: Rc<RefCell<Array<'a>>>) -> Value<'a> {
+		let mut result: Vec<Value> = vec![];
 		for av in arr.borrow().values.iter() {
 			result.push(to_tval!(&*av.val.borrow()));
 		}
-		TOMLValue::Array(Rc::new(result))
+		Value::Array(Rc::new(result))
 	}
 	
-	pub fn sanitize_inline_table(it: Rc<RefCell<InlineTable<'a>>>) -> TOMLValue<'a> {
-		let mut result: Vec<(Cow<'a, str>, TOMLValue)> = vec![];
+	pub fn sanitize_inline_table(it: Rc<RefCell<InlineTable<'a>>>) -> Value<'a> {
+		let mut result: Vec<(Cow<'a, str>, Value)> = vec![];
 		for kv in it.borrow().keyvals.iter() {
 			result.push((kv.keyval.key.clone(), to_tval!(&*kv.keyval.val.borrow())));
 		}
-		return TOMLValue::InlineTable(Rc::new(result));
+		return Value::InlineTable(Rc::new(result));
 	}
 }
 
-impl<'a> Display for Parser<'a> {
+impl<'a> Display for TOMLParser<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "{}", *self.root.borrow())
 	}
@@ -450,8 +450,8 @@ impl<'a> Display for Parser<'a> {
 mod test {
   use std::cell::{Cell, RefCell};
   use std::rc::Rc;
-  use parser::Parser;
-  use types::{TOMLValue, Children, StrType, Date, Time, DateTime, Bool};
+  use parser::TOMLParser;
+  use types::{Value, Children, StrType, Date, Time, DateTime};
   struct TT;
   impl TT {
     fn get<'a>() -> &'a str {
@@ -482,84 +482,84 @@ Age = 44"#;
 
   #[test]
   fn test_bare_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("animal".to_string()), res2opt!(TOMLValue::basic_string("bear")));
+    assert_eq!(p.get_value("animal".to_string()), res2opt!(Value::basic_string("bear")));
   }
 
   #[test]
   fn test_key_val() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.model"), res2opt!(TOMLValue::basic_string("Civic")));
+    assert_eq!(p.get_value("car.model"), res2opt!(Value::basic_string("Civic")));
   }
 
   #[test]
   fn test_quoted_key_val_int() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.\"ωλèèℓƨ\""), res2opt!(TOMLValue::int_from_str("4")));
+    assert_eq!(p.get_value("car.\"ωλèèℓƨ\""), res2opt!(Value::int_from_str("4")));
   }
 
   #[test]
   fn test_quoted_key_val_float() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.\"ƭôƥ ƨƥèèδ\""), res2opt!(TOMLValue::float_from_str("124.56")));
+    assert_eq!(p.get_value("car.\"ƭôƥ ƨƥèèδ\""), res2opt!(Value::float_from_str("124.56")));
   }
 
   #[test]
   fn test_key_array() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.drivers[0]"), res2opt!(TOMLValue::basic_string("Bob")));
-    assert_eq!(p.get_value("car.drivers[1]"), res2opt!(TOMLValue::basic_string("Jane")));
-    assert_eq!(p.get_value("car.drivers[2]"), res2opt!(TOMLValue::basic_string("John")));
-    assert_eq!(p.get_value("car.drivers[3]"), res2opt!(TOMLValue::basic_string("Michael")));
-    assert_eq!(p.get_value("car.drivers[4].disallowed"), res2opt!(TOMLValue::basic_string("Chris")));
-    assert_eq!(p.get_value("car.drivers[4].banned"), res2opt!(TOMLValue::basic_string("Sally")));
+    assert_eq!(p.get_value("car.drivers[0]"), res2opt!(Value::basic_string("Bob")));
+    assert_eq!(p.get_value("car.drivers[1]"), res2opt!(Value::basic_string("Jane")));
+    assert_eq!(p.get_value("car.drivers[2]"), res2opt!(Value::basic_string("John")));
+    assert_eq!(p.get_value("car.drivers[3]"), res2opt!(Value::basic_string("Michael")));
+    assert_eq!(p.get_value("car.drivers[4].disallowed"), res2opt!(Value::basic_string("Chris")));
+    assert_eq!(p.get_value("car.drivers[4].banned"), res2opt!(Value::basic_string("Sally")));
   }
 
   #[test]
   fn test_key_inline_table() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.properties.color"), res2opt!(TOMLValue::basic_string("red")));
-    assert_eq!(p.get_value("car.properties.\"plate number\""), res2opt!(TOMLValue::basic_string("ABC 345")));
-    assert_eq!(p.get_value("car.properties.accident_dates[0]"), res2opt!(TOMLValue::date_from_str("2008", "09", "29")));
-    assert_eq!(p.get_value("car.properties.accident_dates[1]"), res2opt!(TOMLValue::date_from_int(2011, 1, 16)));
-    assert_eq!(p.get_value("car.properties.accident_dates[2]"), res2opt!(TOMLValue::datetime_from_str("2014", "11", "30", "03", "13", "54")));
+    assert_eq!(p.get_value("car.properties.color"), res2opt!(Value::basic_string("red")));
+    assert_eq!(p.get_value("car.properties.\"plate number\""), res2opt!(Value::basic_string("ABC 345")));
+    assert_eq!(p.get_value("car.properties.accident_dates[0]"), res2opt!(Value::date_from_str("2008", "09", "29")));
+    assert_eq!(p.get_value("car.properties.accident_dates[1]"), res2opt!(Value::date_from_int(2011, 1, 16)));
+    assert_eq!(p.get_value("car.properties.accident_dates[2]"), res2opt!(Value::datetime_from_str("2014", "11", "30", "03", "13", "54")));
   }
 
   #[test]
   fn test_implicit_table() {
     
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.interior.seats.type"), res2opt!(TOMLValue::ml_literal_string("fabric")));
-    assert_eq!(p.get_value("car.interior.seats.count"), res2opt!(TOMLValue::int_from_str("5")));
+    assert_eq!(p.get_value("car.interior.seats.type"), res2opt!(Value::ml_literal_string("fabric")));
+    assert_eq!(p.get_value("car.interior.seats.count"), res2opt!(Value::int_from_str("5")));
   }
 
   #[test]
   fn test_array_table() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.owners[0].Name"), res2opt!(TOMLValue::ml_basic_string("Bob Jones")));
-    assert_eq!(p.get_value("car.owners[0].Age"), Some(TOMLValue::int(25)));
-    assert_eq!(p.get_value("car.owners[1].Name"), res2opt!(TOMLValue::literal_string("Jane Doe")));
-    assert_eq!(p.get_value("car.owners[1].Age"), Some(TOMLValue::int(44)));
+    assert_eq!(p.get_value("car.owners[0].Name"), res2opt!(Value::ml_basic_string("Bob Jones")));
+    assert_eq!(p.get_value("car.owners[0].Age"), Some(Value::int(25)));
+    assert_eq!(p.get_value("car.owners[1].Name"), res2opt!(Value::literal_string("Jane Doe")));
+    assert_eq!(p.get_value("car.owners[1].Age"), Some(Value::int(44)));
   }
   
   #[test]
   fn test_get_root_children() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
     assert_eq!(p.get_children(""), Some(&Children::Keys(RefCell::new(vec!["animal".to_string(), "car".to_string()]))));
   }
   
   #[test]
   fn test_get_table_children() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
     assert_eq!(p.get_children("car".to_string()),
       Some(&Children::Keys(RefCell::new(vec!["model".to_string(), "\"ωλèèℓƨ\"".to_string(), "\"ƭôƥ ƨƥèèδ\"".to_string(),
@@ -569,14 +569,14 @@ Age = 44"#;
   
   #[test]
   fn test_get_array_children() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
     assert_eq!(p.get_children("car.drivers"), Some(&Children::Count(Cell::new(5))));
   }
   
   #[test]
   fn test_get_inline_table_children() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
     assert_eq!(p.get_children("car.properties"),
       Some(&Children::Keys(RefCell::new(vec!["color".to_string(), "\"plate number\"".to_string(), "accident_dates".to_string()]))));
@@ -584,7 +584,7 @@ Age = 44"#;
   
   #[test]
   fn test_get_nested_inline_table_children() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
     assert_eq!(p.get_children("car.drivers[4]"),
       Some(&Children::Keys(RefCell::new(vec!["disallowed".to_string(), "banned".to_string()]))));
@@ -592,14 +592,14 @@ Age = 44"#;
   
   #[test]
   fn test_get_nested_array_children() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
     assert_eq!(p.get_children("car.properties.accident_dates"), Some(&Children::Count(Cell::new(3))));
   }
   
   #[test]
   fn test_implicit_table_children() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
     assert_eq!(p.get_children("car.interior.seats"),
       Some(&Children::Keys(RefCell::new(vec!["type".to_string(), "count".to_string()]))));
@@ -607,14 +607,14 @@ Age = 44"#;
   
   #[test]
   fn test_get_array_of_table_children() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
     assert_eq!(p.get_children("car.owners"), Some(&Children::Count(Cell::new(2))));
   }
   
   #[test]
   fn test_get_array_of_table0_children() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
     assert_eq!(p.get_children("car.owners[0]"),
       Some(&Children::Keys(RefCell::new(vec!["Name".to_string(), "Age".to_string()]))));
@@ -622,7 +622,7 @@ Age = 44"#;
   
   #[test]
   fn test_get_array_of_table1_children() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
     assert_eq!(p.get_children("car.owners[1]"),
       Some(&Children::Keys(RefCell::new(vec!["Name".to_string(), "Age".to_string()]))));
@@ -630,162 +630,162 @@ Age = 44"#;
   
   #[test]
   fn test_set_bare_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("animal", TOMLValue::ml_basic_string("shark").unwrap());
+    p.set_value("animal", Value::ml_basic_string("shark").unwrap());
     assert_eq!(p.get_value("animal"),
-      Some(TOMLValue::String("shark".into(), StrType::MLBasic)));
+      Some(Value::String("shark".into(), StrType::MLBasic)));
   }
   
   #[test]
   fn test_set_table_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.model", TOMLValue::literal_string("Accord").unwrap());
+    p.set_value("car.model", Value::literal_string("Accord").unwrap());
     assert_eq!(p.get_value("car.model"),
-      Some(TOMLValue::String("Accord".into(), StrType::Literal)));
+      Some(Value::String("Accord".into(), StrType::Literal)));
   }
   
   #[test]
   fn test_set_array_element_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.drivers[1]", TOMLValue::ml_literal_string("Mark").unwrap());
+    p.set_value("car.drivers[1]", Value::ml_literal_string("Mark").unwrap());
     assert_eq!(p.get_value("car.drivers[1]"),
-      Some(TOMLValue::String("Mark".into(), StrType::MLLiteral)));
+      Some(Value::String("Mark".into(), StrType::MLLiteral)));
   }
   
   #[test]
   fn test_set_nested_aray_element_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.properties.accident_dates[2]", TOMLValue::float(3443.34));
+    p.set_value("car.properties.accident_dates[2]", Value::float(3443.34));
     assert_eq!(p.get_value("car.properties.accident_dates[2]"),
-      Some(TOMLValue::Float("3443.34".into())));
+      Some(Value::Float("3443.34".into())));
   }
   
   #[test]
   fn test_set_inline_table_element_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.properties.color", TOMLValue::int(19));
+    p.set_value("car.properties.color", Value::int(19));
     assert_eq!(p.get_value("car.properties.color"),
-      Some(TOMLValue::Integer("19".into())));
+      Some(Value::Integer("19".into())));
   }
   
   #[test]
   fn test_set_nested_inline_table_element_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.drivers[4].banned", TOMLValue::datetime_from_int(2013, 9, 23, 17, 34, 2).unwrap());
+    p.set_value("car.drivers[4].banned", Value::datetime_from_int(2013, 9, 23, 17, 34, 2).unwrap());
     assert_eq!(p.get_value("car.drivers[4].banned"),
-      Some(TOMLValue::DateTime(DateTime::new(Date::new_str("2013", "09", "23"),
+      Some(Value::DateTime(DateTime::new(Date::new_str("2013", "09", "23"),
         Some(Time::new_str("17", "34", "02", None, None))))));
   }
   
   #[test]
   fn test_truncate_array() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.drivers", TOMLValue::Array(Rc::new(
-      vec![TOMLValue::basic_string("Phil").unwrap(), TOMLValue::basic_string("Mary").unwrap()]
+    p.set_value("car.drivers", Value::Array(Rc::new(
+      vec![Value::basic_string("Phil").unwrap(), Value::basic_string("Mary").unwrap()]
     )));
     assert_eq!(p.get_value("car.drivers"),
-      Some(TOMLValue::Array(Rc::new(
-        vec![TOMLValue::String("Phil".into(), StrType::Basic),
-             TOMLValue::String("Mary".into(), StrType::Basic)
+      Some(Value::Array(Rc::new(
+        vec![Value::String("Phil".into(), StrType::Basic),
+             Value::String("Mary".into(), StrType::Basic)
         ]
       ))));
   }
   
   #[test]
   fn test_truncate_inline_table() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.properties", TOMLValue::InlineTable(Rc::new(
-      vec![("make".into(), TOMLValue::literal_string("Honda").unwrap()),
-           ("transmission".into(), TOMLValue::bool(true))]
+    p.set_value("car.properties", Value::InlineTable(Rc::new(
+      vec![("make".into(), Value::literal_string("Honda").unwrap()),
+           ("transmission".into(), Value::bool(true))]
     )));
     assert_eq!(p.get_value("car.properties"),
-      Some(TOMLValue::InlineTable(Rc::new(
-        vec![("make".into(), TOMLValue::String("Honda".into(), StrType::Literal)),
-             ("transmission".into(), TOMLValue::Boolean(Bool::True))]
+      Some(Value::InlineTable(Rc::new(
+        vec![("make".into(), Value::String("Honda".into(), StrType::Literal)),
+             ("transmission".into(), Value::Boolean(true))]
       ))));
   }
   
   #[test]
   fn test_extend_array() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.drivers", TOMLValue::Array(Rc::new(
-      vec![TOMLValue::int(1), TOMLValue::int(2), TOMLValue::int(3), TOMLValue::int(4),
-      TOMLValue::int(5), TOMLValue::int(6), TOMLValue::int(7), TOMLValue::int(8)]
+    p.set_value("car.drivers", Value::Array(Rc::new(
+      vec![Value::int(1), Value::int(2), Value::int(3), Value::int(4),
+      Value::int(5), Value::int(6), Value::int(7), Value::int(8)]
     )));
     assert_eq!(p.get_value("car.drivers"),
-      Some(TOMLValue::Array(Rc::new(
-        vec![TOMLValue::Integer("1".into()),
-             TOMLValue::Integer("2".into()),
-             TOMLValue::Integer("3".into()),
-             TOMLValue::Integer("4".into()),
-             TOMLValue::Integer("5".into()),
-             TOMLValue::Integer("6".into()),
-             TOMLValue::Integer("7".into()),
-             TOMLValue::Integer("8".into()),
+      Some(Value::Array(Rc::new(
+        vec![Value::Integer("1".into()),
+             Value::Integer("2".into()),
+             Value::Integer("3".into()),
+             Value::Integer("4".into()),
+             Value::Integer("5".into()),
+             Value::Integer("6".into()),
+             Value::Integer("7".into()),
+             Value::Integer("8".into()),
         ]
       ))));
   }
   
   #[test]
   fn test_extend_inline_table() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.properties", TOMLValue::InlineTable(Rc::new(
-      vec![("prop1".into(), TOMLValue::bool_from_str("TrUe").unwrap()),
-           ("prop2".into(), TOMLValue::bool_from_str("FALSE").unwrap()),
-           ("prop3".into(), TOMLValue::bool_from_str("truE").unwrap()),
-           ("prop4".into(), TOMLValue::bool_from_str("false").unwrap())]
+    p.set_value("car.properties", Value::InlineTable(Rc::new(
+      vec![("prop1".into(), Value::bool_from_str("TrUe").unwrap()),
+           ("prop2".into(), Value::bool_from_str("FALSE").unwrap()),
+           ("prop3".into(), Value::bool_from_str("truE").unwrap()),
+           ("prop4".into(), Value::bool_from_str("false").unwrap())]
     )));
     assert_eq!(p.get_value("car.properties"),
-      Some(TOMLValue::InlineTable(Rc::new(
-        vec![("prop1".into(), TOMLValue::Boolean(Bool::True)),
-             ("prop2".into(), TOMLValue::Boolean(Bool::False)),
-             ("prop3".into(), TOMLValue::Boolean(Bool::True)),
-             ("prop4".into(), TOMLValue::Boolean(Bool::False))]
+      Some(Value::InlineTable(Rc::new(
+        vec![("prop1".into(), Value::Boolean(true)),
+             ("prop2".into(), Value::Boolean(false)),
+             ("prop3".into(), Value::Boolean(true)),
+             ("prop4".into(), Value::Boolean(false))]
       ))));
   }
   
   #[test]
   fn test_set_implicit_table_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.interior.seats.type", TOMLValue::basic_string("leather").unwrap());
+    p.set_value("car.interior.seats.type", Value::basic_string("leather").unwrap());
     assert_eq!(p.get_value("car.interior.seats.type"),
-      Some(TOMLValue::String("leather".into(), StrType::Basic)));
+      Some(Value::String("leather".into(), StrType::Basic)));
   }
   
   #[test]
   fn test_set_array_of_table0_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.owners[0].Age", TOMLValue::float_from_str("19.5").unwrap());
+    p.set_value("car.owners[0].Age", Value::float_from_str("19.5").unwrap());
     assert_eq!(p.get_value("car.owners[0].Age"),
-      Some(TOMLValue::Float("19.5".into())));
+      Some(Value::Float("19.5".into())));
   }
   
   #[test]
   fn test_set_array_of_table1_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.owners[1].Name", TOMLValue::ml_basic_string("Steve Parker").unwrap());
+    p.set_value("car.owners[1].Name", Value::ml_basic_string("Steve Parker").unwrap());
     assert_eq!(p.get_value("car.owners[1].Name"),
-      Some(TOMLValue::String("Steve Parker".into(), StrType::MLBasic)));
+      Some(Value::String("Steve Parker".into(), StrType::MLBasic)));
   }
   
   #[test]
   fn test_truncate_array_check_keys() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("database.ports", TOMLValue::datetime_from_int(2000, 02, 16, 10, 31, 06).unwrap());
+    p.set_value("database.ports", Value::datetime_from_int(2000, 02, 16, 10, 31, 06).unwrap());
     assert_eq!(p.get_value("database.ports[0]"), None);
     assert_eq!(p.get_value("database.ports[1]"), None);
     assert_eq!(p.get_value("database.ports[2]"), None);
@@ -795,9 +795,9 @@ Age = 44"#;
   
   #[test]
   fn test_truncate_inline_table_check_keys() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("database.servers", TOMLValue::datetime_from_str("4000", "02", "27", "01", "59", "59").unwrap());
+    p.set_value("database.servers", Value::datetime_from_str("4000", "02", "27", "01", "59", "59").unwrap());
     assert_eq!(p.get_value("database.servers.main"), None);
     assert_eq!(p.get_value("database.servers.failover1"), None);
     assert_eq!(p.get_value("database.servers.failover2"), None);
@@ -807,35 +807,35 @@ Age = 44"#;
   
   #[test]
   fn test_output_after_set() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p = p.parse(TT::get());
-    p.set_value("car.interior.seats.type", TOMLValue::basic_string("leather").unwrap());
-    p.set_value("car.interior.seats.type", TOMLValue::basic_string("vinyl").unwrap());
-    p.set_value("car.owners[0].Age", TOMLValue::float_from_str("19.5").unwrap());
-    p.set_value("car.owners[1].Name", TOMLValue::ml_basic_string("Steve Parker").unwrap());
-    p.set_value("car.drivers[4].banned", TOMLValue::datetime_from_int(2013, 9, 23, 17, 34, 2).unwrap());
-    p.set_value("car.properties.color", TOMLValue::int(19));
-    p.set_value("car.properties.accident_dates[2]", TOMLValue::float(3443.34));
-    p.set_value("car.drivers[1]", TOMLValue::ml_literal_string("Mark").unwrap());
-    p.set_value("car.properties", TOMLValue::InlineTable(Rc::new(
-      vec![("make".into(), TOMLValue::literal_string("Honda").unwrap()),
-           ("transmission".into(), TOMLValue::bool(true))]
+    p.set_value("car.interior.seats.type", Value::basic_string("leather").unwrap());
+    p.set_value("car.interior.seats.type", Value::basic_string("vinyl").unwrap());
+    p.set_value("car.owners[0].Age", Value::float_from_str("19.5").unwrap());
+    p.set_value("car.owners[1].Name", Value::ml_basic_string("Steve Parker").unwrap());
+    p.set_value("car.drivers[4].banned", Value::datetime_from_int(2013, 9, 23, 17, 34, 2).unwrap());
+    p.set_value("car.properties.color", Value::int(19));
+    p.set_value("car.properties.accident_dates[2]", Value::float(3443.34));
+    p.set_value("car.drivers[1]", Value::ml_literal_string("Mark").unwrap());
+    p.set_value("car.properties", Value::InlineTable(Rc::new(
+      vec![("make".into(), Value::literal_string("Honda").unwrap()),
+           ("transmission".into(), Value::bool(true))]
     )));
-    p.set_value("car.drivers", TOMLValue::Array(Rc::new(
-      vec![TOMLValue::basic_string("Phil").unwrap(), TOMLValue::basic_string("Mary").unwrap()]
+    p.set_value("car.drivers", Value::Array(Rc::new(
+      vec![Value::basic_string("Phil").unwrap(), Value::basic_string("Mary").unwrap()]
     )));
-    p.set_value("car.properties", TOMLValue::InlineTable(Rc::new(
-      vec![("prop1".into(), TOMLValue::bool_from_str("TrUe").unwrap()),
-           ("prop2".into(), TOMLValue::bool_from_str("FALSE").unwrap()),
-           ("prop3".into(), TOMLValue::bool_from_str("truE").unwrap()),
-           ("prop4".into(), TOMLValue::bool_from_str("false").unwrap())]
+    p.set_value("car.properties", Value::InlineTable(Rc::new(
+      vec![("prop1".into(), Value::bool_from_str("TrUe").unwrap()),
+           ("prop2".into(), Value::bool_from_str("FALSE").unwrap()),
+           ("prop3".into(), Value::bool_from_str("truE").unwrap()),
+           ("prop4".into(), Value::bool_from_str("false").unwrap())]
     )));
-    p.set_value("car.drivers", TOMLValue::Array(Rc::new(
-      vec![TOMLValue::int(1), TOMLValue::int(2), TOMLValue::int(3), TOMLValue::int(4),
-      TOMLValue::int(5), TOMLValue::int(6), TOMLValue::int(7), TOMLValue::int(8)]
+    p.set_value("car.drivers", Value::Array(Rc::new(
+      vec![Value::int(1), Value::int(2), Value::int(3), Value::int(4),
+      Value::int(5), Value::int(6), Value::int(7), Value::int(8)]
     )));
-    p.set_value("car.model", TOMLValue::literal_string("Accord").unwrap());
-    p.set_value("animal", TOMLValue::ml_basic_string("shark").unwrap());
+    p.set_value("car.model", Value::literal_string("Accord").unwrap());
+    p.set_value("animal", Value::ml_basic_string("shark").unwrap());
     assert_eq!(r#"animal = """shark"""
 
 [car]

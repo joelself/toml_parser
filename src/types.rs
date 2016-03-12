@@ -7,7 +7,7 @@ use std::error::Error;
 use std::fmt::Display;
 use std::str::FromStr;
 use std::borrow::Cow;
-use parser::Parser;
+use parser::TOMLParser;
 use nom::IResult;
 
 
@@ -25,22 +25,6 @@ pub enum StrType {
 	MLBasic,
 	Literal,
 	MLLiteral,
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum Bool {
-	False,
-	True,
-}
-
-impl Display for Bool {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		if let &Bool::False = self {
-			write!(f, "false")
-		} else {
-			write!(f, "true")
-		}
-	}
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -66,16 +50,16 @@ impl Children {
   pub fn combine_keys_index<S>(base_key: S, child_key: usize) -> String where S: Into<String> {
     return format!("{}[{}]", base_key.into(), child_key);
   }
-  pub fn combine_all_child_keys<S>(base_key: S, child_keys: Children) -> Vec<String> where S: Into<String> {
+  pub fn combine_child_keys<S>(&self, base_key: S) -> Vec<String> where S: Into<String> {
     let mut all_keys = vec![];
     let base = base_key.into();
-    match child_keys {
-      Children::Count(c) => {
+    match self {
+      &Children::Count(ref c) => {
         for i in 0..c.get() {
           all_keys.push(format!("{}[{}]", base, i));
         }
       },
-      Children::Keys(hs_rc) => {
+      &Children::Keys(ref hs_rc) => {
         for subkey in hs_rc.borrow().iter() {
           if base != "" {
             let mut full_key = base.clone();
@@ -93,24 +77,24 @@ impl Children {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum TOMLValue<'a> {
+pub enum Value<'a> {
 	Integer(Cow<'a, str>),
 	Float(Cow<'a, str>),
-	Boolean(Bool),
+	Boolean(bool),
 	DateTime(DateTime<'a>),
-	Array(Rc<Vec<TOMLValue<'a>>>),
 	String(Cow<'a, str>, StrType),
-	InlineTable(Rc<Vec<(Cow<'a, str>, TOMLValue<'a>)>>)
+	Array(Rc<Vec<Value<'a>>>),
+	InlineTable(Rc<Vec<(Cow<'a, str>, Value<'a>)>>)
 }
 
-impl<'a> Display for TOMLValue<'a> {
+impl<'a> Display for Value<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			&TOMLValue::Integer(ref v) | &TOMLValue::Float(ref v) =>
+			&Value::Integer(ref v) | &Value::Float(ref v) =>
 				write!(f, "{}", v),
-			&TOMLValue::Boolean(ref b) => write!(f, "{}", b),
-			&TOMLValue::DateTime(ref v) => write!(f, "{}", v),
-			&TOMLValue::Array(ref arr) => {
+			&Value::Boolean(ref b) => write!(f, "{}", b),
+			&Value::DateTime(ref v) => write!(f, "{}", v),
+			&Value::Array(ref arr) => {
 				try!(write!(f, "["));
 				for i in 0..arr.len() - 1 {
 					try!(write!(f, "{}, ", arr[i]));
@@ -120,7 +104,7 @@ impl<'a> Display for TOMLValue<'a> {
 				}
 				write!(f, "]")
 			},
-			&TOMLValue::String(ref s, ref t) => {
+			&Value::String(ref s, ref t) => {
 				match t {
 					&StrType::Basic => write!(f, "\"{}\"", s),
 					&StrType::MLBasic => write!(f, "\"\"\"{}\"\"\"", s),
@@ -128,7 +112,7 @@ impl<'a> Display for TOMLValue<'a> {
 					&StrType::MLLiteral =>  write!(f, "'''{}'''", s),
 				}
 			},
-			&TOMLValue::InlineTable(ref it) => {
+			&Value::InlineTable(ref it) => {
 				try!(write!(f, "{{"));
 				for i in 0..it.len() - 1 {
 					try!(write!(f, "{} = {}, ", it[i].0, it[i].1));
@@ -142,42 +126,38 @@ impl<'a> Display for TOMLValue<'a> {
 	}
 }
 
-impl<'a> TOMLValue<'a> {
-  pub fn int(int: i64) -> TOMLValue<'a> {
-    TOMLValue::Integer(format!("{}", int).into())
+impl<'a> Value<'a> {
+  pub fn int(int: i64) -> Value<'a> {
+    Value::Integer(format!("{}", int).into())
   }
-  pub fn int_from_str<S>(int: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
-    let result = TOMLValue::Integer(int.clone().into().into());
+  pub fn int_from_str<S>(int: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = Value::Integer(int.clone().into().into());
     if result.validate() {
       return Result::Ok(result);
     } else {
       return Result::Err(TOMLError::new(format!("Error parsing int. Argument: {}", int.into())));
     }
   }
-  pub fn float(float: f64) -> TOMLValue<'a> {
-    TOMLValue::Float(format!("{}", float).into())
+  pub fn float(float: f64) -> Value<'a> {
+    Value::Float(format!("{}", float).into())
   }
-  pub fn float_from_str<S>(float: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
-    let result = TOMLValue::Float(float.clone().into().into());
+  pub fn float_from_str<S>(float: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = Value::Float(float.clone().into().into());
     if result.validate() {
       return Result::Ok(result);
     } else {
       return Result::Err(TOMLError::new(format!("Error parsing float. Argument: {}", float.into())));
     }
   }
-  pub fn bool(b: bool) -> TOMLValue<'a> {
-    if b {
-      TOMLValue::Boolean(Bool::True)
-    } else {
-      TOMLValue::Boolean(Bool::False)
-    }
+  pub fn bool(b: bool) -> Value<'a> {
+      Value::Boolean(b)
   }
-  pub fn bool_from_str<S>(b: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
+  pub fn bool_from_str<S>(b: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {
     let lower = b.clone().into().to_lowercase();
     if lower == "true" {
-      Result::Ok(TOMLValue::Boolean(Bool::True))
+      Result::Ok(Value::Boolean(true))
     } else if lower == "false" {
-      Result::Ok(TOMLValue::Boolean(Bool::False))
+      Result::Ok(Value::Boolean(false))
     } else {
       return Result::Err(TOMLError::new(
         format!("Error parsing bool. Argument: {}", b.into())
@@ -185,11 +165,11 @@ impl<'a> TOMLValue<'a> {
     }
   }
   
-  pub fn date_from_int(year: usize, month: usize, day: usize) -> Result<TOMLValue<'a>, TOMLError> {
+  pub fn date_from_int(year: usize, month: usize, day: usize) -> Result<Value<'a>, TOMLError> {
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), None));
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(y, m, d), None));
     if datetime.validate() {
       return Result::Ok(datetime);
     } else {
@@ -198,8 +178,8 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn date_from_str<S>(year: S, month: S, day: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), None));
+  pub fn date_from_str<S>(year: S, month: S, day: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), None));
     if datetime.validate() {
       return Result::Ok(datetime);
     } else {
@@ -208,14 +188,14 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize) -> Result<TOMLValue<'a>, TOMLError> {
+  pub fn datetime_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize) -> Result<Value<'a>, TOMLError> {
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
     let h = format!("{:0>2}", hour);
     let min = format!("{:0>2}", minute);
     let s = format!("{:0>2}", second);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
       Time::from_str(h, min, s, None, None)
     )));
     if datetime.validate() {
@@ -226,8 +206,8 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+  pub fn datetime_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
       Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), None, None)
     )));
     if datetime.validate() {
@@ -239,7 +219,7 @@ impl<'a> TOMLValue<'a> {
     }
   }
 
-  pub fn datetime_frac_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, frac: usize) -> Result<TOMLValue<'a>, TOMLError> {  
+  pub fn datetime_frac_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, frac: usize) -> Result<Value<'a>, TOMLError> {  
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
@@ -247,7 +227,7 @@ impl<'a> TOMLValue<'a> {
     let min = format!("{:0>2}", minute);
     let s = format!("{:0>2}", second);
     let f = format!("{}", frac);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
       Time::from_str(h, min, s, Some(f), None)
     )));
     if datetime.validate() {
@@ -258,8 +238,8 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_frac_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, frac: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone{ 
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+  pub fn datetime_frac_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, frac: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone{ 
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
       Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), Some(frac.clone().into()), None)
     )));
     if datetime.validate() {
@@ -270,7 +250,7 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_offset_from_int<S>(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, posneg: S, off_hour: usize, off_minute: usize) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone{  
+  pub fn datetime_offset_from_int<S>(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, posneg: S, off_hour: usize, off_minute: usize) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone{  
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
@@ -279,7 +259,7 @@ impl<'a> TOMLValue<'a> {
     let s = format!("{:0>2}", second);
     let oh = format!("{:0>2}", off_hour);
     let omin = format!("{:0>2}", off_minute);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
       Time::from_str(h, min, s, None, Some(
         TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), oh, omin))
       ))
@@ -292,8 +272,8 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_offset_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, posneg: S, off_hour: S, off_minute: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone{ 
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+  pub fn datetime_offset_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, posneg: S, off_hour: S, off_minute: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone{ 
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
       Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), None, Some(
         TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), off_hour.clone().into(), off_minute.clone().into()))
       ))
@@ -306,14 +286,14 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_zulu_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize) -> Result<TOMLValue<'a>, TOMLError> {  
+  pub fn datetime_zulu_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize) -> Result<Value<'a>, TOMLError> {  
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
     let h = format!("{:0>2}", hour);
     let min = format!("{:0>2}", minute);
     let s = format!("{:0>2}", second);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
       Time::from_str(h, min, s, None, Some(
         TimeOffset::Zulu
       ))
@@ -326,8 +306,8 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_zulu_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone{ 
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+  pub fn datetime_zulu_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone{ 
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
       Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), None, Some(
         TimeOffset::Zulu
       ))
@@ -340,7 +320,7 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_full_from_int<S>(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, frac: usize, posneg: S, off_hour: usize, off_minute: usize) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {  
+  pub fn datetime_full_from_int<S>(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, frac: usize, posneg: S, off_hour: usize, off_minute: usize) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {  
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
@@ -350,7 +330,7 @@ impl<'a> TOMLValue<'a> {
     let f = format!("{}", frac);
     let oh = format!("{:0>2}", off_hour);
     let omin = format!("{:0>2}", off_minute);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
       Time::from_str(h, min, s, Some(f), Some(
         TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), oh, omin))
       ))
@@ -363,8 +343,8 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_full_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, frac: S, posneg: S, off_hour: S, off_minute: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone { 
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+  pub fn datetime_full_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, frac: S, posneg: S, off_hour: S, off_minute: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone { 
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
       Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), Some(frac.clone().into()), Some(
         TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), off_hour.clone().into(), off_minute.clone().into()))
       ))
@@ -377,12 +357,12 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_parse<S>(dt: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<&'a str> {
+  pub fn datetime_parse<S>(dt: S) -> Result<Value<'a>, TOMLError> where S: Into<&'a str> {
     let datetime = dt.into();
-    let p = Parser::new();
+    let p = TOMLParser::new();
     match p.date_time(datetime) {
       (_, IResult::Done(_, o)) => {
-        let result = TOMLValue::DateTime(o);
+        let result = Value::DateTime(o);
         if !result.validate() {
           return Result::Err(TOMLError::new(format!("Error parsing string as datetime. Argument: {}", datetime)));
         } else {
@@ -392,32 +372,32 @@ impl<'a> TOMLValue<'a> {
       (_,_) => return Result::Err(TOMLError::new(format!("Error parsing string as datetime. Argument: {}", datetime))),
     }
   }
-  pub fn basic_string<S>(s: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
-    let result = TOMLValue::String(s.clone().into().into(), StrType::Basic);
+  pub fn basic_string<S>(s: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = Value::String(s.clone().into().into(), StrType::Basic);
     if result.validate() {
       return Result::Ok(result);
     } else {
       return Result::Err(TOMLError::new(format!("Error parsing string as basic_string. Argument: {}", s.into())));
     }
   }
-  pub fn ml_basic_string<S>(s: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
-    let result = TOMLValue::String(s.clone().into().into(), StrType::MLBasic);
+  pub fn ml_basic_string<S>(s: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = Value::String(s.clone().into().into(), StrType::MLBasic);
     if result.validate() {
       return Result::Ok(result);
     } else {
       return Result::Err(TOMLError::new(format!("Error parsing string as ml_basic_string. Argument: {}", s.into())));
     }
   }
-  pub fn literal_string<S>(s: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
-    let result = TOMLValue::String(s.clone().into().into(), StrType::Literal);
+  pub fn literal_string<S>(s: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = Value::String(s.clone().into().into(), StrType::Literal);
     if result.validate() {
       return Result::Ok(result);
     } else {
       return Result::Err(TOMLError::new(format!("Error parsing string as literal_string. Argument: {}", s.into())));
     }
   }
-  pub fn ml_literal_string<S>(s: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
-    let result = TOMLValue::String(s.clone().into().into(), StrType::MLLiteral);
+  pub fn ml_literal_string<S>(s: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = Value::String(s.clone().into().into(), StrType::MLLiteral);
     if result.validate() {
       return Result::Ok(result);
     } else {
@@ -427,43 +407,43 @@ impl<'a> TOMLValue<'a> {
   
   pub fn validate(&self) -> bool{
     match self {
-      &TOMLValue::Integer(ref s) => {
-        let p = Parser::new();
+      &Value::Integer(ref s) => {
+        let p = TOMLParser::new();
         match p.integer(s) {
            (_, IResult::Done(_, _)) => true,
            (_,_) => false,
         }
       },
-      &TOMLValue::Float(ref s) => {
-        let p = Parser::new();
+      &Value::Float(ref s) => {
+        let p = TOMLParser::new();
         match p.float(s) {
            (_, IResult::Done(_, _)) => true,
            (_,_) => false,
         }
       },
-      &TOMLValue::DateTime(ref dt) => {dt.validate()},
-      &TOMLValue::String(ref s, st) => {
+      &Value::DateTime(ref dt) => {dt.validate()},
+      &Value::String(ref s, st) => {
         match st {
           StrType::Basic => {
-            match Parser::quoteless_basic_string(s) {
+            match TOMLParser::quoteless_basic_string(s) {
               IResult::Done(_,_) => true,
               _ => false,
             }
           },
           StrType::MLBasic => {
-            match Parser::quoteless_ml_basic_string(s) {
+            match TOMLParser::quoteless_ml_basic_string(s) {
               IResult::Done(_,_) => true,
               _ => false,
             }
           },
           StrType::Literal => {
-            match Parser::quoteless_literal_string(s) {
+            match TOMLParser::quoteless_literal_string(s) {
               IResult::Done(_,_) => true,
               _ => false,
             }
           },
           StrType::MLLiteral => {
-            match Parser::quoteless_ml_literal_string(s) {
+            match TOMLParser::quoteless_ml_literal_string(s) {
               IResult::Done(_,_) => true,
               _ => false,
             }
@@ -816,7 +796,253 @@ impl<'a> DateTime<'a> {
 
 pub enum ParseError<'a> {
 	MixedArray(String, usize),
-	DuplicateKey(String, usize, TOMLValue<'a>),
-	InvalidTable(String, usize, RefCell<HashMap<String, TOMLValue<'a>>>),
+	DuplicateKey(String, usize, Value<'a>),
+	InvalidTable(String, usize, RefCell<HashMap<String, Value<'a>>>),
   InvalidDateTime(String, usize)
+}
+
+
+#[cfg(test)]
+mod test {
+  use std::cell::{Cell, RefCell};
+  use std::rc::Rc;
+  use types::{Children, Value, Date, Time, DateTime, TimeOffset, TimeOffsetAmount, StrType};
+
+  #[test]
+  fn test_combine_keys() {
+    assert_eq!("foo.bar.baz".to_string(), Children::combine_keys("foo.bar", "baz"));
+  }
+
+  #[test]
+  fn test_combine_keys_index() {
+    assert_eq!("foo.bar[9]".to_string(), Children::combine_keys_index("foo.bar", 9));
+  }
+  
+  #[test]
+  fn test_combine_child_keys() {
+    let kids = Children::Keys(RefCell::new(vec!["baz".to_string(), "qux".to_string(), "plugh".to_string(),
+      "thud".to_string()]));
+    assert_eq!(vec!["foo.bar.baz".to_string(), "foo.bar.qux".to_string(), "foo.bar.plugh".to_string(),
+      "foo.bar.thud".to_string()], kids.combine_child_keys("foo.bar".to_string()));
+  }
+  
+  #[test]
+  fn test_combine_child_keys_empty_base() {
+    let kids = Children::Keys(RefCell::new(vec!["baz".to_string(), "qux".to_string(), "plugh".to_string(),
+      "thud".to_string()]));
+    assert_eq!(vec!["baz".to_string(), "qux".to_string(), "plugh".to_string(),
+      "thud".to_string()], kids.combine_child_keys("".to_string()));
+  }
+  
+  #[test]
+  fn test_combine_child_keys_index() {
+    let kids = Children::Count(Cell::new(3));
+    assert_eq!(vec!["foo.bar[0]".to_string(), "foo.bar[1]".to_string(), "foo.bar[2]".to_string()],
+      kids.combine_child_keys("foo.bar".to_string()));
+  }
+  
+  #[test]
+  fn test_value_display() {
+    let val_int = Value::Integer("7778877".into());
+    let val_float = Value::Float("1929.345".into());
+    let val_true = Value::Boolean(true);
+    let val_false = Value::Boolean(false);
+    let val_datetime = Value::DateTime(DateTime::new(Date::new_str("9999", "12", "31"), Some(Time::new_str(
+      "23", "59", "59", Some("9999999"), Some(TimeOffset::Time(TimeOffsetAmount::new_str(
+        "-", "00", "00"
+      )))
+    ))));
+    let val_basic_str = Value::String("foobar1".into(), StrType::Basic);
+    let val_literal_str = Value::String("foobar2".into(), StrType::Literal);
+    let val_ml_basic_str = Value::String("foobar3".into(), StrType::MLBasic);
+    let val_ml_literal_str = Value::String("foobar4".into(), StrType::MLLiteral);
+    let val_array = Value::Array(Rc::new(vec![Value::Integer("3000".into()),
+      Value::Array(Rc::new(vec![Value::Integer("40000".into()), Value::Float("50.5".into())])),
+      Value::String("barbaz".into(), StrType::Literal)]));
+    let val_inline_table = Value::InlineTable(Rc::new(vec![
+      ("foo".into(), Value::Boolean(true)), ("bar".into(), Value::InlineTable(Rc::new(vec![
+        ("baz".into(), Value::Boolean(false)), ("qux".into(), Value::Integer("2016".into())),
+      ]))), ("plugh".into(), Value::Float("3333.444".into()))
+    ]));
+    
+    assert_eq!("7778877", &format!("{}", val_int));
+    assert_eq!("1929.345", &format!("{}", val_float));
+    assert_eq!("true", &format!("{}", val_true));
+    assert_eq!("false", &format!("{}", val_false));
+    assert_eq!("9999-12-31T23:59:59.9999999-00:00", &format!("{}", val_datetime));
+    assert_eq!("\"foobar1\"", &format!("{}", val_basic_str));
+    assert_eq!("'foobar2'", &format!("{}", val_literal_str));
+    assert_eq!("\"\"\"foobar3\"\"\"", &format!("{}", val_ml_basic_str));
+    assert_eq!("'''foobar4'''", &format!("{}", val_ml_literal_str));
+    assert_eq!("[3000, [40000, 50.5], 'barbaz']", &format!("{}", val_array));
+    assert_eq!("{foo = true, bar = {baz = false, qux = 2016}, plugh = 3333.444}",
+      &format!("{}", val_inline_table));
+  }
+  
+  #[test]
+  fn test_create_int() {
+    assert_eq!(Value::Integer("9223372036854775807".into()), Value::int(9223372036854775807));
+  }
+  
+  #[test]
+  fn test_create_int_from_str() {
+    assert_eq!(Value::Integer("-9223372036854775808".into()), Value::int_from_str("-9223372036854775808").unwrap());
+  }
+  
+  #[test]
+  fn test_create_int_from_str_fail() {
+    assert!(Value::int_from_str("q-9223$37(203)[]M807").is_err());
+  }
+  
+  #[test]
+  fn test_create_float() {
+    assert_eq!(Value::Float("179769000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".into()), Value::float(1.79769e+308));
+  }
+  
+  #[test]
+  fn test_create_float_from_str() {
+    assert_eq!(Value::Float("2.22507e-308".into()), Value::float_from_str("2.22507e-308").unwrap());
+  }
+  
+  #[test]
+  fn test_create_float_from_str_fail() {
+    assert!(Value::float_from_str("q2.3e++10eipi").is_err());
+  }
+  
+  #[test]
+  fn test_create_bool() {
+    assert_eq!(Value::Boolean(false), Value::bool(false));
+  }
+  
+  #[test]
+  fn test_create_bool_from_str() {
+    assert_eq!(Value::Boolean(true), Value::bool_from_str("TrUe").unwrap());
+  }
+  
+  #[test]
+  fn test_create_bool_from_str_fail() {
+    assert!(Value::bool_from_str("TFraulese").is_err());
+  }
+  
+  #[test]
+  fn test_create_date_from_int() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), None)),
+      Value::date_from_int(2012, 1, 3).unwrap());
+  }
+  
+  #[test]
+  fn test_create_date_from_int_fail() {
+    assert!(Value::date_from_int(0, 2, 20).is_err());
+    assert!(Value::date_from_int(2016, 0, 20).is_err());
+    assert!(Value::date_from_int(2016, 1, 0).is_err());
+    assert!(Value::date_from_int(2016, 1, 32).is_err());
+    assert!(Value::date_from_int(2016, 4, 31).is_err());
+    assert!(Value::date_from_int(2016, 2, 30).is_err());
+    assert!(Value::date_from_int(2015, 2, 29).is_err());
+    assert!(Value::date_from_int(1900, 2, 29).is_err());
+    assert!(Value::date_from_int(2000, 2, 30).is_err());
+  }
+  
+  #[test]
+  fn test_create_date_from_str() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), None)),
+      Value::date_from_str("2012", "01", "03").unwrap());
+  }
+  
+  #[test]
+  fn test_create_date_from_str_fail() {
+    assert!(Value::date_from_str("12345", "01", "01").is_err());
+    assert!(Value::date_from_str("2016", "012", "01").is_err());
+    assert!(Value::date_from_str("2016", "01", "012").is_err());
+    assert!(Value::date_from_str("201q", "01", "01").is_err());
+    assert!(Value::date_from_str("2016", "0q", "01").is_err());
+    assert!(Value::date_from_str("2016", "01", "0q").is_err());
+    assert!(Value::date_from_str("201", "01", "01").is_err());
+    assert!(Value::date_from_str("2016", "1", "01").is_err());
+    assert!(Value::date_from_str("2016", "01", "1").is_err());
+  }
+  
+  #[test]
+  fn test_create_datetime_from_int() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", None, None
+    )))), Value::datetime_from_int(2012, 1, 3, 3, 30, 30).unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_from_int_fail() {
+    assert!(Value::datetime_from_int(2012, 1, 3, 24, 30, 30).is_err());
+    assert!(Value::datetime_from_int(2012, 1, 3, 3, 60, 30).is_err());
+    assert!(Value::datetime_from_int(2012, 1, 3, 3, 30, 60).is_err());
+  }
+  
+  #[test]
+  fn test_create_datetime_from_str() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", None, None
+    )))), Value::datetime_from_str("2012", "01", "03", "03", "30", "30").unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_from_str_fail() {
+    assert!(Value::datetime_from_str("2012", "01", "03", "3", "30", "30").is_err());
+    assert!(Value::datetime_from_str("2012", "01", "03", "03", "3", "30").is_err());
+    assert!(Value::datetime_from_str("2012", "01", "03", "03", "30", "3").is_err());
+    assert!(Value::datetime_from_str("2012", "01", "03", "033", "30", "30").is_err());
+    assert!(Value::datetime_from_str("2012", "01", "03", "03", "303", "303").is_err());
+    assert!(Value::datetime_from_str("2012", "01", "03", "0q", "30", "30").is_err());
+    assert!(Value::datetime_from_str("2012", "01", "03", "03", "3q", "30").is_err());
+    assert!(Value::datetime_from_str("2012", "01", "03", "03", "30", "3q").is_err());
+  }
+  
+  #[test]
+  fn test_create_datetime_frac_from_int() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", Some("3030"), None
+    )))), Value::datetime_frac_from_int(2012, 1, 3, 3, 30, 30, 3030).unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_frac_from_str() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", Some("3030"), None
+    )))), Value::datetime_frac_from_str("2012", "01", "03", "03", "30", "30", "3030").unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_frac_from_str_fail() {
+    assert!(Value::datetime_frac_from_str("2012", "01", "03", "03", "30", "30", "q3030").is_err());
+  }
+  
+  // ********************** START HERE WITH TEST FOR DATETIME_OFFSET_FROM_INT *************************
+  // **************************************************************************************************
+  
+  #[test]
+  fn test_create_datetime_full_from_int() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", Some("3030"), Some(TimeOffset::Time(TimeOffsetAmount::new_str(
+        "+", "07", "45"
+      )))
+    )))), Value::datetime_full_from_int(2012, 1, 3, 3, 30, 30, 3030, "+", 7, 45).unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_full_from_int_fail() {
+    //assert!(Value::datetime_full_from_int(2012, 1, 3, 3, 30, 30, 3030, "+", 7, 45).is_err());
+  }
+  
+  #[test]
+  fn test_create_datetime_full_from_str() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", Some("3030"), Some(TimeOffset::Time(TimeOffsetAmount::new_str(
+        "+", "07", "45"
+      )))
+    )))), Value::datetime_full_from_str("2012", "01", "03", "03", "30", "30", "3030", "+", "07", "45").unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_full_from_str_fail() {
+    //assert!(Value::datetime_full_from_str("2012", "01", "03", "03", "30", "30", "3030", "+", "07", "45").is_err());
+  }
+  
 }

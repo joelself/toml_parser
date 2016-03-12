@@ -3,6 +3,8 @@
   - [x] Logging
   - [x] Add line numbers to errors
   - [ ] Add documentation to public enums, structs, functions, methods and macros
+  - [x] Switch names of TOMLValue and Value
+  - [x] Rename TOMLParser to TOMLTOMLParser
 
 * primitives.rs
 	- [x] Implement get_keychain_key
@@ -17,7 +19,7 @@
   - [x] DateTime validation
 
 * ast/structs.rs
-	- [x] Re-implement HashValue to have a list of children or max index of children
+	- [x] Re-implement HashTOMLValue to have a list of children or max index of children
 	- [x] Fix DateTime to allow only Date, only DateTime (no fractional seconds), only DateTime (with fractional seconds), Full DateTime with offset
 	- [x] Change TimeOffset::Z to TimeOffset::Zulu?
 	- [x] Change '+'/'-' to enum
@@ -37,14 +39,14 @@
 	- [x] Change Key::Str to just hold a Str
 	- [x] Implement reconstructing InlineTables and Arrays with different structures than previous values
     - [x] Implement wiping out all keys and values of InlineTables and Arrays with changed structure
-    - [x] Implement converting TOMLValue Arrays and InlineTables to Value Arrays and Tables
+    - [x] Implement converting Value Arrays and InlineTables to TOMLValue Arrays and Tables
     - [x] Implement inserting new keys and values into map
     - [x] Implement inserting new Array or InlineTable value into AST
 	- [x] Implement ~~get_errors~~ Errors are returned as part of pars result if there are any
-  - [x] Value parsing on set_value (currently set_value accepts whatever you give it). *In progress, almost finished*
+  - [x] TOMLValue parsing on set_value (currently set_value accepts whatever you give it). *In progress, almost finished*
 	- [x] Implement get_children
   - [x] Convenience functions
-    - [x] For creating TOMLValues, especially DateTime
+    - [x] For creating Values, especially DateTime
     - [x] Combining a key and a subkey or index to a new key
 	- [x] Add unit tests for getting values
     - [x] Add unit tests for getting sub-keys
@@ -60,4 +62,4 @@
 
 * types.rs
   - [x] Log an error on a return result of Result::Err
-  - [ ] Add unit tests to convenience functions
+  - [ ] Add unit tests to convenience functions (partially done)

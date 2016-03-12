@@ -1,12 +1,12 @@
 use std::fs;
 use std::fs::File;
 extern crate tomllib;
-use tomllib::parser::Parser;
+use tomllib::parser::TOMLParser;
 use std::io::{Read, BufReader};
 
 fn verify(input: String) -> (bool, Option<(String, String)>) {
     let input_copy = input.clone();
-    let parser = Parser::new();
+    let parser = TOMLParser::new();
     let parser = parser.parse(&input_copy);
     let result = format!("{}", parser);
     if result != input  {

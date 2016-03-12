@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::option::Option;
 use std::borrow::Cow;
-use ::types::{DateTime, StrType, Bool, Children, Time, TimeOffset, TimeOffsetAmount,
+use ::types::{DateTime, StrType, Children, Time, TimeOffset, TimeOffsetAmount,
               Date, PosNeg};
 
 
@@ -125,10 +125,10 @@ impl<'a> Expression<'a> {
 }
 
 #[derive(Debug, Eq, Clone)]
-pub enum Value<'a> {
+pub enum TOMLValue<'a> {
 	Integer(Cow<'a, str>),
 	Float(Cow<'a, str>),
-	Boolean(Bool),
+	Boolean(bool),
 	DateTime(DateTime<'a>),
 	Array(Rc<RefCell<Array<'a>>>),
 	String(Cow<'a, str>, StrType),
@@ -148,12 +148,12 @@ pub enum ArrayType {
 }
 
 #[derive(Debug, Eq, Clone)]
-pub struct HashValue<'a> {
-	pub value: Option<Rc<RefCell<Value<'a>>>>, 
+pub struct HashTOMLValue<'a> {
+	pub value: Option<Rc<RefCell<TOMLValue<'a>>>>, 
 	pub subkeys: Children,
 }
 
-impl<'a> Display for HashValue<'a> {
+impl<'a> Display for HashTOMLValue<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self.subkeys {
       Children::Count(ref c) => try!(write!(f, "Subkey Count: {}, ", c.get())),
@@ -165,84 +165,84 @@ impl<'a> Display for HashValue<'a> {
       },
     }
 		if let Some(ref v) = self.value {
-			write!(f, "Value: {}", *v.borrow())
+			write!(f, "TOMLValue: {}", *v.borrow())
 		} else {
-			write!(f, "No Value")
+			write!(f, "No TOMLValue")
 		}
 	}
 }
 
 #[allow(dead_code)]
-impl<'a> HashValue<'a> {
-	pub fn new_keys(value: Rc<RefCell<Value<'a>>>) -> HashValue<'a> {
-		HashValue {
+impl<'a> HashTOMLValue<'a> {
+	pub fn new_keys(value: Rc<RefCell<TOMLValue<'a>>>) -> HashTOMLValue<'a> {
+		HashTOMLValue {
 			value: Some(value),
 			subkeys: Children::Keys(RefCell::new(vec![])),
 		}
 	}
-	pub fn none_keys() -> HashValue<'a> {
-		HashValue {
+	pub fn none_keys() -> HashTOMLValue<'a> {
+		HashTOMLValue {
 			value: None,
 			subkeys: Children::Keys(RefCell::new(vec![])),
 		}
 	}
-  pub fn one_keys(key: String) -> HashValue<'a> {
-    HashValue {
+  pub fn one_keys(key: String) -> HashTOMLValue<'a> {
+    HashTOMLValue {
       value: None,
       subkeys: Children::Keys(RefCell::new(vec![key])),
     }
   }
-	pub fn new_count(value: Rc<RefCell<Value<'a>>>) -> HashValue<'a> {
-		HashValue {
+	pub fn new_count(value: Rc<RefCell<TOMLValue<'a>>>) -> HashTOMLValue<'a> {
+		HashTOMLValue {
 			value: Some(value),
 			subkeys: Children::Count(Cell::new(0)),
 		}
 	}
-  pub fn none_count() -> HashValue<'a> {
-    HashValue {
+  pub fn none_count() -> HashTOMLValue<'a> {
+    HashTOMLValue {
       value: None,
       subkeys: Children::Count(Cell::new(0)),
     }
   }
-  pub fn one_count() -> HashValue<'a> {
-    HashValue {
+  pub fn one_count() -> HashTOMLValue<'a> {
+    HashTOMLValue {
       value: None,
       subkeys: Children::Count(Cell::new(1)),
     }
   }
 }
 
-impl<'a> PartialEq for HashValue<'a> {
-	fn eq(&self, other: &HashValue<'a>) -> bool {
+impl<'a> PartialEq for HashTOMLValue<'a> {
+	fn eq(&self, other: &HashTOMLValue<'a>) -> bool {
 		self.value == other.value
 	}
 }
 
-impl<'a> PartialEq for Value<'a> {
-	fn eq(&self, other: &Value<'a>) -> bool {
+impl<'a> PartialEq for TOMLValue<'a> {
+	fn eq(&self, other: &TOMLValue<'a>) -> bool {
 		match (self, other) {
-			(&Value::Integer(ref i), &Value::Integer(ref j)) if i == j => true,
-			(&Value::Float(ref i), &Value::Float(ref j)) if i == j => true,
-			(&Value::Boolean(ref i), &Value::Boolean(ref j)) if i == j => true,
-			(&Value::DateTime(ref i), &Value::DateTime(ref j)) if i == j => true,
-			(&Value::Array(ref i), &Value::Array(ref j)) if i == j => true,
-			(&Value::String(ref i, _), &Value::String(ref j, _)) if i == j => true,
-			(&Value::InlineTable(ref i), &Value::InlineTable(ref j)) if i == j => true,
+			(&TOMLValue::Integer(ref i), &TOMLValue::Integer(ref j)) if i == j => true,
+			(&TOMLValue::Float(ref i), &TOMLValue::Float(ref j)) if i == j => true,
+			(&TOMLValue::Boolean(ref i), &TOMLValue::Boolean(ref j)) if i == j => true,
+			(&TOMLValue::DateTime(ref i), &TOMLValue::DateTime(ref j)) if i == j => true,
+			(&TOMLValue::Array(ref i), &TOMLValue::Array(ref j)) if i == j => true,
+			(&TOMLValue::String(ref i, _), &TOMLValue::String(ref j, _)) if i == j => true,
+			(&TOMLValue::InlineTable(ref i), &TOMLValue::InlineTable(ref j)) if i == j => true,
 			_ => false
 		}
 	}
 }
 
-impl<'a> Display for Value<'a> {
+impl<'a> Display for TOMLValue<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			&Value::Integer(ref i) => write!(f, "{}", i),
-			&Value::Float(ref i) => write!(f, "{}", i),
-			&Value::Boolean(ref i) => write!(f, "{}", i),
-			&Value::DateTime(ref i) => write!(f, "{}", i),
-			&Value::Array(ref i) => write!(f, "{}", *i.borrow()),
-			&Value::InlineTable(ref i) => write!(f, "{}", *i.borrow()),
-			&Value::String(ref i, ref t) =>  {
+			&TOMLValue::Integer(ref i) => write!(f, "{}", i),
+			&TOMLValue::Float(ref i) => write!(f, "{}", i),
+			&TOMLValue::Boolean(ref i) => write!(f, "{}", i),
+			&TOMLValue::DateTime(ref i) => write!(f, "{}", i),
+			&TOMLValue::Array(ref i) => write!(f, "{}", *i.borrow()),
+			&TOMLValue::InlineTable(ref i) => write!(f, "{}", *i.borrow()),
+			&TOMLValue::String(ref i, ref t) =>  {
 				match t {
 					&StrType::Basic => write!(f, "\"{}\"", i),
 					&StrType::MLBasic => write!(f, "\"\"\"{}\"\"\"", i),
@@ -335,7 +335,7 @@ impl<'a> WSSep<'a> {
 pub struct KeyVal<'a> {
 	pub key: Cow<'a, str>,
 	pub keyval_sep: WSSep<'a>,
-	pub val: Rc<RefCell<Value<'a>>>,
+	pub val: Rc<RefCell<TOMLValue<'a>>>,
 }
 
 impl<'a> PartialEq for KeyVal<'a> {
@@ -354,10 +354,10 @@ impl<'a> Display for KeyVal<'a> {
 
 #[allow(dead_code)]
 impl<'a> KeyVal<'a> {
-    pub fn new_str(key: &'a str, keyval_sep: WSSep<'a>, val: Rc<RefCell<Value<'a>>>) -> KeyVal<'a> {
+    pub fn new_str(key: &'a str, keyval_sep: WSSep<'a>, val: Rc<RefCell<TOMLValue<'a>>>) -> KeyVal<'a> {
     	KeyVal{key: key.into(), keyval_sep: keyval_sep, val: val}
     }
-    pub fn new_string(key: String, keyval_sep: WSSep<'a>, val: Rc<RefCell<Value<'a>>>) -> KeyVal<'a> {
+    pub fn new_string(key: String, keyval_sep: WSSep<'a>, val: Rc<RefCell<TOMLValue<'a>>>) -> KeyVal<'a> {
     	KeyVal{key: key.into(), keyval_sep: keyval_sep, val: val}
     }
 }
@@ -593,21 +593,21 @@ impl<'a> TimeOffsetAmount<'a> {
 
 // <val><<array_sep.ws1>,<array_sep.ws2>?><comment_nl?><array_vals?>
 #[derive(Debug, Eq)]
-pub struct ArrayValue<'a> {
-	pub val: Rc<RefCell<Value<'a>>>,
+pub struct ArrayTOMLValue<'a> {
+	pub val: Rc<RefCell<TOMLValue<'a>>>,
 	pub array_sep: Option<WSSep<'a>>,
 	pub comment_nls: Vec<CommentOrNewLines<'a>>,
 }
 
-impl<'a> PartialEq for ArrayValue<'a> {
-	fn eq(&self, other: &ArrayValue<'a>) -> bool {
+impl<'a> PartialEq for ArrayTOMLValue<'a> {
+	fn eq(&self, other: &ArrayTOMLValue<'a>) -> bool {
 		self.val == other.val &&
 		comp_opt(&self.array_sep, &other.array_sep) &&
 		self.comment_nls == other.comment_nls
 	}
 }
 
-impl<'a> Display for ArrayValue<'a> {
+impl<'a> Display for ArrayTOMLValue<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     if self.comment_nls.len() > 0 {
       match self.array_sep {
@@ -627,23 +627,23 @@ impl<'a> Display for ArrayValue<'a> {
   }
 }
 
-impl<'a> ArrayValue<'a> {
-  pub fn new(val: Rc<RefCell<Value<'a>>>, array_sep: Option<WSSep<'a>>,
-  	comment_nls: Vec<CommentOrNewLines<'a>>) -> ArrayValue<'a> {
-  	ArrayValue{val: val, array_sep: array_sep, comment_nls: comment_nls}
+impl<'a> ArrayTOMLValue<'a> {
+  pub fn new(val: Rc<RefCell<TOMLValue<'a>>>, array_sep: Option<WSSep<'a>>,
+  	comment_nls: Vec<CommentOrNewLines<'a>>) -> ArrayTOMLValue<'a> {
+  	ArrayTOMLValue{val: val, array_sep: array_sep, comment_nls: comment_nls}
   }
-  pub fn default(val: Rc<RefCell<Value<'a>>>) -> ArrayValue<'a> {
-    ArrayValue{val: val, array_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
+  pub fn default(val: Rc<RefCell<TOMLValue<'a>>>) -> ArrayTOMLValue<'a> {
+    ArrayTOMLValue{val: val, array_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
   }
-  pub fn last(val: Rc<RefCell<Value<'a>>>) -> ArrayValue<'a> {
-    ArrayValue{val: val, array_sep: None, comment_nls: vec![]}
+  pub fn last(val: Rc<RefCell<TOMLValue<'a>>>) -> ArrayTOMLValue<'a> {
+    ArrayTOMLValue{val: val, array_sep: None, comment_nls: vec![]}
   }
 }
 
 // [<ws.ws1><values?><ws.ws2>]
 #[derive(Debug, Eq)]
 pub struct Array<'a> {
-	pub values: Vec<ArrayValue<'a>>,
+	pub values: Vec<ArrayTOMLValue<'a>>,
 	pub comment_nls1: Vec<CommentOrNewLines<'a>>,
 	pub comment_nls2: Vec<CommentOrNewLines<'a>>,
 }
@@ -673,7 +673,7 @@ impl<'a> Display for Array<'a> {
 }
 
 impl<'a> Array<'a> {
-  pub fn new(values: Vec<ArrayValue<'a>>, comment_nls1: Vec<CommentOrNewLines<'a>>,
+  pub fn new(values: Vec<ArrayTOMLValue<'a>>, comment_nls1: Vec<CommentOrNewLines<'a>>,
   	comment_nls2: Vec<CommentOrNewLines<'a>>,) -> Array<'a> {
   	Array{values: values, comment_nls1: comment_nls1, comment_nls2: comment_nls2}
   }
@@ -719,11 +719,11 @@ impl<'a> TableKeyVal<'a> {
     pub fn new(keyval: KeyVal<'a>, kv_sep: Option<WSSep<'a>>, comment_nls: Vec<CommentOrNewLines<'a>>) -> TableKeyVal<'a> {
     	TableKeyVal{keyval: keyval, kv_sep: kv_sep, comment_nls: comment_nls}
     }
-    pub fn default<S>(key: S, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> where S: Into<String> {
+    pub fn default<S>(key: S, val: Rc<RefCell<TOMLValue<'a>>>) -> TableKeyVal<'a> where S: Into<String> {
       let keyval = KeyVal::new_string(key.into(), WSSep::new_str(" ", " "), val);
       TableKeyVal{keyval: keyval, kv_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
     }
-    pub fn last<S>(key: S, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> where S: Into<String> {
+    pub fn last<S>(key: S, val: Rc<RefCell<TOMLValue<'a>>>) -> TableKeyVal<'a> where S: Into<String> {
       let keyval = KeyVal::new_string(key.into(), WSSep::new_str(" ", " "), val);
       TableKeyVal{keyval: keyval, kv_sep: None, comment_nls: vec![]}
     }

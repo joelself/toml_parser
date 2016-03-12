@@ -1,8 +1,8 @@
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
-                   CommentOrNewLines, ArrayValue, Array, Value,
+                   CommentOrNewLines, ArrayTOMLValue, Array, TOMLValue,
                    InlineTable, WSSep, TableKeyVal, ArrayType,
-                   HashValue, format_tt_keys};
-use parser::{Parser, Key};
+                   HashTOMLValue, format_tt_keys};
+use parser::{TOMLParser, Key};
 use types::{ParseError, Children};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -12,19 +12,19 @@ use std::cell::Cell;
 use nom::IResult;
 
 #[inline(always)]
-fn map_val_to_array_type(val: &Value) -> ArrayType {
+fn map_val_to_array_type(val: &TOMLValue) -> ArrayType {
   match val {
-    &Value::Integer(_)        => ArrayType::Integer,
-    &Value::Float(_)          => ArrayType::Float,
-    &Value::Boolean(_)        => ArrayType::Boolean,
-    &Value::DateTime(_)       => ArrayType::DateTime,
-    &Value::Array(_)          => ArrayType::Array,
-    &Value::String(_,_)       => ArrayType::String,
-    &Value::InlineTable(_)    => ArrayType::InlineTable,
+    &TOMLValue::Integer(_)        => ArrayType::Integer,
+    &TOMLValue::Float(_)          => ArrayType::Float,
+    &TOMLValue::Boolean(_)        => ArrayType::Boolean,
+    &TOMLValue::DateTime(_)       => ArrayType::DateTime,
+    &TOMLValue::Array(_)          => ArrayType::Array,
+    &TOMLValue::String(_,_)       => ArrayType::String,
+    &TOMLValue::InlineTable(_)    => ArrayType::InlineTable,
   }
 }
 
-impl<'a> Parser<'a> {
+impl<'a> TOMLParser<'a> {
   
   pub fn insert(vector: &RefCell<Vec<String>>, insert: String) -> bool {
     for s in vector.borrow().iter() {
@@ -75,10 +75,10 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn add_implicit_tables(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
+  fn add_implicit_tables(map: &RefCell<&mut HashMap<String, HashTOMLValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>,
     tables_index: &RefCell<Vec<usize>>, table: Rc<TableType<'a>>) {
-    let mut last_key = Parser::get_array_table_key(map, tables, tables_index);
+    let mut last_key = TOMLParser::get_array_table_key(map, tables, tables_index);
     let mut len = tables.borrow().len();
     let mut pop = false;
     // TODO: Need to add an array_table_root key that points to all of it's Children
@@ -112,13 +112,13 @@ impl<'a> Parser<'a> {
               if let Entry::Occupied(mut o) = borrow.entry(last_key.clone()) {
                 if first {
                   insert = match &o.get_mut().subkeys {
-                    &Children::Keys(ref vec_rf) => Parser::insert(vec_rf, tb.keys[i].key.clone().into_owned()),
+                    &Children::Keys(ref vec_rf) => TOMLParser::insert(vec_rf, tb.keys[i].key.clone().into_owned()),
                     &Children::Count(ref cell) => { cell.set(cell.get() + 1); true },
                   };
                   first = false;
                 } else {
                   insert = match &o.get_mut().subkeys {
-                    &Children::Keys(ref vec_rf) => Parser::insert(vec_rf, tb.keys[i].key.clone().into_owned()),
+                    &Children::Keys(ref vec_rf) => TOMLParser::insert(vec_rf, tb.keys[i].key.clone().into_owned()),
                     _ => panic!("Implicit tables can only be Standard Tables: \"{}\"", format!("{}.{}", last_key, tb.keys[i].key)),
                   };
                 }
@@ -133,12 +133,12 @@ impl<'a> Parser<'a> {
                 debug!("insert last_key {}", last_key);
                 if i == tb.keys.len() - 1 {
                   if let TableType::Array(_) = *table {
-                    borrow.insert(last_key.clone(), HashValue::one_count());
+                    borrow.insert(last_key.clone(), HashTOMLValue::one_count());
                   } else {
-                    borrow.insert(last_key.clone(), HashValue::none_keys());
+                    borrow.insert(last_key.clone(), HashTOMLValue::none_keys());
                   }
                 } else {
-                  borrow.insert(last_key.clone(), HashValue::none_keys());
+                  borrow.insert(last_key.clone(), HashTOMLValue::none_keys());
                 }
               }
             }
@@ -152,9 +152,9 @@ impl<'a> Parser<'a> {
     debug!("Returning from add_implicit_tables");
   }
 
-  fn increment_array_table_index(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
+  fn increment_array_table_index(map: &RefCell<&mut HashMap<String, HashTOMLValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,) {
-    let parent_key = Parser::get_key_parent(tables, tables_index);
+    let parent_key = TOMLParser::get_key_parent(tables, tables_index);
     debug!("increment_array_table_index: {}", parent_key);
     let mut borrow = map.borrow_mut();
     let entry = borrow.entry(parent_key);
@@ -168,21 +168,21 @@ impl<'a> Parser<'a> {
     tables_index.borrow_mut()[len - 1] = last_index + 1;
   }
 
-  fn add_to_table_set(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
+  fn add_to_table_set(map: &RefCell<&mut HashMap<String, HashTOMLValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>, key: &str) -> bool{
-    let parent_key = Parser::get_key_parent(tables, tables_index);
+    let parent_key = TOMLParser::get_key_parent(tables, tables_index);
     debug!("add_to_table_set: {}", parent_key);
     let mut borrow = map.borrow_mut();
     let entry = borrow.entry(parent_key);
     if let Entry::Occupied(mut o) = entry {
       if let &Children::Keys(ref keys) = &o.get_mut().subkeys {
-        let contains = Parser::contains(keys, key);
+        let contains = TOMLParser::contains(keys, key);
         if contains {
           debug!("key already exists");
           return false;
         } else {
           debug!("add_to_table_set--> {}", key);
-          Parser::insert(keys, key.to_string());
+          TOMLParser::insert(keys, key.to_string());
         }
       }
     }
@@ -190,16 +190,16 @@ impl<'a> Parser<'a> {
   }
 
   // Table
-  method!(pub table<Parser<'a>, &'a str, Rc<TableType> >, mut self,
+  method!(pub table<TOMLParser<'a>, &'a str, Rc<TableType> >, mut self,
     alt!(
       complete!(call_m!(self.array_table)) |
       complete!(call_m!(self.std_table))
     )
   );
 
-  method!(table_subkeys<Parser<'a>, &'a str, Vec<WSKeySep> >, mut self, many0!(call_m!(self.table_subkey)));
+  method!(table_subkeys<TOMLParser<'a>, &'a str, Vec<WSKeySep> >, mut self, many0!(call_m!(self.table_subkey)));
 
-  method!(table_subkey<Parser<'a>, &'a str, WSKeySep>, mut self,
+  method!(table_subkey<TOMLParser<'a>, &'a str, WSKeySep>, mut self,
     chain!(
       ws1: call_m!(self.ws)         ~
            tag_s!(".")~
@@ -211,7 +211,7 @@ impl<'a> Parser<'a> {
     )
   );
   // Standard Table
-  method!(std_table<Parser<'a>, &'a str, Rc<TableType> >, mut self,
+  method!(std_table<TOMLParser<'a>, &'a str, Rc<TableType> >, mut self,
     chain!(
            tag_s!("[")    ~
       ws1: call_m!(self.ws)             ~
@@ -227,7 +227,7 @@ impl<'a> Parser<'a> {
         let mut error = false;
         let keychain_len = self.keychain.borrow().len();
         self.keychain.borrow_mut().truncate(keychain_len - keys_len);
-        if Parser::is_top_std_table(&self.last_array_tables) || Parser::equal_key_length(res.clone(), &self.last_array_tables) {
+        if TOMLParser::is_top_std_table(&self.last_array_tables) || TOMLParser::equal_key_length(res.clone(), &self.last_array_tables) {
           self.last_array_tables.borrow_mut().pop();
           self.last_array_tables_index.borrow_mut().pop();
         }
@@ -260,7 +260,7 @@ impl<'a> Parser<'a> {
             } else {
               self.last_array_tables.borrow_mut().push(res.clone());
               self.last_array_tables_index.borrow_mut().push(0);
-              table_key = Parser::get_array_table_key(&map, &self.last_array_tables, &self.last_array_tables_index);
+              table_key = TOMLParser::get_array_table_key(&map, &self.last_array_tables, &self.last_array_tables_index);
               self.last_array_tables.borrow_mut().pop();
               self.last_array_tables_index.borrow_mut().pop();
               debug!("Standard Table Key: {}", table_key);
@@ -285,7 +285,7 @@ impl<'a> Parser<'a> {
           self.last_array_tables.borrow_mut().push(res.clone());
           self.last_array_tables_index.borrow_mut().push(0);
           self.errors.borrow_mut().push(ParseError::InvalidTable(
-            Parser::get_array_table_key(&map, &self.last_array_tables,
+            TOMLParser::get_array_table_key(&map, &self.last_array_tables,
             &self.last_array_tables_index), self.line_count.get(),
             RefCell::new(HashMap::new())
           ));
@@ -293,13 +293,13 @@ impl<'a> Parser<'a> {
           self.last_array_tables_index.borrow_mut().pop();
           self.array_error.set(true);
         } else {
-          Parser::add_implicit_tables(&map, &self.last_array_tables,
+          TOMLParser::add_implicit_tables(&map, &self.last_array_tables,
             &self.last_array_tables_index, res.clone());
           if let TableType::Standard(ref tbl) = *res {
-            Parser::add_to_table_set(&map, &self.last_array_tables,
+            TOMLParser::add_to_table_set(&map, &self.last_array_tables,
               &self.last_array_tables_index, &tbl.keys[keys_len - 1].key);
             self.array_error.set(false);
-            map.borrow_mut().insert(table_key, HashValue::none_keys());
+            map.borrow_mut().insert(table_key, HashTOMLValue::none_keys());
             self.last_array_tables.borrow_mut().push(res.clone());
             self.last_array_tables_index.borrow_mut().push(0);
             self.last_table = Some(res.clone());
@@ -311,7 +311,7 @@ impl<'a> Parser<'a> {
   );
 
   //Array Table
-  method!(array_table<Parser<'a>, &'a str, Rc<TableType> >, mut self,
+  method!(array_table<TOMLParser<'a>, &'a str, Rc<TableType> >, mut self,
     chain!(
            tag_s!("[[")   ~
       ws1: call_m!(self.ws)             ~
@@ -326,7 +326,7 @@ impl<'a> Parser<'a> {
         )));
         let keychain_len = self.keychain.borrow().len();
         self.keychain.borrow_mut().truncate(keychain_len - keys_len);
-        if Parser::is_top_std_table(&self.last_array_tables) {
+        if TOMLParser::is_top_std_table(&self.last_array_tables) {
           self.last_array_tables.borrow_mut().pop();
           self.last_array_tables_index.borrow_mut().pop();
         }
@@ -341,13 +341,13 @@ impl<'a> Parser<'a> {
             debug!("current_key: {}, last_key: {}", current_key, last_key);
             if current_key == last_key {
               debug!("Increment array table index");
-              Parser::increment_array_table_index(&map, &self.last_array_tables,
+              TOMLParser::increment_array_table_index(&map, &self.last_array_tables,
                 &self.last_array_tables_index);
             } else {
               let subtable = res.is_subtable_of(&self.last_array_tables.borrow()[len - 1]);
               if subtable {
                 debug!("Is subtable");
-                Parser::add_implicit_tables(&map, &self.last_array_tables,
+                TOMLParser::add_implicit_tables(&map, &self.last_array_tables,
                   &self.last_array_tables_index, res.clone());
                 self.last_array_tables.borrow_mut().push(res.clone());
                 self.last_array_tables_index.borrow_mut().push(0);
@@ -362,11 +362,11 @@ impl<'a> Parser<'a> {
                 len = self.last_array_tables.borrow().len();
                 if len > 0 {
                   debug!("Increment array table index the second");
-                  Parser::increment_array_table_index(&map, &self.last_array_tables,
+                  TOMLParser::increment_array_table_index(&map, &self.last_array_tables,
                     &self.last_array_tables_index);
                 } else {
                   debug!("Add implicit tables");
-                  Parser::add_implicit_tables(&map, &self.last_array_tables,
+                  TOMLParser::add_implicit_tables(&map, &self.last_array_tables,
                     &self.last_array_tables_index,  res.clone());
                   self.last_array_tables.borrow_mut().push(res.clone());
                   self.last_array_tables_index.borrow_mut().push(0);
@@ -375,20 +375,20 @@ impl<'a> Parser<'a> {
             }
           } else {
             debug!("Len == 0 add implicit tables");
-            Parser::add_implicit_tables(&map, &self.last_array_tables,
+            TOMLParser::add_implicit_tables(&map, &self.last_array_tables,
               &self.last_array_tables_index, res.clone());
             self.last_array_tables.borrow_mut().push(res.clone());
             self.last_array_tables_index.borrow_mut().push(0);
           }
           debug!("Before call to get_array_table_key");
-          let full_key = Parser::get_array_table_key(&map, &self.last_array_tables,
+          let full_key = TOMLParser::get_array_table_key(&map, &self.last_array_tables,
             &self.last_array_tables_index);
           debug!("After call to get_array_table_key");
           let contains_key = map.borrow().contains_key(&full_key);
           if !contains_key {
-            map.borrow_mut().insert(full_key, HashValue::none_keys());
+            map.borrow_mut().insert(full_key, HashTOMLValue::none_keys());
           } else {
-            Parser::increment_array_table_index(&map, &self.last_array_tables,
+            TOMLParser::increment_array_table_index(&map, &self.last_array_tables,
               &self.last_array_tables_index);
           }
           self.last_table = Some(res.clone());
@@ -399,7 +399,7 @@ impl<'a> Parser<'a> {
   );
 
   // Array
-  method!(array_sep<Parser<'a>, &'a str, WSSep>, mut self,
+  method!(array_sep<TOMLParser<'a>, &'a str, WSSep>, mut self,
     chain!(
       ws1: call_m!(self.ws)         ~
            tag_s!(",")~
@@ -410,9 +410,9 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(ws_newline<Parser<'a>, &'a str, &'a str>, self, re_find!("^( |\t|\n|(\r\n))*"));
+  method!(ws_newline<TOMLParser<'a>, &'a str, &'a str>, self, re_find!("^( |\t|\n|(\r\n))*"));
 
-  method!(comment_nl<Parser<'a>, &'a str, CommentNewLines>, mut self,
+  method!(comment_nl<TOMLParser<'a>, &'a str, CommentNewLines>, mut self,
     chain!(
    prewsnl: call_m!(self.ws_newline)  ~
    comment: call_m!(self.comment)     ~
@@ -423,17 +423,17 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(comment_or_nl<Parser<'a>, &'a str, CommentOrNewLines>, mut self,
+  method!(comment_or_nl<TOMLParser<'a>, &'a str, CommentOrNewLines>, mut self,
     alt!(
       complete!(call_m!(self.comment_nl))   => {|com| CommentOrNewLines::Comment(com)} |
       complete!(call_m!(self.ws_newline))  => {|nl: &'a str|  CommentOrNewLines::NewLines(nl.into())}
     )
   );
 
-  method!(comment_or_nls<Parser<'a>, &'a str, Vec<CommentOrNewLines> >, mut self,
+  method!(comment_or_nls<TOMLParser<'a>, &'a str, Vec<CommentOrNewLines> >, mut self,
     many1!(call_m!(self.comment_or_nl)));
   
-  method!(array_value<Parser<'a>, &'a str, ArrayValue>, mut self,
+  method!(array_value<TOMLParser<'a>, &'a str, ArrayTOMLValue>, mut self,
         chain!(
           val: call_m!(self.val)                        ~
     array_sep: complete!(call_m!(self.array_sep))?      ~
@@ -450,12 +450,12 @@ impl<'a> Parser<'a> {
             let keychain_len = self.keychain.borrow().len();
             self.insert_keyval_into_map(val.clone());
             self.keychain.borrow_mut()[keychain_len - 1].inc();
-            ArrayValue::new(val, array_sep, comment_nls)
+            ArrayTOMLValue::new(val, array_sep, comment_nls)
           }
         )
   );
 
-  method!(array_values<Parser<'a>, &'a str, Vec<ArrayValue> >, mut self,
+  method!(array_values<TOMLParser<'a>, &'a str, Vec<ArrayTOMLValue> >, mut self,
     chain!(
      vals: many0!(call_m!(self.array_value)) ,
      ||{
@@ -467,7 +467,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  pub fn array(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, IResult<&'a str, Rc<RefCell<Array>>>) {
+  pub fn array(mut self: TOMLParser<'a>, input: &'a str) -> (TOMLParser<'a>, IResult<&'a str, Rc<RefCell<Array>>>) {
     // Initialize last array type to None, we need a stack because arrays can be nested
     debug!("*** array called on input:\t\t\t{}", input);
     self.last_array_type.borrow_mut().push(ArrayType::None);
@@ -477,7 +477,7 @@ impl<'a> Parser<'a> {
     if self.mixed_array.get() {
       self.mixed_array.set(false);
       self.errors.borrow_mut().push(ParseError::MixedArray(
-        Parser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
+        TOMLParser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
           &self.last_array_tables_index, &self.keychain
         ).0, self.line_count.get()
       ));
@@ -487,7 +487,7 @@ impl<'a> Parser<'a> {
     (self, res)
   }
 
-  method!(pub array_internal<Parser<'a>, &'a str, Rc<RefCell<Array>> >, mut self,
+  method!(pub array_internal<TOMLParser<'a>, &'a str, Rc<RefCell<Array>> >, mut self,
     chain!(
               tag_s!("[")                   ~
          cn1: call_m!(self.comment_or_nls)  ~
@@ -502,7 +502,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(table_keyval<Parser<'a>, &'a str, TableKeyVal>, mut self,
+  method!(table_keyval<TOMLParser<'a>, &'a str, TableKeyVal>, mut self,
         chain!(
        keyval: call_m!(self.keyval)                     ~
    keyval_sep: complete!(call_m!(self.array_sep))?      ~
@@ -513,9 +513,9 @@ impl<'a> Parser<'a> {
         )
   );
 
-  method!(inline_table_keyvals_non_empty<Parser<'a>, &'a str, Vec<TableKeyVal> >, mut self, many0!(call_m!(self.table_keyval)));
+  method!(inline_table_keyvals_non_empty<TOMLParser<'a>, &'a str, Vec<TableKeyVal> >, mut self, many0!(call_m!(self.table_keyval)));
 
-  method!(pub inline_table<Parser<'a>, &'a str, Rc<RefCell<InlineTable>> >, mut self,
+  method!(pub inline_table<TOMLParser<'a>, &'a str, Rc<RefCell<InlineTable>> >, mut self,
     chain!(
            tag_s!("{")                                ~
       ws1: call_m!(self.ws)                                         ~
@@ -536,17 +536,17 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
+  use ast::structs::{Array, ArrayTOMLValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
                      KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table,
-                     TableType, Value};
+                     TableType, TOMLValue};
   use ::types::{DateTime, Date, Time, TimeOffset, TimeOffsetAmount, StrType};
-  use parser::{Parser, Key};
+  use parser::{TOMLParser, Key};
   use std::rc::Rc;
   use std::cell::{RefCell, Cell};
 
   #[test]
   fn test_table() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     assert_eq!(p.table("[ _underscore_ . \"-δáƨλèƨ-\" ]").1, Done("",
       Rc::new(TableType::Standard(Table::new_str(
         WSSep::new_str(" ", " "), "_underscore_", vec![
@@ -554,7 +554,7 @@ mod test {
         ]
       ))
     )));
-    p = Parser::new();
+    p = TOMLParser::new();
     assert_eq!(p.table("[[\t NumberOne\t.\tnUMBERtWO \t]]").1, Done("",
       Rc::new(TableType::Array(Table::new_str(
         WSSep::new_str("\t ", " \t"), "NumberOne", vec![
@@ -566,7 +566,7 @@ mod test {
 
   #[test]
   fn test_table_subkey() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.table_subkey("\t . \t\"áƭúƨôèλôñèƭúññèôúñôèƭú\"").1, Done("",
       WSKeySep::new_str(WSSep::new_str("\t ", " \t"), "\"áƭúƨôèλôñèƭúññèôúñôèƭú\""),
     ));
@@ -574,7 +574,7 @@ mod test {
 
   #[test]
   fn test_table_subkeys() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.table_subkeys(" .\tAPPLE.MAC . \"ßÓÓK\"").1, Done("",
       vec![
         WSKeySep::new_str(WSSep::new_str(" ", "\t"), "APPLE"),
@@ -586,7 +586,7 @@ mod test {
 
   #[test]
   fn test_std_table() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.std_table("[Dr-Pepper  . \"ƙè¥_TWÓ\"]").1, Done("",
       Rc::new(TableType::Standard(Table::new_str(
         WSSep::new_str("", ""), "Dr-Pepper", vec![
@@ -598,7 +598,7 @@ mod test {
 
   #[test]
   fn test_array_table() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.array_table("[[\"ƙè¥ôñè\"\t. key_TWO]]").1, Done("",
       Rc::new(TableType::Array(Table::new_str(
         WSSep::new_str("", ""), "\"ƙè¥ôñè\"", vec![
@@ -610,19 +610,19 @@ mod test {
 
   #[test]
   fn test_array_sep() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.array_sep("  ,  ").1, Done("", WSSep::new_str("  ", "  ")));
   }
 
   #[test]
   fn test_ws_newline() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.ws_newline("\t\n\n").1, Done("", "\t\n\n"));
   }
 
   #[test]
   fn test_comment_nl() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.comment_nl("\r\n\t#çô₥₥èñƭñèωℓïñè\n \n \n").1, Done("",
       CommentNewLines::new_str(
         "\r\n\t", Comment::new_str("çô₥₥èñƭñèωℓïñè"), "\n \n \n"
@@ -632,46 +632,46 @@ mod test {
 
   #[test]
   fn test_comment_or_nl() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     assert_eq!(p.comment_or_nl("#ωôřƙωôřƙ\n").1, Done("",
       CommentOrNewLines::Comment(CommentNewLines::new_str(
         "", Comment::new_str("ωôřƙωôřƙ"), "\n"
       ))
     ));
-    p = Parser::new();
+    p = TOMLParser::new();
     assert_eq!(p.comment_or_nl(" \t\n#ωôřƙωôřƙ\n \r\n").1, Done("",
       CommentOrNewLines::Comment(CommentNewLines::new_str(
         " \t\n", Comment::new_str("ωôřƙωôřƙ"), "\n \r\n"
       ))
     ));
-    p = Parser::new();
+    p = TOMLParser::new();
     assert_eq!(p.comment_or_nl("\n\t\r\n ").1, Done("", CommentOrNewLines::NewLines("\n\t\r\n ".into())));
   }
 
   #[test]
   fn test_array_value() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("54.6, \n#çô₥₥èñƭ\n\n").1,
-      Done("",ArrayValue::new(
-        Rc::new(RefCell::new(Value::Float("54.6".into()))), Some(WSSep::new_str("", " ")),
+      Done("",ArrayTOMLValue::new(
+        Rc::new(RefCell::new(TOMLValue::Float("54.6".into()))), Some(WSSep::new_str("", " ")),
         vec![CommentOrNewLines::Comment(CommentNewLines::new_str(
           "\n", Comment::new_str("çô₥₥èñƭ"), "\n\n"
         ))]
       ))
     );
-    p = Parser::new();
+    p = TOMLParser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("\"ƨƥáϱλèƭƭï\"").1,
-      Done("",ArrayValue::new(
-        Rc::new(RefCell::new(Value::String("ƨƥáϱλèƭƭï".into(), StrType::Basic))), None, vec![CommentOrNewLines::NewLines("".into())]
+      Done("",ArrayTOMLValue::new(
+        Rc::new(RefCell::new(TOMLValue::String("ƨƥáϱλèƭƭï".into(), StrType::Basic))), None, vec![CommentOrNewLines::NewLines("".into())]
       ))
     );
-    p = Parser::new();
+    p = TOMLParser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("44_9 , ").1,
-      Done("",ArrayValue::new(
-        Rc::new(RefCell::new(Value::Integer("44_9".into()))), Some(WSSep::new_str(" ", " ")),
+      Done("",ArrayTOMLValue::new(
+        Rc::new(RefCell::new(TOMLValue::Integer("44_9".into()))), Some(WSSep::new_str(" ", " ")),
         vec![CommentOrNewLines::NewLines("".into())]
       ))
     );
@@ -679,42 +679,42 @@ mod test {
 
   #[test]
   fn test_array_values() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_values("1, 2, 3").1, Done("", vec![
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("1".into()))), Some(WSSep::new_str("", " ")),
+      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("1".into()))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines("".into())]),
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("2".into()))), Some(WSSep::new_str("", " ")),
+      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("2".into()))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines("".into())]),
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("3".into()))), None, vec![CommentOrNewLines::NewLines("".into())])
+      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("3".into()))), None, vec![CommentOrNewLines::NewLines("".into())])
     ]));
-    p = Parser::new();
+    p = TOMLParser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_values("1, 2, #çô₥₥èñƭ\n3, ").1, Done("", vec![
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("1".into()))), Some(WSSep::new_str("", " ")),
+      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("1".into()))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines("".into())]),
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("2".into()))), Some(WSSep::new_str("", " ")),
+      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("2".into()))), Some(WSSep::new_str("", " ")),
         vec![CommentOrNewLines::Comment(CommentNewLines::new_str("", Comment::new_str("çô₥₥èñƭ"), "\n"))]),
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("3".into()))), Some(WSSep::new_str("", " ")),
+      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("3".into()))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines("".into())])
     ]));
   }
 
   #[test]
   fn test_non_nested_array() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.array("[2010-10-10T10:10:10.33Z, 1950-03-30T21:04:14.123+05:00]").1,
       Done("", Rc::new(RefCell::new(Array::new(
-        vec![ArrayValue::new(
-          Rc::new(RefCell::new(Value::DateTime(DateTime::new(
+        vec![ArrayTOMLValue::new(
+          Rc::new(RefCell::new(TOMLValue::DateTime(DateTime::new(
             Date::new_str("2010", "10", "10"), Some(Time::new_str("10", "10", "10", Some("33"),
               Some(TimeOffset::Zulu)
           )))))),
           Some(WSSep::new_str("", " ")),
           vec![CommentOrNewLines::NewLines("".into())]
         ),
-        ArrayValue::new(
-          Rc::new(RefCell::new(Value::DateTime(DateTime::new(
+        ArrayTOMLValue::new(
+          Rc::new(RefCell::new(TOMLValue::DateTime(DateTime::new(
             Date::new_str("1950", "03", "30"), Some(Time::new_str("21", "04", "14", Some("123"),
             Some(TimeOffset::Time(TimeOffsetAmount::new_str("+", "05", "00")))
           )))))),
@@ -727,19 +727,19 @@ mod test {
 
   #[test]
   fn test_nested_array() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.array("[[3,4], [4,5], [6]]").1,
       Done("", Rc::new(RefCell::new(Array::new(
         vec![
-          ArrayValue::new(
-            Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
+          ArrayTOMLValue::new(
+            Rc::new(RefCell::new(TOMLValue::Array(Rc::new(RefCell::new(Array::new(
               vec![
-                ArrayValue::new(
-                  Rc::new(RefCell::new(Value::Integer("3".into()))), Some(WSSep::new_str("", "")),
+                ArrayTOMLValue::new(
+                  Rc::new(RefCell::new(TOMLValue::Integer("3".into()))), Some(WSSep::new_str("", "")),
                   vec![CommentOrNewLines::NewLines("".into())]
                 ),
-                ArrayValue::new(
-                  Rc::new(RefCell::new(Value::Integer("4".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
+                ArrayTOMLValue::new(
+                  Rc::new(RefCell::new(TOMLValue::Integer("4".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
                 )
               ],
               vec![CommentOrNewLines::NewLines("".into())], vec![CommentOrNewLines::NewLines("".into())]
@@ -747,15 +747,15 @@ mod test {
             Some(WSSep::new_str("", " ")),
             vec![CommentOrNewLines::NewLines("".into())]
           ),
-          ArrayValue::new(
-            Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
+          ArrayTOMLValue::new(
+            Rc::new(RefCell::new(TOMLValue::Array(Rc::new(RefCell::new(Array::new(
               vec![
-                ArrayValue::new(
-                  Rc::new(RefCell::new(Value::Integer("4".into()))), Some(WSSep::new_str("", "")),
+                ArrayTOMLValue::new(
+                  Rc::new(RefCell::new(TOMLValue::Integer("4".into()))), Some(WSSep::new_str("", "")),
                   vec![CommentOrNewLines::NewLines("".into())]
                 ),
-                ArrayValue::new(
-                    Rc::new(RefCell::new(Value::Integer("5".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
+                ArrayTOMLValue::new(
+                    Rc::new(RefCell::new(TOMLValue::Integer("5".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
                 )
               ],
               vec![CommentOrNewLines::NewLines("".into())], vec![CommentOrNewLines::NewLines("".into())]
@@ -763,11 +763,11 @@ mod test {
             Some(WSSep::new_str("", " ")),
             vec![CommentOrNewLines::NewLines("".into())]
           ),
-          ArrayValue::new(
-            Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
+          ArrayTOMLValue::new(
+            Rc::new(RefCell::new(TOMLValue::Array(Rc::new(RefCell::new(Array::new(
               vec![
-                ArrayValue::new(
-                  Rc::new(RefCell::new(Value::Integer("6".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
+                ArrayTOMLValue::new(
+                  Rc::new(RefCell::new(TOMLValue::Integer("6".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
                 )
               ],
              vec![CommentOrNewLines::NewLines("".into())], vec![CommentOrNewLines::NewLines("".into())]
@@ -782,10 +782,10 @@ mod test {
 
   #[test]
   fn test_table_keyval() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.table_keyval("\"Ì WúƲ Húϱƨ!\"\t=\t'Mè ƭôô!' ").1, Done("", TableKeyVal::new(
       KeyVal::new_str(
-        "\"Ì WúƲ Húϱƨ!\"", WSSep::new_str("\t", "\t"), Rc::new(RefCell::new(Value::String("Mè ƭôô!".into(), StrType::Literal)))
+        "\"Ì WúƲ Húϱƨ!\"", WSSep::new_str("\t", "\t"), Rc::new(RefCell::new(TOMLValue::String("Mè ƭôô!".into(), StrType::Literal)))
       ),
       None,
       vec![]
@@ -794,13 +794,13 @@ mod test {
 
   #[test]
   fn test_inline_table_keyvals_non_empty() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.inline_table_keyvals_non_empty("Key =\t54,\"Key2\" = '34.99'").1,
       Done("", vec![
         TableKeyVal::new(
           KeyVal::new_str(
             "Key", WSSep::new_str(" ", "\t"),
-            Rc::new(RefCell::new(Value::Integer("54".into())))
+            Rc::new(RefCell::new(TOMLValue::Integer("54".into())))
           ),
           Some(WSSep::new_str("", "")),
           vec![]
@@ -808,7 +808,7 @@ mod test {
         TableKeyVal::new(
           KeyVal::new_str(
             "\"Key2\"", WSSep::new_str( " ", " "),
-            Rc::new(RefCell::new(Value::String("34.99".into(), StrType::Literal)))
+            Rc::new(RefCell::new(TOMLValue::String("34.99".into(), StrType::Literal)))
           ),
           None,
           vec![]
@@ -819,21 +819,21 @@ mod test {
 
   #[test]
   fn test_inline_table() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.inline_table("{\tKey = 3.14E+5 , \"Key2\" = '''New\nLine'''\t}").1,
       Done("", Rc::new(RefCell::new(InlineTable::new(
         vec![
           TableKeyVal::new(
             KeyVal::new_str(
               "Key", WSSep::new_str(" ", " "),
-              Rc::new(RefCell::new(Value::Float("3.14E+5".into())))
+              Rc::new(RefCell::new(TOMLValue::Float("3.14E+5".into())))
             ),
             Some(WSSep::new_str(" ", " ")),
             vec![CommentOrNewLines::NewLines("".into())]
           ),
           TableKeyVal::new(
             KeyVal::new_str("\"Key2\"", WSSep::new_str(" ", " "),
-              Rc::new(RefCell::new(Value::String("New\nLine".into(), StrType::MLLiteral)))
+              Rc::new(RefCell::new(TOMLValue::String("New\nLine".into(), StrType::MLLiteral)))
             ),
             None,
             vec![CommentOrNewLines::NewLines("\t".into())]

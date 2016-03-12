@@ -2,12 +2,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use ast::structs::{KeyVal, WSSep, Value, ErrorCode,
-                   HashValue, TableType, Table,
+use ast::structs::{KeyVal, WSSep, TOMLValue, ErrorCode,
+                   HashTOMLValue, TableType, Table,
                    get_last_keys};
 use ::types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
-             Bool, Children, TOMLValue};
-use parser::{Parser, Key, count_lines};
+              Children, Value};
+use parser::{TOMLParser, Key, count_lines};
 use nom;
 use nom::{IResult, InputLength};
 // TODO LIST:
@@ -23,7 +23,7 @@ fn is_keychar(chr: char) -> bool {
   uchr == 0x2D || uchr == 0x5f    // "-", "_"
 }
 
-impl<'a> Parser<'a> {
+impl<'a> TOMLParser<'a> {
   pub fn get_key_parent(tables: &RefCell<Vec<Rc<TableType<'a>>>>,
     tables_index: &RefCell<Vec<usize>>) -> String {
     let mut key_parent: String = String::new();
@@ -55,7 +55,7 @@ impl<'a> Parser<'a> {
   }
 
 
-  pub fn get_array_table_key(map: &RefCell<&mut HashMap<String, HashValue<'a>>>, tables: &RefCell<Vec<Rc<TableType<'a>>>>,
+  pub fn get_array_table_key(map: &RefCell<&mut HashMap<String, HashTOMLValue<'a>>>, tables: &RefCell<Vec<Rc<TableType<'a>>>>,
     tables_index: &RefCell<Vec<usize>>) -> String {
     let mut full_key: String = String::new();
     let last_table: Option<&Table> = None;
@@ -146,12 +146,12 @@ impl<'a> Parser<'a> {
     return (key, parent_key);
   }
 
-  pub fn get_full_key(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
+  pub fn get_full_key(map: &RefCell<&mut HashMap<String, HashTOMLValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,
     keychain: &RefCell<Vec<Key<'a>>>) -> (String, String) {
 
-    let array_key = Parser::get_array_table_key(map, tables, tables_index);
-    let (chain_key, parent_chain_key) = Parser::get_keychain_key(keychain);
+    let array_key = TOMLParser::get_array_table_key(map, tables, tables_index);
+    let (chain_key, parent_chain_key) = TOMLParser::get_keychain_key(keychain);
     debug!("array_key: {}, chain_key: {}, parent_chain_key: {}", array_key, chain_key, parent_chain_key);
     let mut full_key = String::new();
     let mut parent_key = String::new();
@@ -169,7 +169,7 @@ impl<'a> Parser<'a> {
     return (full_key, parent_key);
   }
 
-  pub fn insert_keyval_into_map(&mut self, val: Rc<RefCell<Value<'a>>>) {
+  pub fn insert_keyval_into_map(&mut self, val: Rc<RefCell<TOMLValue<'a>>>) {
     debug!("Insert val: {}", *(*val).borrow());
     let map = RefCell::new(&mut self.map);
     let mut insert = false;
@@ -184,7 +184,7 @@ impl<'a> Parser<'a> {
       //    If the value in non-empty add the key/val to the error list
       //  If the key doesn't exist, insert it
       &None => {
-        let tuple = Parser::get_keychain_key(&self.keychain);
+        let tuple = TOMLParser::get_keychain_key(&self.keychain);
         full_key = tuple.0;
         parent_key = tuple.1;
         if parent_key == "" {
@@ -212,7 +212,7 @@ impl<'a> Parser<'a> {
         match **ttype {
           TableType::Standard(_) => {
             self.last_array_tables.borrow_mut().push(ttype.clone());
-            let tuple = Parser::get_full_key(&map, &self.last_array_tables,
+            let tuple = TOMLParser::get_full_key(&map, &self.last_array_tables,
               &self.last_array_tables_index, &self.keychain);
             full_key = tuple.0;
             parent_key = tuple.1;
@@ -230,7 +230,7 @@ impl<'a> Parser<'a> {
             }
           },
           TableType::Array(_) => {
-            let tuple = Parser::get_full_key(&map, &self.last_array_tables,
+            let tuple = TOMLParser::get_full_key(&map, &self.last_array_tables,
               &self.last_array_tables_index, &self.keychain);
             full_key = tuple.0;
             parent_key = tuple.1;
@@ -270,8 +270,8 @@ impl<'a> Parser<'a> {
       } else if insert {
         debug!("Insert full_key: {}, parent_key: {}, val: {}", full_key, parent_key, *(*val).borrow());
         match *val.borrow() {
-          Value::InlineTable(_) => map.borrow_mut().insert(full_key.clone(), HashValue::new_keys(val.clone())),
-          _                     => map.borrow_mut().insert(full_key.clone(), HashValue::new_count(val.clone())),
+          TOMLValue::InlineTable(_) => map.borrow_mut().insert(full_key.clone(), HashTOMLValue::new_keys(val.clone())),
+          _                     => map.borrow_mut().insert(full_key.clone(), HashTOMLValue::new_count(val.clone())),
         };
       }
 
@@ -286,7 +286,7 @@ impl<'a> Parser<'a> {
               &Children::Count(ref c) => { debug!("parent inc to {}", c.get() + 1); c.set(c.get() + 1) },
               &Children::Keys(ref vec_rf) => {
                 if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
-                  Parser::insert(vec_rf,s.clone().into_owned());
+                  TOMLParser::insert(vec_rf,s.clone().into_owned());
                 }
               },
             }
@@ -295,10 +295,10 @@ impl<'a> Parser<'a> {
             debug!("vacant parent");
             if let Key::Index(_) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
               debug!("initialize to 1");
-              v.insert(HashValue::one_count());
+              v.insert(HashTOMLValue::one_count());
             } else if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
               debug!("initialize to string: {}", s);
-              v.insert(HashValue::one_keys(s.clone().into_owned()));
+              v.insert(HashTOMLValue::one_keys(s.clone().into_owned()));
             }
           },
         }
@@ -307,10 +307,10 @@ impl<'a> Parser<'a> {
   }
 
   // Integer
-  method!(pub integer<Parser<'a>, &'a str, &'a str>, self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
+  method!(pub integer<TOMLParser<'a>, &'a str, &'a str>, self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
 
   // Float
-  method!(pub float<Parser<'a>, &'a str, &'a str>, self,
+  method!(pub float<TOMLParser<'a>, &'a str, &'a str>, self,
          re_find!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
 
   // Basic String
@@ -327,28 +327,28 @@ impl<'a> Parser<'a> {
   named!(pub quoteless_ml_literal_string<&'a str, &'a str>, re_find!("^(	|[ -􏿿]|\n|(\r\n))*?"));
 
   // Basic String
-  method!(raw_basic_string<Parser<'a>, &'a str, &'a str>, self,
+  method!(raw_basic_string<TOMLParser<'a>, &'a str, &'a str>, self,
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*?\""));
   // Multiline Basic String
   // TODO: Convert this to take_while_s using a function that increments self.linecount
-  method!(raw_ml_basic_string<Parser<'a>, &'a str, &'a str>, self,
+  method!(raw_ml_basic_string<TOMLParser<'a>, &'a str, &'a str>, self,
     chain!(
    string: re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*?\"\"\""),
       ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
     )
   );
   // Literal String
-  method!(raw_literal_string<Parser<'a>, &'a str, &'a str>, self, re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
+  method!(raw_literal_string<TOMLParser<'a>, &'a str, &'a str>, self, re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
   // Multiline Literal String
   // TODO: Convert to take_while_s using a function that increments self.linecount
-  method!(raw_ml_literal_string<Parser<'a>, &'a str, &'a str>, self,
+  method!(raw_ml_literal_string<TOMLParser<'a>, &'a str, &'a str>, self,
     chain!(
    string: re_find!("^'''(	|[ -􏿿]|\n|(\r\n))*?'''"),
       ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
     )
   );
 
-  fn ml_basic_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nom::IResult<&'a str, &'a str>) {
+  fn ml_basic_string(mut self: TOMLParser<'a>, input: &'a str) -> (TOMLParser<'a>, nom::IResult<&'a str, &'a str>) {
     let (tmp, raw) = self.raw_ml_basic_string(input);
     self = tmp;
     let r = match raw {
@@ -359,7 +359,7 @@ impl<'a> Parser<'a> {
     (self, r)
   }
 
-  fn basic_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nom::IResult<&'a str, &'a str>) {
+  fn basic_string(mut self: TOMLParser<'a>, input: &'a str) -> (TOMLParser<'a>, nom::IResult<&'a str, &'a str>) {
     let (tmp, raw) = self.raw_basic_string(input);
     self = tmp;
     let r = match raw {
@@ -370,7 +370,7 @@ impl<'a> Parser<'a> {
     (self, r)
   }
 
-  fn ml_literal_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nom::IResult<&'a str, &'a str>) {
+  fn ml_literal_string(mut self: TOMLParser<'a>, input: &'a str) -> (TOMLParser<'a>, nom::IResult<&'a str, &'a str>) {
     let (tmp, raw) = self.raw_ml_literal_string(input);
     self = tmp;
     let r = match raw {
@@ -381,7 +381,7 @@ impl<'a> Parser<'a> {
     (self, r)
   }
 
-  fn literal_string(mut self: Parser<'a>, input: &'a str) -> (Parser<'a>, nom::IResult<&'a str, &'a str>) {
+  fn literal_string(mut self: TOMLParser<'a>, input: &'a str) -> (TOMLParser<'a>, nom::IResult<&'a str, &'a str>) {
     let (tmp, raw) = self.raw_literal_string(input);
     self = tmp;
     let r = match raw {
@@ -392,27 +392,27 @@ impl<'a> Parser<'a> {
     (self, r)
   }
 
-  method!(string<Parser<'a>, &'a str, Value>, mut self,
+  method!(string<TOMLParser<'a>, &'a str, TOMLValue>, mut self,
     alt!(
-      complete!(call_m!(self.ml_literal_string))  => {|ml: &'a str| Value::String(ml.into(), StrType::MLLiteral)}  |
-      complete!(call_m!(self.ml_basic_string))    => {|mb: &'a str| Value::String(mb.into(), StrType::MLBasic)}  |
-      complete!(call_m!(self.basic_string))       => {|b: &'a str| Value::String(b.into(), StrType::Basic)}    |
-      complete!(call_m!(self.literal_string))     => {|l: &'a str| Value::String(l.into(), StrType::Literal)}
+      complete!(call_m!(self.ml_literal_string))  => {|ml: &'a str| TOMLValue::String(ml.into(), StrType::MLLiteral)}  |
+      complete!(call_m!(self.ml_basic_string))    => {|mb: &'a str| TOMLValue::String(mb.into(), StrType::MLBasic)}  |
+      complete!(call_m!(self.basic_string))       => {|b: &'a str| TOMLValue::String(b.into(), StrType::Basic)}    |
+      complete!(call_m!(self.literal_string))     => {|l: &'a str| TOMLValue::String(l.into(), StrType::Literal)}
     )
   );
 
   // TODO: Allow alternate casing, but report it as an error
   // Boolean
-  method!(boolean<Parser<'a>, &'a str, Bool>, self, alt!(complete!(tag_s!("false")) => {|_| Bool::False} |
-                                                         complete!(tag_s!("true"))  => {|_| Bool::True}));
+  method!(boolean<TOMLParser<'a>, &'a str, bool>, self, alt!(complete!(tag_s!("false")) => {|_| false} |
+                                                         complete!(tag_s!("true"))  => {|_| true}));
 
 
   // Datetime
   // I use re_capture here because I only want the number without the dot. It captures the entire match
   // in the 0th position and the first capture group in the 1st position
-  method!(fractional<Parser<'a>, &'a str, Vec<&'a str> >, self, re_capture!("^\\.([0-9]+)"));
+  method!(fractional<TOMLParser<'a>, &'a str, Vec<&'a str> >, self, re_capture!("^\\.([0-9]+)"));
 
-  method!(time<Parser<'a>, &'a str, Time>, mut self,
+  method!(time<TOMLParser<'a>, &'a str, Time>, mut self,
     chain!(
            tag_s!("T")                            ~
      hour: re_find!("^[0-9]{2}")                  ~
@@ -434,7 +434,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(time_offset_amount<Parser<'a>, &'a str, TimeOffsetAmount >, self,
+  method!(time_offset_amount<TOMLParser<'a>, &'a str, TimeOffsetAmount >, self,
     chain!(
   pos_neg: alt!(complete!(tag_s!("+")) | complete!(tag_s!("-")))  ~
      hour: re_find!("^[0-9]{2}")                                  ~
@@ -446,14 +446,14 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(time_offset<Parser<'a>, &'a str, TimeOffset>, mut self,
+  method!(time_offset<TOMLParser<'a>, &'a str, TimeOffset>, mut self,
     alt!(
       complete!(tag_s!("Z"))                       => {|_|       TimeOffset::Zulu} |
       complete!(call_m!(self.time_offset_amount))  => {|offset|  TimeOffset::Time(offset)}
     )
   );
 
-  method!(date<Parser<'a>, &'a str, Date>, self,
+  method!(date<TOMLParser<'a>, &'a str, Date>, self,
     chain!(
      year: re_find!("^([0-9]{4})") ~
            tag_s!("-") ~
@@ -466,7 +466,7 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(pub date_time<Parser<'a>, &'a str, DateTime>, mut self,
+  method!(pub date_time<TOMLParser<'a>, &'a str, DateTime>, mut self,
     chain!(
      date: call_m!(self.date)       ~
      time: call_m!(self.time) ?     ,
@@ -474,7 +474,7 @@ impl<'a> Parser<'a> {
           let res = DateTime::new(date, time);
           if !res.validate() {
             self.errors.borrow_mut().push(ParseError::InvalidDateTime(
-              Parser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
+              TOMLParser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
                 &self.last_array_tables_index, &self.keychain
               ).0, self.line_count.get()
             ));
@@ -484,12 +484,12 @@ impl<'a> Parser<'a> {
     )
   );
 
-  // Key-Value pairs
-  method!(unquoted_key<Parser<'a>, &'a str, &'a str>, self, take_while1_s!(is_keychar));
-  method!(quoted_key<Parser<'a>, &'a str, &'a str>, self,
+  // Key-TOMLValue pairs
+  method!(unquoted_key<TOMLParser<'a>, &'a str, &'a str>, self, take_while1_s!(is_keychar));
+  method!(quoted_key<TOMLParser<'a>, &'a str, &'a str>, self,
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
-  method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(
+  method!(pub key<TOMLParser<'a>, &'a str, &'a str>, mut self, alt!(
     complete!(call_m!(self.quoted_key))   =>  {|k: &'a str| {
       self.keychain.borrow_mut().push(Key::Str(k.into())); k
     }}|
@@ -497,7 +497,7 @@ impl<'a> Parser<'a> {
       self.keychain.borrow_mut().push(Key::Str(k.into())); k}}
   ));
 
-  method!(keyval_sep<Parser<'a>, &'a str, WSSep>, mut self,
+  method!(keyval_sep<TOMLParser<'a>, &'a str, WSSep>, mut self,
     chain!(
       ws1: call_m!(self.ws) ~
            tag_s!("=")      ~
@@ -508,19 +508,19 @@ impl<'a> Parser<'a> {
     )
   );
 
-  method!(pub val<Parser<'a>, &'a str, Rc<RefCell<Value>> >, mut self,
+  method!(pub val<TOMLParser<'a>, &'a str, Rc<RefCell<TOMLValue>> >, mut self,
     alt!(
-      complete!(call_m!(self.array))        => {|arr|           Rc::new(RefCell::new(Value::Array(arr)))}             |
-      complete!(call_m!(self.inline_table)) => {|it|            Rc::new(RefCell::new(Value::InlineTable(it)))}        |
-      complete!(call_m!(self.date_time))    => {|dt|            Rc::new(RefCell::new(Value::DateTime(dt)))}           |
-      complete!(call_m!(self.float))        => {|flt: &'a str|  Rc::new(RefCell::new(Value::Float(flt.into())))}   |
-      complete!(call_m!(self.integer))      => {|int: &'a str|  Rc::new(RefCell::new(Value::Integer(int.into())))} |
-      complete!(call_m!(self.boolean))      => {|b|             Rc::new(RefCell::new(Value::Boolean(b)))}             |
+      complete!(call_m!(self.array))        => {|arr|           Rc::new(RefCell::new(TOMLValue::Array(arr)))}             |
+      complete!(call_m!(self.inline_table)) => {|it|            Rc::new(RefCell::new(TOMLValue::InlineTable(it)))}        |
+      complete!(call_m!(self.date_time))    => {|dt|            Rc::new(RefCell::new(TOMLValue::DateTime(dt)))}           |
+      complete!(call_m!(self.float))        => {|flt: &'a str|  Rc::new(RefCell::new(TOMLValue::Float(flt.into())))}   |
+      complete!(call_m!(self.integer))      => {|int: &'a str|  Rc::new(RefCell::new(TOMLValue::Integer(int.into())))} |
+      complete!(call_m!(self.boolean))      => {|b|             Rc::new(RefCell::new(TOMLValue::Boolean(b)))}             |
       complete!(call_m!(self.string))       => {|s|             Rc::new(RefCell::new(s))}
     )
   );
 
-  method!(pub keyval<Parser<'a>, &'a str, KeyVal>, mut self,
+  method!(pub keyval<TOMLParser<'a>, &'a str, KeyVal>, mut self,
     chain!(
       key: call_m!(self.key)        ~
        ws: call_m!(self.keyval_sep) ~
@@ -550,35 +550,35 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use ast::structs::{WSSep, Array, ArrayValue, KeyVal,
-                     InlineTable, TableKeyVal, Value,
+  use ast::structs::{WSSep, Array, ArrayTOMLValue, KeyVal,
+                     InlineTable, TableKeyVal, TOMLValue,
                      CommentOrNewLines};
-  use ::types::{DateTime, Time, Date, TimeOffsetAmount, TimeOffset, StrType, Bool};
-  use parser::Parser;
+  use ::types::{DateTime, Time, Date, TimeOffsetAmount, TimeOffset, StrType};
+  use parser::TOMLParser;
   use std::rc::Rc;
   use std::cell::RefCell;
 
   #[test]
   fn test_integer() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.integer("345_12_678").1, Done("", "345_12_678"));
   }
 
   #[test]
   fn test_float() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.float("98_7.2_34e-8_8").1, Done("", "98_7.2_34e-8_8"));
   }
 
   #[test]
   fn test_basic_string() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.basic_string("\"TÎ»Ã¯Æ¨ Ã¯Æ¨ Ã¡ Î²Ã¡Æ¨Ã¯Ã§ Æ¨Æ­Å™Ã¯Ã±Ï±.\"").1, Done("", "TÎ»Ã¯Æ¨ Ã¯Æ¨ Ã¡ Î²Ã¡Æ¨Ã¯Ã§ Æ¨Æ­Å™Ã¯Ã±Ï±."));
   }
 
   #[test]
   fn test_ml_basic_string() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.ml_basic_string("\"\"\"Â£Ã¯Ã±Ã¨ Ã“Ã±Ã¨
 Â£Ã¯Ã±Ã¨ TÏ‰Ã´
 Â£Ã¯Ã±Ã¨ TÎ»Å™Ã¨Ã¨\"\"\"").1, Done("", r#"Â£Ã¯Ã±Ã¨ Ã“Ã±Ã¨
@@ -588,13 +588,13 @@ mod test {
 
   #[test]
   fn test_literal_string() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.literal_string("'Abc ÑŸ'").1, Done("", "Abc ÑŸ")); 
   }
 
   #[test]
   fn test_ml_literal_string() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.ml_literal_string(r#"'''
                                     Abc ÑŸ
                                     '''"#).1,
@@ -605,24 +605,24 @@ mod test {
 
   #[test]
   fn test_string() {
-    let mut p = Parser::new();
-    assert_eq!(p.string("\"Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±\"").1, Done("", Value::String("Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±".into(), StrType::Basic)));
-    p = Parser::new();
+    let mut p = TOMLParser::new();
+    assert_eq!(p.string("\"Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±\"").1, Done("", TOMLValue::String("Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±".into(), StrType::Basic)));
+    p = TOMLParser::new();
     assert_eq!(p.string(r#""""â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
 Ã±Ãºâ‚¥Î²Ã¨Å™_Æ­Ï‰Ã´
 NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
-""""#).1, Done("", Value::String(r#"â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
+""""#).1, Done("", TOMLValue::String(r#"â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
 Ã±Ãºâ‚¥Î²Ã¨Å™_Æ­Ï‰Ã´
 NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
 "#.into(), StrType::MLBasic)));
-    p = Parser::new();
-    assert_eq!(p.string("'Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG'").1, Done("", Value::String("Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG".into(), StrType::Literal)));
-    p = Parser::new();
+    p = TOMLParser::new();
+    assert_eq!(p.string("'Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG'").1, Done("", TOMLValue::String("Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG".into(), StrType::Literal)));
+    p = TOMLParser::new();
     assert_eq!(p.string(r#"'''Â§Æ¥Å™Ã¯Æ­Ã¨
 Ã‡Ã´Æ™Ã¨
 ÃžÃ¨Æ¥Æ¨Ã¯
 '''"#).1,
-      Done("", Value::String(r#"Â§Æ¥Å™Ã¯Æ­Ã¨
+      Done("", TOMLValue::String(r#"Â§Æ¥Å™Ã¯Æ­Ã¨
 Ã‡Ã´Æ™Ã¨
 ÃžÃ¨Æ¥Æ¨Ã¯
 "#.into(), StrType::MLLiteral)));
@@ -630,31 +630,31 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
 
   #[test]
   fn test_boolean() {
-    let mut p = Parser::new();
-    assert_eq!(p.boolean("true").1, Done("", Bool::True));
-    p = Parser::new();
-    assert_eq!(p.boolean("false").1, Done("", Bool::False));
+    let mut p = TOMLParser::new();
+    assert_eq!(p.boolean("true").1, Done("", true));
+    p = TOMLParser::new();
+    assert_eq!(p.boolean("false").1, Done("", false));
   }
 
   #[test]
   fn test_fractional() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.fractional(".03856").1, Done("", vec![".03856", "03856"]));
   }
 
   #[test]
   fn test_time() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     assert_eq!(p.time("T11:22:33.456").1,
       Done("", Time::new_str("11", "22", "33", Some("456"), None)));
-    p = Parser::new();
+    p = TOMLParser::new();
     assert_eq!(p.time("T04:05:06").1,
       Done("", Time::new_str("04", "05", "06", None, None)));
   }
 
   #[test]
   fn test_time_offset_amount() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.time_offset_amount("+12:34").1,
       Done("", TimeOffsetAmount::new_str("+", "12", "34"))
     );
@@ -662,17 +662,17 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
 
   #[test]
   fn test_time_offset() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     assert_eq!(p.time_offset("+12:34").1,
       Done("", TimeOffset::Time(TimeOffsetAmount::new_str("+", "12", "34")))
     );
-    p = Parser::new();
+    p = TOMLParser::new();
     assert_eq!(p.time_offset("Z").1, Done("", TimeOffset::Zulu));
   }
 
   #[test]
   fn test_full_date() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.date("1942-12-07").1,
       Done("", Date::new_str("1942", "12", "07"))
     );
@@ -680,7 +680,7 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
 
   #[test]
   fn test_date_time() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.date_time("1999-03-21T20:15:44.5-07:00").1,
       Done("", DateTime::new(Date::new_str("1999", "03", "21"),
         Some(Time::new_str("20", "15", "44", Some("5"),
@@ -691,56 +691,56 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
 
   #[test]
   fn test_unquoted_key() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.unquoted_key("Un-Quoted_Key").1, Done("", "Un-Quoted_Key"));
   }
 
   #[test]
   fn test_quoted_key() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.quoted_key("\"QÃºÃ´Æ­Ã¨Î´KÃ¨Â¥\"").1, Done("", "\"QÃºÃ´Æ­Ã¨Î´KÃ¨Â¥\""));
   }
 
   #[test]
   fn test_key() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     assert_eq!(p.key("\"GÅ™Ã¡Æ¥Ã¨Æ’Å™ÃºÃ¯Æ­\"").1, Done("", "\"GÅ™Ã¡Æ¥Ã¨Æ’Å™ÃºÃ¯Æ­\""));
-    p = Parser::new();
+    p = TOMLParser::new();
     assert_eq!(p.key("_is-key").1, Done("", "_is-key"));
   }
 
   #[test]
   fn test_keyval_sep() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.keyval_sep("\t \t= \t").1, Done("", WSSep::new_str("\t \t", " \t")));
   }
 
   #[test]
   fn test_val() {
-    let mut p = Parser::new();
+    let mut p = TOMLParser::new();
     assert_eq!(p.val("[4,9]").1, Done("",
-      Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
+      Rc::new(RefCell::new(TOMLValue::Array(Rc::new(RefCell::new(Array::new(
         vec![
-          ArrayValue::new(
-            Rc::new(RefCell::new(Value::Integer("4".into()))), Some(WSSep::new_str("", "")),
+          ArrayTOMLValue::new(
+            Rc::new(RefCell::new(TOMLValue::Integer("4".into()))), Some(WSSep::new_str("", "")),
             vec![CommentOrNewLines::NewLines("".into())]
           ),
-          ArrayValue::new(
-            Rc::new(RefCell::new(Value::Integer("9".into()))), None,
+          ArrayTOMLValue::new(
+            Rc::new(RefCell::new(TOMLValue::Integer("9".into()))), None,
             vec![CommentOrNewLines::NewLines("".into())]
           ),
         ],
         vec![CommentOrNewLines::NewLines("".into())], vec![CommentOrNewLines::NewLines("".into())]
       ))
     ))))));
-    p = Parser::new();
+    p = TOMLParser::new();
     assert_eq!(p.val("{\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"='TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™'}").1, Done("",
-      Rc::new(RefCell::new(Value::InlineTable(Rc::new(RefCell::new(InlineTable::new(
+      Rc::new(RefCell::new(TOMLValue::InlineTable(Rc::new(RefCell::new(InlineTable::new(
         vec![
           TableKeyVal::new(
             KeyVal::new_str(
               "\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"", WSSep::new_str("", ""),
-              Rc::new(RefCell::new(Value::String("TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™".into(), StrType::Literal)))
+              Rc::new(RefCell::new(TOMLValue::String("TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™".into(), StrType::Literal)))
             ),
             None,
             vec![]
@@ -748,29 +748,29 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
         ],
         WSSep::new_str("", "")
     ))))))));
-    p = Parser::new();
-    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Rc::new(RefCell::new(Value::DateTime(
+    p = TOMLParser::new();
+    assert_eq!(p.val("2112-09-30T12:33:01.345-11:30").1, Done("", Rc::new(RefCell::new(TOMLValue::DateTime(
       DateTime::new(Date::new_str("2112", "09", "30"), Some(Time::new_str("12", "33", "01", Some("345"),
         Some(TimeOffset::Time(TimeOffsetAmount::new_str("-", "11", "30"))
     )))))))));
-    p = Parser::new();
-    assert_eq!(p.val("3487.3289E+22").1, Done("", Rc::new(RefCell::new(Value::Float("3487.3289E+22".into())))));
-    p = Parser::new();
-    assert_eq!(p.val("8932838").1, Done("", Rc::new(RefCell::new(Value::Integer("8932838".into())))));
-    p = Parser::new();
-    assert_eq!(p.val("false").1, Done("", Rc::new(RefCell::new(Value::Boolean(Bool::False)))));
-    p = Parser::new();
-    assert_eq!(p.val("true").1, Done("", Rc::new(RefCell::new(Value::Boolean(Bool::True)))));
-    p = Parser::new();
-    assert_eq!(p.val("'Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±'").1, Done("", Rc::new(RefCell::new(Value::String("Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±".into(), StrType::Literal)))));
+    p = TOMLParser::new();
+    assert_eq!(p.val("3487.3289E+22").1, Done("", Rc::new(RefCell::new(TOMLValue::Float("3487.3289E+22".into())))));
+    p = TOMLParser::new();
+    assert_eq!(p.val("8932838").1, Done("", Rc::new(RefCell::new(TOMLValue::Integer("8932838".into())))));
+    p = TOMLParser::new();
+    assert_eq!(p.val("false").1, Done("", Rc::new(RefCell::new(TOMLValue::Boolean(false)))));
+    p = TOMLParser::new();
+    assert_eq!(p.val("true").1, Done("", Rc::new(RefCell::new(TOMLValue::Boolean(true)))));
+    p = TOMLParser::new();
+    assert_eq!(p.val("'Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±'").1, Done("", Rc::new(RefCell::new(TOMLValue::String("Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±".into(), StrType::Literal)))));
   }
 
   #[test]
   fn test_keyval() {
-    let p = Parser::new();
+    let p = TOMLParser::new();
     assert_eq!(p.keyval("Boolean = 84.67").1, Done("", KeyVal::new_str(
       "Boolean", WSSep::new_str(" ", " "),
-      Rc::new(RefCell::new(Value::Float("84.67".into())))
+      Rc::new(RefCell::new(TOMLValue::Float("84.67".into())))
     )));
   }
 }

@@ -19,17 +19,17 @@ Next steps for the first release are:
 - [x] Unit tests for all parsers that don't have them yet
 - [x] ***Add macros to [nom](https://github.com/joelself/nom/tree/methods) that produce and consume methods***
 - [x] An integration test method that will iterate through each toml file in the assets directory (which includes the toml-test valid tests and the toml examples mentioned in the README), parse the file, then reconstruct it and compare it to the original.
-- [x] Value look-up
+- [x] TOMLValue look-up
   - [x] Sub-key list ~~for arrays and inline tables only~~ *for __any__ key or partial key*
-- [x] Value modification
-  - [x] Value add/delete for arrays only
-  - [x] Key/Value add/delete for inline tables only
+- [x] TOMLValue modification
+  - [x] TOMLValue add/delete for arrays only
+  - [x] Key/TOMLValue add/delete for inline tables only
 - [x] Key modification for inline tables (general key modification moved to 0.2)
 - [x] Content validation, and non-failure error reporting (currently the parser doesn't fail on heterogeneous arrays, duplicate keys, or invalid tables because it wants to give you a chance to correct them rather than  force you to fix the original TOML by hand.)
   - [x] DateTime validation
-  - [x] Value parsing on set_value
+  - [x] TOMLValue parsing on set_value
 - [x] Convenience functions
-  - [x] For creating TOMLValues, especially DateTime
+  - [x] For creating Values, especially DateTime
   - [x] Combining a key and a subkey to a new key
 - [x] Logging
 - [x] Unit tests for key look-up
@@ -39,7 +39,7 @@ Next steps for the first release are:
 - [ ] Add documentation on public structs, enums, functions, methods, and macros
 - [ ] Add example code somewhere, possibly part of the documentation, probably some in the README too.
 
-The Parser's first release is done. You can parse any TOML document, lookup any value, get the sub-keys of any key, and modify any value to be any other value of any type. And throughout it all, it will preserve the original formatting and comments, with the exception of changes to the structure of an Array or InlineTable. All that remains is to add unit tests for key look-up, sub-key look-up, key modification, failure integration tests, and documentation.
+The TOMLParser's first release is done. You can parse any TOML document, lookup any value, get the sub-keys of any key, and modify any value to be any other value of any type. And throughout it all, it will preserve the original formatting and comments, with the exception of changes to the structure of an Array or InlineTable. All that remains is to add unit tests for key look-up, sub-key look-up, key modification, failure integration tests, and documentation.
 
 Some other things I will probably add for future realeses:
 * Element addition and deletion
