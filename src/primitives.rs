@@ -307,43 +307,43 @@ impl<'a> TOMLParser<'a> {
   }
 
   // Integer
-  method!(pub integer<TOMLParser<'a>, &'a str, &'a str>, self, re_find!("^((\\+|-)?(([1-9](\\d|(_\\d))+)|\\d))")) ;
+  method!(pub integer<TOMLParser<'a>, &'a str, &'a str>, self, re_find!(r#"^((\+|-)?(([1-9](\d|(_\d))+)|\d))"#)) ;
 
   // Float
   method!(pub float<TOMLParser<'a>, &'a str, &'a str>, self,
-         re_find!("^(\\+|-)?([1-9](\\d|(_\\d))+|\\d)((\\.\\d(\\d|(_\\d))*)((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d))|(\\.\\d(\\d|(_\\d))*)|((e|E)(\\+|-)?([1-9](\\d|(_\\d))+|\\d)))"));
+         re_find!(r#"^(\+|-)?([1-9](\d|(_\d))+|\d)((\.\d(\d|(_\d))*)((e|E)(\+|-)?([1-9](\d|(_\d))+|\d))|(\.\d(\d|(_\d))*)|((e|E)(\+|-)?([1-9](\d|(_\d))+|\d)))"#));
 
   // Basic String
   named!(pub quoteless_basic_string<&'a str, &'a str>,
-    re_find!("^( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*?"));
+    re_find!(r#"^( |!|[#-\[]|[\]-􏿿]|(\\")|(\\\\)|(\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\u[0-9A-Z]{4})|(\\U[0-9A-Z]{8}))*"#));
   // Multiline Basic String
   // TODO: Convert this to take_while_s using a function that increments self.linecount
   named!(pub quoteless_ml_basic_string<&'a str, &'a str>,
-    re_find!("^([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*?"));
+    re_find!(r#"^([ -\[]|[\]-􏿿]|(\\")|(\\\\)|(\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\u[0-9A-Z]{4})|(\\U[0-9A-Z]{8})|\n|(\r\n)|(\\(\n|(\r\n))))*"#));
   // Literal String
-  named!(pub quoteless_literal_string<&'a str, &'a str>, re_find!("^(	|[ -&]|[\\(-􏿿])*?"));
+  named!(pub quoteless_literal_string<&'a str, &'a str>, re_find!(r#"^(	|[ -&]|[\(-􏿿])*"#));
   // Multiline Literal String
   // TODO: Convert to take_while_s using a function that increments self.linecount
-  named!(pub quoteless_ml_literal_string<&'a str, &'a str>, re_find!("^(	|[ -􏿿]|\n|(\r\n))*?"));
+  named!(pub quoteless_ml_literal_string<&'a str, &'a str>, re_find!(r#"^(	|[ -􏿿]|\n|(\r\n))*"#));
 
   // Basic String
   method!(raw_basic_string<TOMLParser<'a>, &'a str, &'a str>, self,
-    re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))*?\""));
+    re_find!(r#"^"( |!|[#-\[]|[\]-􏿿]|(\\")|(\\\\)|(\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\\t)|(\\u[0-9A-Z]{4})|(\\U[0-9A-Z]{8}))*?""#));
   // Multiline Basic String
   // TODO: Convert this to take_while_s using a function that increments self.linecount
   method!(raw_ml_basic_string<TOMLParser<'a>, &'a str, &'a str>, self,
     chain!(
-   string: re_find!("^\"\"\"([ -\\[]|[\\]-􏿿]|(\\\\\")|(\\\\)|(\\\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8})|\n|(\r\n)|(\\\\(\n|(\r\n))))*?\"\"\""),
+   string: re_find!(r#"^"""([ -\[]|[\]-􏿿]|(\\")|(\\\\)|(\\/)|(\\b)|(\\f)|(\\n)|(\\r)|(\t)|(\\u[0-9A-Z]{4})|(\\U[0-9A-Z]{8})|\n|(\r\n)|(\\(\n|(\r\n))))*?""""#),
       ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
     )
   );
   // Literal String
-  method!(raw_literal_string<TOMLParser<'a>, &'a str, &'a str>, self, re_find!("^'(	|[ -&]|[\\(-􏿿])*?'"));
+  method!(raw_literal_string<TOMLParser<'a>, &'a str, &'a str>, self, re_find!(r#"^'(	|[ -&]|[\(-􏿿])*?'"#));
   // Multiline Literal String
   // TODO: Convert to take_while_s using a function that increments self.linecount
   method!(raw_ml_literal_string<TOMLParser<'a>, &'a str, &'a str>, self,
     chain!(
-   string: re_find!("^'''(	|[ -􏿿]|\n|(\r\n))*?'''"),
+   string: re_find!(r#"^'''(	|[ -􏿿]|\n|(\r\n))*?'''"#),
       ||{self.line_count.set(self.line_count.get() + count_lines(string)); string}
     )
   );
@@ -423,7 +423,6 @@ impl<'a> TOMLParser<'a> {
  fraction: complete!(call_m!(self.fractional)) ?  ~
    offset: complete!(call_m!(self.time_offset)) ? ,
       ||{
-        
         Time::new_str(hour, minute, second, match fraction {
             Some(ref x) => Some(x[1]),
             None        => None,
@@ -468,8 +467,8 @@ impl<'a> TOMLParser<'a> {
 
   method!(pub date_time<TOMLParser<'a>, &'a str, DateTime>, mut self,
     chain!(
-     date: call_m!(self.date)       ~
-     time: call_m!(self.time) ?     ,
+     date: call_m!(self.date)             ~
+     time: complete!(call_m!(self.time))?  ,
         ||{
           let res = DateTime::new(date, time);
           if !res.validate() {

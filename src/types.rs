@@ -259,12 +259,17 @@ impl<'a> Value<'a> {
     let s = format!("{:0>2}", second);
     let oh = format!("{:0>2}", off_hour);
     let omin = format!("{:0>2}", off_minute);
+    let pn = &posneg.clone().into();
+    let mut error = false;
+    if pn != "+" && pn != "-" {
+      error = true
+    }
     let datetime = Value::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
       Time::from_str(h, min, s, None, Some(
         TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), oh, omin))
       ))
     )));
-    if datetime.validate() {
+    if !error && datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
@@ -272,13 +277,18 @@ impl<'a> Value<'a> {
       ));
     }
   }
-  pub fn datetime_offset_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, posneg: S, off_hour: S, off_minute: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone{ 
+  pub fn datetime_offset_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, posneg: S, off_hour: S, off_minute: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone{
+    let pn = &posneg.clone().into();
+    let mut error = false;
+    if pn != "+" && pn != "-" {
+      error = true
+    }
     let datetime = Value::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
       Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), None, Some(
         TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), off_hour.clone().into(), off_minute.clone().into()))
       ))
     )));
-    if datetime.validate() {
+    if !error && datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
@@ -286,6 +296,7 @@ impl<'a> Value<'a> {
       ));
     }
   }
+  
   pub fn datetime_zulu_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize) -> Result<Value<'a>, TOMLError> {  
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
@@ -306,6 +317,7 @@ impl<'a> Value<'a> {
       ));
     }
   }
+  
   pub fn datetime_zulu_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone{ 
     let datetime = Value::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
       Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), None, Some(
@@ -320,6 +332,45 @@ impl<'a> Value<'a> {
       ));
     }
   }
+  pub fn datetime_full_zulu_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, frac: u64) -> Result<Value<'a>, TOMLError> {  
+    let y = format!("{:0>4}", year);
+    let m = format!("{:0>2}", month);
+    let d = format!("{:0>2}", day);
+    let h = format!("{:0>2}", hour);
+    let min = format!("{:0>2}", minute);
+    let s = format!("{:0>2}", second);
+    let f = format!("{}", frac);
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+      Time::from_str(h, min, s, Some(f), Some(
+        TimeOffset::Zulu
+      ))
+    )));
+    if datetime.validate() {
+      return Result::Ok(datetime);
+    } else {
+      return Result::Err(TOMLError::new(
+        format!("Error parsing int datetime_full_zulu. Arguments: {}, {}, {}, {}, {}, {}, {}",
+          year, month, day, hour, minute, second, frac)
+      ));
+    }
+  }
+  
+  pub fn datetime_full_zulu_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, frac: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone{ 
+    let datetime = Value::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+      Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), Some(frac.clone().into()), Some(
+        TimeOffset::Zulu
+      ))
+    )));
+    if datetime.validate() {
+      return Result::Ok(datetime);
+    } else {
+      return Result::Err(TOMLError::new(
+        format!("Error parsing &str datetime_full_zulu. Arguments: {}, {}, {}, {}, {}, {}, {}",
+          year.into(), month.into(), day.into(), hour.into(), minute.into(), second.into(), frac.into())
+      ));
+    }
+  }
+  
   pub fn datetime_full_from_int<S>(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, frac: usize, posneg: S, off_hour: usize, off_minute: usize) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone {  
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
@@ -330,12 +381,17 @@ impl<'a> Value<'a> {
     let f = format!("{}", frac);
     let oh = format!("{:0>2}", off_hour);
     let omin = format!("{:0>2}", off_minute);
+    let pn = &posneg.clone().into();
+    let mut error = false;
+    if pn != "+" && pn != "-" {
+      error = true
+    }
     let datetime = Value::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
       Time::from_str(h, min, s, Some(f), Some(
         TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), oh, omin))
       ))
     )));
-    if datetime.validate() {
+    if !error && datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
@@ -344,12 +400,17 @@ impl<'a> Value<'a> {
     }
   }
   pub fn datetime_full_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, frac: S, posneg: S, off_hour: S, off_minute: S) -> Result<Value<'a>, TOMLError> where S: Into<String> + Clone { 
+    let pn = &posneg.clone().into();
+    let mut error = false;
+    if pn != "+" && pn != "-" {
+      error = true
+    }
     let datetime = Value::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
       Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), Some(frac.clone().into()), Some(
         TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), off_hour.clone().into(), off_minute.clone().into()))
       ))
     )));
-    if datetime.validate() {
+    if !error && datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
@@ -361,9 +422,9 @@ impl<'a> Value<'a> {
     let datetime = dt.into();
     let p = TOMLParser::new();
     match p.date_time(datetime) {
-      (_, IResult::Done(_, o)) => {
+      (_, IResult::Done(i, o)) => {
         let result = Value::DateTime(o);
-        if !result.validate() {
+        if i.len() > 0 || !result.validate() {
           return Result::Err(TOMLError::new(format!("Error parsing string as datetime. Argument: {}", datetime)));
         } else {
           return Result::Ok(result);
@@ -426,25 +487,25 @@ impl<'a> Value<'a> {
         match st {
           StrType::Basic => {
             match TOMLParser::quoteless_basic_string(s) {
-              IResult::Done(_,_) => true,
+              IResult::Done(i,_) => i.len() == 0,
               _ => false,
             }
           },
           StrType::MLBasic => {
             match TOMLParser::quoteless_ml_basic_string(s) {
-              IResult::Done(_,_) => true,
+              IResult::Done(i,_) => i.len() == 0,
               _ => false,
             }
           },
           StrType::Literal => {
             match TOMLParser::quoteless_literal_string(s) {
-              IResult::Done(_,_) => true,
+              IResult::Done(i,_) => i.len() == 0,
               _ => false,
             }
           },
           StrType::MLLiteral => {
             match TOMLParser::quoteless_ml_literal_string(s) {
-              IResult::Done(_,_) => true,
+              IResult::Done(i,_) => i.len() == 0,
               _ => false,
             }
           },
@@ -1003,6 +1064,11 @@ mod test {
   }
   
   #[test]
+  fn test_create_datetime_frac_from_int_fail() {
+    assert!(Value::datetime_frac_from_int(2012, 1, 0, 3, 30, 30, 3030).is_err());
+  }
+  
+  #[test]
   fn test_create_datetime_frac_from_str() {
     assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
       "03", "30", "30", Some("3030"), None
@@ -1014,8 +1080,87 @@ mod test {
     assert!(Value::datetime_frac_from_str("2012", "01", "03", "03", "30", "30", "q3030").is_err());
   }
   
-  // ********************** START HERE WITH TEST FOR DATETIME_OFFSET_FROM_INT *************************
-  // **************************************************************************************************
+  #[test]
+  fn test_create_datetime_offset_from_int() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", None, Some(TimeOffset::Time(TimeOffsetAmount::new_str(
+        "+", "07", "45"
+      )))
+    )))), Value::datetime_offset_from_int(2012, 1, 3, 3, 30, 30, "+", 7, 45).unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_offset_from_int_fail() {
+    assert!(Value::datetime_offset_from_int(2012, 1, 3, 3, 30, 30, "q", 7, 45).is_err());
+    assert!(Value::datetime_offset_from_int(2012, 1, 3, 3, 30, 30, "+", 24, 45).is_err());
+    assert!(Value::datetime_offset_from_int(2012, 1, 3, 3, 30, 30, "+", 7, 60).is_err());
+  }
+  
+  #[test]
+  fn test_create_datetime_offset_from_str() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", None, Some(TimeOffset::Time(TimeOffsetAmount::new_str(
+        "+", "07", "45"
+      )))
+    )))), Value::datetime_offset_from_str("2012", "01", "03", "03", "30", "30", "+", "07", "45").unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_offset_from_str_fail() {
+    assert!(Value::datetime_offset_from_str("2012", "01", "03", "03", "30", "30", "+", "077", "45").is_err());
+    assert!(Value::datetime_offset_from_str("2012", "01", "03", "03", "30", "30", "+", "07", "455").is_err());
+    assert!(Value::datetime_offset_from_str("2012", "01", "03", "03", "30", "30", "+", "7", "45").is_err());
+    assert!(Value::datetime_offset_from_str("2012", "01", "03", "03", "30", "30", "+", "07", "5").is_err());
+    assert!(Value::datetime_offset_from_str("2012", "01", "03", "03", "30", "30", "q", "07", "45").is_err());
+  }
+  
+  #[test]
+  fn test_create_datetime_zulu_from_int() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", None, Some(TimeOffset::Zulu)
+    )))), Value::datetime_zulu_from_int(2012, 1, 3, 3, 30, 30).unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_zulu_from_int_fail() {
+    assert!(Value::datetime_zulu_from_int(2012, 1, 0, 3, 30, 30).is_err());
+  }
+  
+  #[test]
+  fn test_create_datetime_zulu_from_str() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", None, Some(TimeOffset::Zulu)
+    )))), Value::datetime_zulu_from_str("2012", "01", "03", "03", "30", "30").unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_zulu_from_str_fail() {
+    assert!(Value::datetime_zulu_from_str("q2012", "01", "03", "03", "30", "30").is_err());
+  }
+  
+  #[test]
+  fn test_create_datetime_full_zulu_from_int() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", Some("3030"), Some(TimeOffset::Zulu)
+    )))), Value::datetime_full_zulu_from_int(2012, 1, 3, 3, 30, 30, 3030).unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_full_zulu_from_int_fail() {
+    assert!(Value::datetime_full_zulu_from_int(2012, 1, 0, 3, 30, 30, 3030).is_err());
+  }
+  
+  #[test]
+  fn test_create_datetime_full_zulu_from_str() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", Some("3030"), Some(TimeOffset::Zulu)
+    )))), Value::datetime_full_zulu_from_str("2012", "01", "03", "03", "30", "30", "3030").unwrap());
+  }
+  
+  #[test]
+  fn test_create_datetime_full_zulu_from_str_fail() {
+    assert!(Value::datetime_full_zulu_from_str("q2012", "01", "03", "03", "30", "30", "3030").is_err());
+  }
   
   #[test]
   fn test_create_datetime_full_from_int() {
@@ -1028,7 +1173,8 @@ mod test {
   
   #[test]
   fn test_create_datetime_full_from_int_fail() {
-    //assert!(Value::datetime_full_from_int(2012, 1, 3, 3, 30, 30, 3030, "+", 7, 45).is_err());
+    assert!(Value::datetime_full_from_int(2012, 1, 0, 3, 30, 30, 3030, "+", 7, 45).is_err());
+    assert!(Value::datetime_full_from_int(2012, 1, 0, 3, 30, 30, 3030, "q", 7, 45).is_err());
   }
   
   #[test]
@@ -1042,7 +1188,111 @@ mod test {
   
   #[test]
   fn test_create_datetime_full_from_str_fail() {
-    //assert!(Value::datetime_full_from_str("2012", "01", "03", "03", "30", "30", "3030", "+", "07", "45").is_err());
+    assert!(Value::datetime_full_from_str("2012", "01", "03", "03", "30", "30", "q3030", "+", "07", "45").is_err());
+    assert!(Value::datetime_full_from_str("2012", "01", "03", "03", "30", "30", "3030", "q", "07", "45").is_err());
+  }
+  
+  #[test]
+  fn test_datetime_parse() {
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", Some("3030"), Some(TimeOffset::Time(TimeOffsetAmount::new_str(
+        "+", "07", "45"
+      )))
+    )))), Value::datetime_parse("2012-01-03T03:30:30.3030+07:45").unwrap());
+    
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", Some("3030"), Some(TimeOffset::Zulu)
+    )))), Value::datetime_parse("2012-01-03T03:30:30.3030Z").unwrap());
+    
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", None, Some(TimeOffset::Zulu)
+    )))), Value::datetime_parse("2012-01-03T03:30:30Z").unwrap());
+    
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", None, Some(TimeOffset::Time(TimeOffsetAmount::new_str(
+        "+", "07", "45"
+      )))
+    )))), Value::datetime_parse("2012-01-03T03:30:30+07:45").unwrap());
+    
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), Some(Time::new_str(
+      "03", "30", "30", None, None
+    )))), Value::datetime_parse("2012-01-03T03:30:30").unwrap());
+    
+    assert_eq!(Value::DateTime(DateTime::new(Date::new_str("2012", "01", "03"), None
+    )), Value::datetime_parse("2012-01-03").unwrap());
+  }
+  
+  #[test]
+  fn test_datetime_parse_fail() {
+    assert!(Value::datetime_parse("012-01-03T03:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-1-03T03:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-3T03:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T3:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:0:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:0.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:30.+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:30.303007:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:30.3030+7:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:30.3030+07:5").is_err());
+    assert!(Value::datetime_parse("20123-01-03T03:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-013-03T03:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-033T03:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T033:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:303:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:303.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:30.3030+073:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:30.3030+07:453").is_err());
+    assert!(Value::datetime_parse("2012q01-03T03:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01q03T03:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03q03:30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03q30:30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30q30.3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:30q3030+07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:30.3030q07:45").is_err());
+    assert!(Value::datetime_parse("2012-01-03T03:30:30.3030+07q45").is_err());
+  }
+  
+  #[test]
+  fn test_create_basic_string() {
+    assert_eq!(Value::String("foobar".into(), StrType::Basic), Value::basic_string("foobar").unwrap());
+  }
+  
+  #[test]
+  fn test_create_basic_string_fail() {
+    assert!(Value::basic_string("foo\nbar").is_err());
+  }
+  
+  #[test]
+  fn test_create_ml_basic_string() {
+    assert_eq!(Value::String("foobar".into(), StrType::MLBasic), Value::ml_basic_string("foobar").unwrap());
+  }
+  
+  #[test]
+  fn test_create_ml_basic_string_fail() {
+    assert!(Value::ml_basic_string(r#"foo\qbar"#).is_err());
+  }
+  
+  #[test]
+  fn test_create_literal_string() {
+    assert_eq!(Value::String("foobar".into(), StrType::Literal), Value::literal_string("foobar").unwrap());
+  }
+  
+  #[test]
+  fn test_create_literal_string_fail() {
+    assert!(Value::literal_string(r#"foo
+bar"#).is_err());
+  }
+  
+  #[test]
+  fn test_create_ml_literal_string() {
+    assert_eq!(Value::String("foobar".into(), StrType::MLLiteral), Value::ml_literal_string("foobar").unwrap());
+  }
+  
+  #[test]
+  fn test_create_ml_literal_string_fail() {
+    // This string contains an invisible 0xC char between foo and bar. It's visible in
+    // Sublime Text, but not in VS Code
+    assert!(Value::ml_literal_string("foobar").is_err());
   }
   
 }

@@ -52,6 +52,7 @@
     - [x] Add unit tests for getting sub-keys
 	- [x] Add unit tests for setting values
 	- [x] Add unit tests to check the map to make sure removed keys are gone
+  - [ ] Have parse return a tuple with the parser and the result
   
 * tests/assets.rs
 	- [ ] Add failure/error tests for invalid toml-test's
@@ -62,4 +63,4 @@
 
 * types.rs
   - [x] Log an error on a return result of Result::Err
-  - [ ] Add unit tests to convenience functions (partially done)
+  - [x] Add unit tests to convenience functions
