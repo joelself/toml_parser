@@ -6,7 +6,7 @@ use ast::structs::{KeyVal, WSSep, Value, ErrorCode,
                    HashValue, TableType, Table,
                    get_last_keys};
 use ::types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
-             Str, Bool, Children, TOMLValue};
+             Bool, Children, TOMLValue};
 use parser::{Parser, Key, count_lines};
 use nom;
 use nom::{IResult, InputLength};
@@ -135,7 +135,7 @@ impl<'a> Parser<'a> {
           if key.len() > 0 {
             key.push('.');
           }
-          key.push_str(str_ref!(str_str))
+          key.push_str(str_str)
         },
         &Key::Index(ref i) => key.push_str(&format!("[{}]", i.get())),
       }
@@ -286,7 +286,7 @@ impl<'a> Parser<'a> {
               &Children::Count(ref c) => { debug!("parent inc to {}", c.get() + 1); c.set(c.get() + 1) },
               &Children::Keys(ref vec_rf) => {
                 if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
-                  Parser::insert(vec_rf,string_ref!(s));
+                  Parser::insert(vec_rf,s.clone().into_owned());
                 }
               },
             }
@@ -298,7 +298,7 @@ impl<'a> Parser<'a> {
               v.insert(HashValue::one_count());
             } else if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
               debug!("initialize to string: {}", s);
-              v.insert(HashValue::one_keys(string_ref!(s)));
+              v.insert(HashValue::one_keys(s.clone().into_owned()));
             }
           },
         }
@@ -394,10 +394,10 @@ impl<'a> Parser<'a> {
 
   method!(string<Parser<'a>, &'a str, Value>, mut self,
     alt!(
-      complete!(call_m!(self.ml_literal_string))  => {|ml| Value::String(Str::Str(ml), StrType::MLLiteral)}  |
-      complete!(call_m!(self.ml_basic_string))    => {|mb| Value::String(Str::Str(mb), StrType::MLBasic)}  |
-      complete!(call_m!(self.basic_string))       => {|b| Value::String(Str::Str(b), StrType::Basic)}    |
-      complete!(call_m!(self.literal_string))     => {|l| Value::String(Str::Str(l), StrType::Literal)}
+      complete!(call_m!(self.ml_literal_string))  => {|ml: &'a str| Value::String(ml.into(), StrType::MLLiteral)}  |
+      complete!(call_m!(self.ml_basic_string))    => {|mb: &'a str| Value::String(mb.into(), StrType::MLBasic)}  |
+      complete!(call_m!(self.basic_string))       => {|b: &'a str| Value::String(b.into(), StrType::Basic)}    |
+      complete!(call_m!(self.literal_string))     => {|l: &'a str| Value::String(l.into(), StrType::Literal)}
     )
   );
 
@@ -472,7 +472,7 @@ impl<'a> Parser<'a> {
      time: call_m!(self.time) ?     ,
         ||{
           let res = DateTime::new(date, time);
-          if !res.validate(false) {
+          if !res.validate() {
             self.errors.borrow_mut().push(ParseError::InvalidDateTime(
               Parser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
                 &self.last_array_tables_index, &self.keychain
@@ -490,11 +490,11 @@ impl<'a> Parser<'a> {
     re_find!("^\"( |!|[#-\\[]|[\\]-􏿿]|(\\\\\")|(\\\\\\\\)|(\\\\/)|(\\\\b)|(\\\\f)|(\\\\n)|(\\\\r)|(\\\\t)|(\\\\u[0-9A-Z]{4})|(\\\\U[0-9A-Z]{8}))+\""));
 
   method!(pub key<Parser<'a>, &'a str, &'a str>, mut self, alt!(
-    complete!(call_m!(self.quoted_key))   =>  {|k| {
-      self.keychain.borrow_mut().push(Key::Str(Str::Str(k))); k
+    complete!(call_m!(self.quoted_key))   =>  {|k: &'a str| {
+      self.keychain.borrow_mut().push(Key::Str(k.into())); k
     }}|
-    complete!(call_m!(self.unquoted_key)) =>  {|k| {
-      self.keychain.borrow_mut().push(Key::Str(Str::Str(k))); k}}
+    complete!(call_m!(self.unquoted_key)) =>  {|k: &'a str| {
+      self.keychain.borrow_mut().push(Key::Str(k.into())); k}}
   ));
 
   method!(keyval_sep<Parser<'a>, &'a str, WSSep>, mut self,
@@ -510,13 +510,13 @@ impl<'a> Parser<'a> {
 
   method!(pub val<Parser<'a>, &'a str, Rc<RefCell<Value>> >, mut self,
     alt!(
-      complete!(call_m!(self.array))        => {|arr|   Rc::new(RefCell::new(Value::Array(arr)))}             |
-      complete!(call_m!(self.inline_table)) => {|it|    Rc::new(RefCell::new(Value::InlineTable(it)))}        |
-      complete!(call_m!(self.date_time))    => {|dt|    Rc::new(RefCell::new(Value::DateTime(dt)))}           |
-      complete!(call_m!(self.float))        => {|flt|   Rc::new(RefCell::new(Value::Float(Str::Str(flt))))}   |
-      complete!(call_m!(self.integer))      => {|int|   Rc::new(RefCell::new(Value::Integer(Str::Str(int))))} |
-      complete!(call_m!(self.boolean))      => {|b|     Rc::new(RefCell::new(Value::Boolean(b)))}             |
-      complete!(call_m!(self.string))       => {|s|     Rc::new(RefCell::new(s))}
+      complete!(call_m!(self.array))        => {|arr|           Rc::new(RefCell::new(Value::Array(arr)))}             |
+      complete!(call_m!(self.inline_table)) => {|it|            Rc::new(RefCell::new(Value::InlineTable(it)))}        |
+      complete!(call_m!(self.date_time))    => {|dt|            Rc::new(RefCell::new(Value::DateTime(dt)))}           |
+      complete!(call_m!(self.float))        => {|flt: &'a str|  Rc::new(RefCell::new(Value::Float(flt.into())))}   |
+      complete!(call_m!(self.integer))      => {|int: &'a str|  Rc::new(RefCell::new(Value::Integer(int.into())))} |
+      complete!(call_m!(self.boolean))      => {|b|             Rc::new(RefCell::new(Value::Boolean(b)))}             |
+      complete!(call_m!(self.string))       => {|s|             Rc::new(RefCell::new(s))}
     )
   );
 

@@ -6,15 +6,16 @@ use std::fmt;
 use std::error::Error;
 use std::fmt::Display;
 use std::str::FromStr;
+use std::borrow::Cow;
 use parser::Parser;
 use nom::IResult;
 
 
 pub enum ParseResult<'a> {
 	Full,
-	Partial(Str<'a>),
+	Partial(Cow<'a, str>),
 	FullError(&'a RefCell<Vec<ParseError<'a>>>),
-	PartialError(Str<'a>, &'a RefCell<Vec<ParseError<'a>>>),
+	PartialError(Cow<'a, str>, &'a RefCell<Vec<ParseError<'a>>>),
 	Failure(usize, usize),
 }
 
@@ -49,32 +50,35 @@ pub enum Children {
 }
 
 impl Children {
-  pub fn combine_keys_string(base_key: String, child_key: String) -> String {
+  pub fn combine_keys<S>(base_key: S, child_key: S) -> String where S: Into<String> {
     let mut full_key;
-    if base_key != "" {
-      full_key = base_key.clone();
+    let base = base_key.into();
+    let child = child_key.into();
+    if base != "" {
+      full_key = base.clone();
       full_key.push('.');
-      full_key.push_str(&child_key);
+      full_key.push_str(&child);
     } else {
-      full_key = child_key.clone();
+      full_key = child.clone();
     }
     return full_key;
   }
-  pub fn combine_keys_int(base_key: String, child_key: usize) -> String {
-    return format!("{}[{}]", base_key, child_key);
+  pub fn combine_keys_index<S>(base_key: S, child_key: usize) -> String where S: Into<String> {
+    return format!("{}[{}]", base_key.into(), child_key);
   }
-  pub fn combine_all_keys(base_key: String, child_keys: Children) -> Vec<String> {
+  pub fn combine_all_child_keys<S>(base_key: S, child_keys: Children) -> Vec<String> where S: Into<String> {
     let mut all_keys = vec![];
+    let base = base_key.into();
     match child_keys {
       Children::Count(c) => {
         for i in 0..c.get() {
-          all_keys.push(format!("{}[{}]", base_key, i));
+          all_keys.push(format!("{}[{}]", base, i));
         }
       },
       Children::Keys(hs_rc) => {
         for subkey in hs_rc.borrow().iter() {
-          if base_key != "" {
-            let mut full_key = base_key.clone();
+          if base != "" {
+            let mut full_key = base.clone();
             full_key.push('.');
             full_key.push_str(&subkey);
             all_keys.push(full_key);
@@ -90,13 +94,13 @@ impl Children {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TOMLValue<'a> {
-	Integer(Str<'a>),
-	Float(Str<'a>),
+	Integer(Cow<'a, str>),
+	Float(Cow<'a, str>),
 	Boolean(Bool),
 	DateTime(DateTime<'a>),
 	Array(Rc<Vec<TOMLValue<'a>>>),
-	String(Str<'a>, StrType),
-	InlineTable(Rc<Vec<(Str<'a>, TOMLValue<'a>)>>)
+	String(Cow<'a, str>, StrType),
+	InlineTable(Rc<Vec<(Cow<'a, str>, TOMLValue<'a>)>>)
 }
 
 impl<'a> Display for TOMLValue<'a> {
@@ -140,25 +144,25 @@ impl<'a> Display for TOMLValue<'a> {
 
 impl<'a> TOMLValue<'a> {
   pub fn int(int: i64) -> TOMLValue<'a> {
-    TOMLValue::Integer(Str::String(format!("{}", int)))
+    TOMLValue::Integer(format!("{}", int).into())
   }
-  pub fn int_str(int: &'a str) -> Result<TOMLValue<'a>, TOMLError> {
-    let result = TOMLValue::Integer(Str::String(int.to_string()));
+  pub fn int_from_str<S>(int: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = TOMLValue::Integer(int.clone().into().into());
     if result.validate() {
       return Result::Ok(result);
     } else {
-      return Result::Err(TOMLError::new(format!("Error parsing int. Argument: {}", int)));
+      return Result::Err(TOMLError::new(format!("Error parsing int. Argument: {}", int.into())));
     }
   }
   pub fn float(float: f64) -> TOMLValue<'a> {
-    TOMLValue::Float(Str::String(format!("{}", float)))
+    TOMLValue::Float(format!("{}", float).into())
   }
-  pub fn float_str(float: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    let result = TOMLValue::Float(Str::String(float.to_string()));
+  pub fn float_from_str<S>(float: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = TOMLValue::Float(float.clone().into().into());
     if result.validate() {
       return Result::Ok(result);
     } else {
-      return Result::Err(TOMLError::new(format!("Error parsing float. Argument: {}", float)));
+      return Result::Err(TOMLError::new(format!("Error parsing float. Argument: {}", float.into())));
     }
   }
   pub fn bool(b: bool) -> TOMLValue<'a> {
@@ -168,23 +172,24 @@ impl<'a> TOMLValue<'a> {
       TOMLValue::Boolean(Bool::False)
     }
   }
-  pub fn bool_str(b: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    let lower = b.to_lowercase();
+  pub fn bool_from_str<S>(b: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
+    let lower = b.clone().into().to_lowercase();
     if lower == "true" {
       Result::Ok(TOMLValue::Boolean(Bool::True))
     } else if lower == "false" {
       Result::Ok(TOMLValue::Boolean(Bool::False))
     } else {
       return Result::Err(TOMLError::new(
-        format!("Error parsing bool. Argument: {}", b)
+        format!("Error parsing bool. Argument: {}", b.into())
       ))
     }
   }
-  pub fn date_int(year: usize, month: usize, day: usize) -> Result<TOMLValue<'a>, TOMLError> {
+  
+  pub fn date_from_int(year: usize, month: usize, day: usize) -> Result<TOMLValue<'a>, TOMLError> {
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(y, m, d), None));
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), None));
     if datetime.validate() {
       return Result::Ok(datetime);
     } else {
@@ -193,25 +198,25 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn date_str(year: &str, month: &str, day: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(year.to_string(), month.to_string(), day.to_string()), None));
+  pub fn date_from_str<S>(year: S, month: S, day: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), None));
     if datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
-        format!("Error parsing &str date. Arguments: {}, {}, {}", year, month, day)
+        format!("Error parsing &str date. Arguments: {}, {}, {}", year.into(), month.into(), day.into())
       ));
     }
   }
-  pub fn datetime_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize) -> Result<TOMLValue<'a>, TOMLError> {
+  pub fn datetime_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize) -> Result<TOMLValue<'a>, TOMLError> {
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
     let h = format!("{:0>2}", hour);
     let min = format!("{:0>2}", minute);
     let s = format!("{:0>2}", second);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(y, m, d), Some(
-      Time::new_string(h, min, s, None, None)
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+      Time::from_str(h, min, s, None, None)
     )));
     if datetime.validate() {
       return Result::Ok(datetime);
@@ -221,20 +226,20 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_str(year: &str, month: &str, day: &str, hour: &str, minute: &str, second: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(year.to_string(), month.to_string(), day.to_string()), Some(
-      Time::new_string(hour.to_string(), minute.to_string(), second.to_string(), None, None)
+  pub fn datetime_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+      Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), None, None)
     )));
     if datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
-        format!("Error parsing &str datetime. Arguments: {}, {}, {}, {}, {}, {}", year, month, day, hour, minute, second)
+        format!("Error parsing &str datetime. Arguments: {}, {}, {}, {}, {}, {}", year.into(), month.into(), day.into(), hour.into(), minute.into(), second.into())
       ));
     }
   }
-  // ************ START HERE ************* convert DateTimes to TOMLValues and call validate on them.
-  pub fn datetime_frac_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, frac: usize) -> Result<TOMLValue<'a>, TOMLError> {  
+
+  pub fn datetime_frac_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, frac: usize) -> Result<TOMLValue<'a>, TOMLError> {  
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
@@ -242,8 +247,8 @@ impl<'a> TOMLValue<'a> {
     let min = format!("{:0>2}", minute);
     let s = format!("{:0>2}", second);
     let f = format!("{}", frac);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(y, m, d), Some(
-      Time::new_string(h, min, s, Some(f), None)
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+      Time::from_str(h, min, s, Some(f), None)
     )));
     if datetime.validate() {
       return Result::Ok(datetime);
@@ -253,19 +258,19 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_frac_str(year: &str, month: &str, day: &str, hour: &str, minute: &str, second: &str, frac: &str) -> Result<TOMLValue<'a>, TOMLError> { 
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(year.to_string(), month.to_string(), day.to_string()), Some(
-      Time::new_string(hour.to_string(), minute.to_string(), second.to_string(), Some(frac.to_string()), None)
+  pub fn datetime_frac_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, frac: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone{ 
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+      Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), Some(frac.clone().into()), None)
     )));
     if datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
-        format!("Error parsing &str datetime_frac. Arguments: {}, {}, {}, {}, {}, {}, {}", year, month, day, hour, minute, second, frac)
+        format!("Error parsing &str datetime_frac. Arguments: {}, {}, {}, {}, {}, {}, {}", year.into(), month.into(), day.into(), hour.into(), minute.into(), second.into(), frac.into())
       ));
     }
   }
-  pub fn datetime_offset_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, posneg: &str, off_hour: usize, off_minute: usize) -> Result<TOMLValue<'a>, TOMLError> {  
+  pub fn datetime_offset_from_int<S>(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, posneg: S, off_hour: usize, off_minute: usize) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone{  
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
@@ -274,42 +279,42 @@ impl<'a> TOMLValue<'a> {
     let s = format!("{:0>2}", second);
     let oh = format!("{:0>2}", off_hour);
     let omin = format!("{:0>2}", off_minute);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(y, m, d), Some(
-      Time::new_string(h, min, s, None, Some(
-        TimeOffset::Time(TimeOffsetAmount::new_string(posneg.to_string(), oh.to_string(), omin.to_string()))
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+      Time::from_str(h, min, s, None, Some(
+        TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), oh, omin))
       ))
     )));
     if datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
-        format!("Error parsing int datetime_offset. Arguments: {}, {}, {}, {}, {}, {}, {}, {}, {}", year, month, day, hour, minute, second, posneg, off_hour, off_minute)
+        format!("Error parsing int datetime_offset. Arguments: {}, {}, {}, {}, {}, {}, {}, {}, {}", year, month, day, hour, minute, second, posneg.into(), off_hour, off_minute)
       ));
     }
   }
-  pub fn datetime_offset_str(year: &str, month: &str, day: &str, hour: &str, minute: &str, second: &str, posneg: &str, off_hour: &str, off_minute: &str) -> Result<TOMLValue<'a>, TOMLError> { 
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(year.to_string(), month.to_string(), day.to_string()), Some(
-      Time::new_string(hour.to_string(), minute.to_string(), second.to_string(), None, Some(
-        TimeOffset::Time(TimeOffsetAmount::new_string(posneg.to_string(), off_hour.to_string(), off_minute.to_string()))
+  pub fn datetime_offset_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, posneg: S, off_hour: S, off_minute: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone{ 
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+      Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), None, Some(
+        TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), off_hour.clone().into(), off_minute.clone().into()))
       ))
     )));
     if datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
-        format!("Error parsing &str datetime_offset. Arguments: {}, {}, {}, {}, {}, {}, {}, {}, {}", year, month, day, hour, minute, second, posneg, off_hour, off_minute)
+        format!("Error parsing &str datetime_offset. Arguments: {}, {}, {}, {}, {}, {}, {}, {}, {}", year.into(), month.into(), day.into(), hour.into(), minute.into(), second.into(), posneg.into(), off_hour.into(), off_minute.into())
       ));
     }
   }
-  pub fn datetime_zulu_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize) -> Result<TOMLValue<'a>, TOMLError> {  
+  pub fn datetime_zulu_from_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize) -> Result<TOMLValue<'a>, TOMLError> {  
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
     let h = format!("{:0>2}", hour);
     let min = format!("{:0>2}", minute);
     let s = format!("{:0>2}", second);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(y, m, d), Some(
-      Time::new_string(h, min, s, None, Some(
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+      Time::from_str(h, min, s, None, Some(
         TimeOffset::Zulu
       ))
     )));
@@ -321,9 +326,9 @@ impl<'a> TOMLValue<'a> {
       ));
     }
   }
-  pub fn datetime_zulu_str(year: &str, month: &str, day: &str, hour: &str, minute: &str, second: &str) -> Result<TOMLValue<'a>, TOMLError> { 
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(year.to_string(), month.to_string(), day.to_string()), Some(
-      Time::new_string(hour.to_string(), minute.to_string(), second.to_string(), None, Some(
+  pub fn datetime_zulu_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone{ 
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+      Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), None, Some(
         TimeOffset::Zulu
       ))
     )));
@@ -331,11 +336,11 @@ impl<'a> TOMLValue<'a> {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
-        format!("Error parsing &str datetime_zulu. Arguments: {}, {}, {}, {}, {}, {}", year, month, day, hour, minute, second)
+        format!("Error parsing &str datetime_zulu. Arguments: {}, {}, {}, {}, {}, {}", year.into(), month.into(), day.into(), hour.into(), minute.into(), second.into())
       ));
     }
   }
-  pub fn datetime_full_int(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, frac: usize, posneg: &str, off_hour: usize, off_minute: usize) -> Result<TOMLValue<'a>, TOMLError> {  
+  pub fn datetime_full_from_int<S>(year: usize, month: usize, day: usize, hour: usize, minute: usize, second: usize, frac: usize, posneg: S, off_hour: usize, off_minute: usize) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {  
     let y = format!("{:0>4}", year);
     let m = format!("{:0>2}", month);
     let d = format!("{:0>2}", day);
@@ -345,120 +350,120 @@ impl<'a> TOMLValue<'a> {
     let f = format!("{}", frac);
     let oh = format!("{:0>2}", off_hour);
     let omin = format!("{:0>2}", off_minute);
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(y, m, d), Some(
-      Time::new_string(h, min, s, Some(f), Some(
-        TimeOffset::Time(TimeOffsetAmount::new_string(posneg.to_string(), oh.to_string(), omin.to_string()))
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(y, m, d), Some(
+      Time::from_str(h, min, s, Some(f), Some(
+        TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), oh, omin))
       ))
     )));
     if datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
-        format!("Error parsing int datetime_full. Arguments: {}, {}, {}, {}, {}, {}, {}, {}, {}, {}", year, month, day, hour, minute, second, frac, posneg, off_hour, off_minute)
+        format!("Error parsing int datetime_full. Arguments: {}, {}, {}, {}, {}, {}, {}, {}, {}, {}", year, month, day, hour, minute, second, frac, posneg.into(), off_hour, off_minute)
       ));
     }
   }
-  pub fn datetime_full_str(year: &str, month: &str, day: &str, hour: &str, minute: &str, second: &str, frac: &str, posneg: &str, off_hour: &str, off_minute: &str) -> Result<TOMLValue<'a>, TOMLError> { 
-    let datetime = TOMLValue::DateTime(DateTime::new(Date::new_string(year.to_string(), month.to_string(), day.to_string()), Some(
-      Time::new_string(hour.to_string(), minute.to_string(), second.to_string(), Some(frac.to_string()), Some(
-        TimeOffset::Time(TimeOffsetAmount::new_string(posneg.to_string(), off_hour.to_string(), off_minute.to_string()))
+  pub fn datetime_full_from_str<S>(year: S, month: S, day: S, hour: S, minute: S, second: S, frac: S, posneg: S, off_hour: S, off_minute: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone { 
+    let datetime = TOMLValue::DateTime(DateTime::new(Date::from_str(year.clone().into(), month.clone().into(), day.clone().into()), Some(
+      Time::from_str(hour.clone().into(), minute.clone().into(), second.clone().into(), Some(frac.clone().into()), Some(
+        TimeOffset::Time(TimeOffsetAmount::from_str(posneg.clone().into(), off_hour.clone().into(), off_minute.clone().into()))
       ))
     )));
     if datetime.validate() {
       return Result::Ok(datetime);
     } else {
       return Result::Err(TOMLError::new(
-        format!("Error parsing &str datetime_full. Arguments: {}, {}, {}, {}, {}, {}, {}, {}, {}, {}", year, month, day, hour, minute, second, frac, posneg, off_hour, off_minute)
+        format!("Error parsing &str datetime_full. Arguments: {}, {}, {}, {}, {}, {}, {}, {}, {}, {}", year.into(), month.into(), day.into(), hour.into(), minute.into(), second.into(), frac.into(), posneg.into(), off_hour.into(), off_minute.into())
       ));
     }
   }
-  pub fn datetime_parse(dt: &'a str) -> Result<TOMLValue<'a>, TOMLError> {
+  pub fn datetime_parse<S>(dt: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<&'a str> {
+    let datetime = dt.into();
     let p = Parser::new();
-    match p.date_time(dt) {
+    match p.date_time(datetime) {
       (_, IResult::Done(_, o)) => {
         let result = TOMLValue::DateTime(o);
         if !result.validate() {
-          return Result::Err(TOMLError::new(format!("Error parsing &str as datetime. Argument: {}", dt)));
+          return Result::Err(TOMLError::new(format!("Error parsing string as datetime. Argument: {}", datetime)));
         } else {
           return Result::Ok(result);
         }
       },
-      (_,_) => return Result::Err(TOMLError::new(format!("Error parsing &str as datetime. Argument: {}", dt))),
+      (_,_) => return Result::Err(TOMLError::new(format!("Error parsing string as datetime. Argument: {}", datetime))),
     }
   }
-  pub fn basic_string(s: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    let result = TOMLValue::String(Str::String(s.to_string()), StrType::Basic);
+  pub fn basic_string<S>(s: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = TOMLValue::String(s.clone().into().into(), StrType::Basic);
     if result.validate() {
       return Result::Ok(result);
     } else {
-      return Result::Err(TOMLError::new(format!("Error parsing &str as basic_string. Argument: {}", s)));
+      return Result::Err(TOMLError::new(format!("Error parsing string as basic_string. Argument: {}", s.into())));
     }
   }
-  pub fn ml_basic_string(s: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    let result = TOMLValue::String(Str::String(s.to_string()), StrType::MLBasic);
+  pub fn ml_basic_string<S>(s: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = TOMLValue::String(s.clone().into().into(), StrType::MLBasic);
     if result.validate() {
       return Result::Ok(result);
     } else {
-      return Result::Err(TOMLError::new(format!("Error parsing &str as ml_basic_string. Argument: {}", s)));
+      return Result::Err(TOMLError::new(format!("Error parsing string as ml_basic_string. Argument: {}", s.into())));
     }
   }
-  pub fn literal_string(s: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    let result = TOMLValue::String(Str::String(s.to_string()), StrType::Literal);
+  pub fn literal_string<S>(s: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = TOMLValue::String(s.clone().into().into(), StrType::Literal);
     if result.validate() {
       return Result::Ok(result);
     } else {
-      return Result::Err(TOMLError::new(format!("Error parsing &str as literal_string. Argument: {}", s)));
+      return Result::Err(TOMLError::new(format!("Error parsing string as literal_string. Argument: {}", s.into())));
     }
   }
-  pub fn ml_literal_string(s: &str) -> Result<TOMLValue<'a>, TOMLError> {
-    let result = TOMLValue::String(Str::String(s.to_string()), StrType::MLLiteral);
+  pub fn ml_literal_string<S>(s: S) -> Result<TOMLValue<'a>, TOMLError> where S: Into<String> + Clone {
+    let result = TOMLValue::String(s.clone().into().into(), StrType::MLLiteral);
     if result.validate() {
       return Result::Ok(result);
     } else {
-      let msg = format!("Error parsing &str as ml_literal_string. Argument: {}", s);
-      error!("{}", msg);
-      return Result::Err(TOMLError::new(format!("Error parsing &str as ml_literal_string. Argument: {}", s)));
+      return Result::Err(TOMLError::new(format!("Error parsing string as ml_literal_string. Argument: {}", s.into())));
     }
   }
+  
   pub fn validate(&self) -> bool{
     match self {
       &TOMLValue::Integer(ref s) => {
         let p = Parser::new();
-        match p.integer(str_ref!(s)) {
+        match p.integer(s) {
            (_, IResult::Done(_, _)) => true,
            (_,_) => false,
         }
       },
       &TOMLValue::Float(ref s) => {
         let p = Parser::new();
-        match p.float(str_ref!(s)) {
+        match p.float(s) {
            (_, IResult::Done(_, _)) => true,
            (_,_) => false,
         }
       },
-      &TOMLValue::DateTime(ref dt) => {dt.validate(true)},
+      &TOMLValue::DateTime(ref dt) => {dt.validate()},
       &TOMLValue::String(ref s, st) => {
         match st {
           StrType::Basic => {
-            match Parser::quoteless_basic_string(str_ref!(s)) {
+            match Parser::quoteless_basic_string(s) {
               IResult::Done(_,_) => true,
               _ => false,
             }
           },
           StrType::MLBasic => {
-            match Parser::quoteless_ml_basic_string(str_ref!(s)) {
+            match Parser::quoteless_ml_basic_string(s) {
               IResult::Done(_,_) => true,
               _ => false,
             }
           },
           StrType::Literal => {
-            match Parser::quoteless_literal_string(str_ref!(s)) {
+            match Parser::quoteless_literal_string(s) {
               IResult::Done(_,_) => true,
               _ => false,
             }
           },
           StrType::MLLiteral => {
-            match Parser::quoteless_ml_literal_string(str_ref!(s)) {
+            match Parser::quoteless_ml_literal_string(s) {
               IResult::Done(_,_) => true,
               _ => false,
             }
@@ -493,32 +498,6 @@ impl TOMLError {
     error!("{}", msg);
     TOMLError{message: msg}
   }
-}
-
-#[derive(Debug, Eq, Clone)]
-pub enum Str<'a> {
-	String(String),
-	Str(&'a str)
-}
-
-impl<'a> Display for Str<'a> {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-  	match self {
-  		&Str::Str(s) => write!(f, "{}", s),
-  		&Str::String(ref s) => write!(f, "{}", s),
-  	}
-  }
-}
-
-impl<'a> PartialEq for Str<'a> {
-	fn eq(&self, other: &Str<'a>) -> bool {
-		match (self, other) {
-			(&Str::String(ref s), &Str::String(ref o)) => *s == *o,
-			(&Str::Str(s), &Str::Str(o)) => s == o,
-			(&Str::Str(ref s), &Str::String(ref o)) => *s == *o,
-			(&Str::String(ref s), &Str::Str(ref o)) => *s == *o,
-		}
-	}
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -563,12 +542,6 @@ impl<'a> Display for TimeOffset<'a> {
 }
 
 impl<'a> TimeOffset<'a> {
-  pub fn validate_string(&self) -> bool {
-    match self {
-      &TimeOffset::Zulu => return true,
-      &TimeOffset::Time(ref amount) => return amount.validate_string(),
-    }
-  }
   pub fn validate(&self) -> bool {
     match self {
       &TimeOffset::Zulu => return true,
@@ -581,8 +554,8 @@ impl<'a> TimeOffset<'a> {
 #[derive(Debug, Eq, Clone)]
 pub struct TimeOffsetAmount<'a> {
 	pub pos_neg: PosNeg,
-	pub hour: Str<'a>,
-	pub minute: Str<'a>,
+	pub hour: Cow<'a, str>,
+	pub minute: Cow<'a, str>,
 }
 
 impl<'a> PartialEq for TimeOffsetAmount<'a> {
@@ -595,43 +568,36 @@ impl<'a> PartialEq for TimeOffsetAmount<'a> {
 
 impl<'a> Display for TimeOffsetAmount<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-  	write!(f, "{}{}:{}", self.pos_neg, self.hour, self.minute)
+  	write!(f, "{}{}:{}", self.pos_neg, &self.hour, &self.minute)
   }
 }
 
 impl<'a> TimeOffsetAmount<'a> {
-  pub fn new_str(pos_neg: &'a str, hour: &'a str, minute: &'a str) -> TimeOffsetAmount<'a> {
-  	let pn = match pos_neg {
+  pub fn from_str<S>(pos_neg: S, hour: S, minute: S) -> TimeOffsetAmount<'a> where S: Into<String>{
+  	let pn = match pos_neg.into().as_ref() {
   		"+" => PosNeg::Pos,
-  		_		=> PosNeg::Neg,
+  		"-"	=> PosNeg::Neg,
+      _   => {error!("PosNeg value is neither a '+' or a '-', defaulting to '+'."); PosNeg::Pos},
   	};
-  	TimeOffsetAmount{pos_neg: pn, hour: Str::Str(hour), minute: Str::Str(minute)}
-  }
-  pub fn new_string(pos_neg: String, hour: String, minute: String) -> TimeOffsetAmount<'a> {
-  	let pos = String::from("+");
-  	let mut pn = PosNeg::Neg;
-  	if pos_neg == pos {
-  		pn = PosNeg::Pos;
-  	}
-  	TimeOffsetAmount{pos_neg: pn, hour: Str::String(hour), minute: Str::String(minute)}
-  }
-  
-  pub fn validate_string(&self) -> bool {
-    if string!(self.hour).len() != 2 || string!(self.minute).len() != 2 {
-      return false;
-    }
-    return self.validate();
+  	TimeOffsetAmount{pos_neg: pn, hour: hour.into().into(), minute: minute.into().into()}
   }
   
   pub fn validate(&self) -> bool {
-    if let Ok(h) = usize::from_str(str!(self.hour)) {
+    if self.hour.len() != 2 || self.minute.len() != 2 {
+      return false;
+    }
+    return self.validate_numbers();
+   }
+   
+  pub fn validate_numbers(&self) -> bool {
+    if let Ok(h) = usize::from_str(&self.hour) {
       if h > 23 {
         return false;
       }
     } else {
       return false;
     }
-    if let Ok(m) = usize::from_str(str!(self.minute)) {
+    if let Ok(m) = usize::from_str(&self.minute) {
       if m > 59 {
         return false;
       }
@@ -645,9 +611,9 @@ impl<'a> TimeOffsetAmount<'a> {
 // <year>-<month>-<day>
 #[derive(Debug, Eq, Clone)]
 pub struct Date<'a> {
-	pub year: Str<'a>,
-	pub month: Str<'a>,
-	pub day: Str<'a>,
+	pub year: Cow<'a, str>,
+	pub month: Cow<'a, str>,
+	pub day: Cow<'a, str>,
 }
 
 impl<'a> PartialEq for Date<'a> {
@@ -665,34 +631,31 @@ impl<'a> Display for Date<'a> {
 }
 
 impl<'a> Date<'a> {
-  pub fn new_str(year: &'a str, month: &'a str, day: &'a str) -> Date<'a> {
-  	Date{year: Str::Str(year), month: Str::Str(month), day: Str::Str(day)}
-  }
-  pub fn new_string(year: String, month: String, day: String) -> Date<'a> {
-  	Date{year: Str::String(year), month: Str::String(month), day: Str::String(day)}
-  }
-  
-  pub fn validate_string(&self) -> bool {
-    if string!(self.year).len() != 4 || string!(self.month).len() != 2 || string!(self.day).len() != 2 {
-      return false;
-    }
-    return self.validate();
+  pub fn from_str<S>(year: S, month: S, day: S) -> Date<'a> where S: Into<String> {
+  	Date{year: year.into().into(), month: month.into().into(), day: day.into().into()}
   }
   
   pub fn validate(&self) -> bool {
-    if let Ok(y) = usize::from_str(str!(self.year)) {
+    if self.year.len() != 4 || self.month.len() != 2 || self.day.len() != 2 {
+      return false;
+    }
+    return self.validate_numbers();
+  }
+  
+  pub fn validate_numbers(&self) -> bool {
+    if let Ok(y) = usize::from_str(&self.year) {
       if y == 0 {
         return false;
       }
-      if let Ok(m) = usize::from_str(str!(self.month)) {
+      if let Ok(m) = usize::from_str(&self.month) {
         if m < 1 || m > 12 {
           return false;
         }
-        if let Ok(d) = usize::from_str(str!(self.day)) {
+        if let Ok(d) = usize::from_str(&self.day) {
           if d < 1 {
             return false;
           }
-          match d {
+          match m {
             2 => {
               let leap_year;
               if y % 4 != 0 {
@@ -729,10 +692,10 @@ impl<'a> Date<'a> {
 // <hour>:<minute>:<second>(.<fraction>)?
 #[derive(Debug, Eq, Clone)]
 pub struct Time<'a> {
-  pub hour: Str<'a>,
-	pub minute: Str<'a>,
-	pub second: Str<'a>,
-	pub fraction: Option<Str<'a>>,
+  pub hour: Cow<'a, str>,
+	pub minute: Cow<'a, str>,
+	pub second: Cow<'a, str>,
+	pub fraction: Option<Cow<'a, str>>,
 	pub offset: Option<TimeOffset<'a>>,
 }
 
@@ -758,50 +721,40 @@ impl<'a> Display for Time<'a> {
 }
 
 impl<'a> Time<'a> {
-  pub fn new_str(hour: &'a str, minute: &'a str, second: &'a str, fraction: Option<&'a str>, offset: Option<TimeOffset<'a>>)
-  	-> Time<'a> {
+  pub fn from_str<S>(hour: S, minute: S, second: S, fraction: Option<S>, offset: Option<TimeOffset<'a>>) 
+  	-> Time<'a> where S: Into<String> {
   	if let Some(s) = fraction {
-  		Time{hour: Str::Str(hour), minute: Str::Str(minute), second: Str::Str(second),
-  			fraction: Some(Str::Str(s)), offset: offset}
+  		Time{hour: hour.into().into(), minute: minute.into().into(), second: second.into().into(),
+  			fraction: Some(s.into().into()), offset: offset}
   	} else {
-  		Time{hour: Str::Str(hour), minute: Str::Str(minute), second: Str::Str(second),
+  		Time{hour: hour.into().into(), minute: minute.into().into(), second: second.into().into(),
   			fraction: None, offset: offset}
-  	}
-  }
-  pub fn new_string(hour: String, minute: String, second: String, fraction: Option<String>, offset: Option<TimeOffset<'a>>)
-  	-> Time<'a> {
-  	if let Some(s) = fraction {
-  		Time{hour: Str::String(hour), minute: Str::String(minute), second: Str::String(second),
-  			fraction: Option::Some(Str::String(s)), offset: offset}
-  	} else {
-  		Time{hour: Str::String(hour), minute: Str::String(minute), second: Str::String(second),
-  			fraction: None, offset: offset}
-  	}
+    }
   }
   
-  pub fn validate_string(&self) -> bool {
-    if string!(self.hour).len() != 2 || string!(self.minute).len() != 2 || string!(self.second).len() != 2 {
+  pub fn validate(&self) -> bool {
+    if self.hour.len() != 2 || self.minute.len() != 2 || self.second.len() != 2 {
       return false;
     }
-    return self.validate(true); 
+    return self.validate_numbers(); 
   }
   
-  pub fn validate(&self, validate_string: bool) -> bool {
-    if let Ok(h) = usize::from_str(str!(self.hour)) {
+  pub fn validate_numbers(&self) -> bool {
+    if let Ok(h) = usize::from_str(&self.hour) {
       if h > 23 {
         return false;
       }
     } else {
       return false;
     }
-    if let Ok(m) = usize::from_str(str!(self.minute)) {
+    if let Ok(m) = usize::from_str(&self.minute) {
       if m > 59 {
         return false;
       }
     } else {
       return false;
     }
-    if let Ok(s) = usize::from_str(str!(self.second)) {
+    if let Ok(s) = usize::from_str(&self.second) {
       if s > 59 {
         return false;
       }
@@ -809,12 +762,12 @@ impl<'a> Time<'a> {
       return false;
     }
     if let Some(ref frac) = self.fraction {
-      if usize::from_str(str_ref!(frac)).is_err() {
+      if usize::from_str(frac).is_err() {
         return false;
       }
     }
     if let Some(ref off) = self.offset {
-      if validate_string && !off.validate_string() || !off.validate() {
+      if !off.validate() {
         return false;
       }
     }
@@ -849,10 +802,10 @@ impl<'a> DateTime<'a> {
 		DateTime{date: date, time: time}
 	}
   
-  pub fn validate(&self, validate_string: bool) -> bool {
-    if validate_string && self.date.validate_string() || self.date.validate() {
+  pub fn validate(&self) -> bool {
+    if self.date.validate() {
       if let Some(ref time) = self.time {
-        return validate_string && !time.validate_string() || time.validate(false);
+        return time.validate();
       }
     } else {
       return false;

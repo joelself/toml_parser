@@ -3,7 +3,7 @@ use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    InlineTable, WSSep, TableKeyVal, ArrayType,
                    HashValue, format_tt_keys};
 use parser::{Parser, Key};
-use types::{ParseError, Str, Children};
+use types::{ParseError, Children};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -112,14 +112,14 @@ impl<'a> Parser<'a> {
               if let Entry::Occupied(mut o) = borrow.entry(last_key.clone()) {
                 if first {
                   insert = match &o.get_mut().subkeys {
-                    &Children::Keys(ref vec_rf) => Parser::insert(vec_rf, string!(tb.keys[i].key)),
+                    &Children::Keys(ref vec_rf) => Parser::insert(vec_rf, tb.keys[i].key.clone().into_owned()),
                     &Children::Count(ref cell) => { cell.set(cell.get() + 1); true },
                   };
                   first = false;
                 } else {
                   insert = match &o.get_mut().subkeys {
-                    &Children::Keys(ref vec_rf) => Parser::insert(vec_rf, string!(tb.keys[i].key)),
-                    _ => panic!("Implicit tables can only be Standard Tables: \"{}\"", format!("{}.{}", last_key, str!(tb.keys[i].key))),
+                    &Children::Keys(ref vec_rf) => Parser::insert(vec_rf, tb.keys[i].key.clone().into_owned()),
+                    _ => panic!("Implicit tables can only be Standard Tables: \"{}\"", format!("{}.{}", last_key, tb.keys[i].key)),
                   };
                 }
               }
@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
               } else {
                 last_key.truncate(0);
               }
-              last_key.push_str(str!(tb.keys[i].key));
+              last_key.push_str(&tb.keys[i].key);
               if insert {
                 debug!("insert last_key {}", last_key);
                 if i == tb.keys.len() - 1 {
@@ -297,7 +297,7 @@ impl<'a> Parser<'a> {
             &self.last_array_tables_index, res.clone());
           if let TableType::Standard(ref tbl) = *res {
             Parser::add_to_table_set(&map, &self.last_array_tables,
-              &self.last_array_tables_index, str!(tbl.keys[keys_len - 1].key));
+              &self.last_array_tables_index, &tbl.keys[keys_len - 1].key);
             self.array_error.set(false);
             map.borrow_mut().insert(table_key, HashValue::none_keys());
             self.last_array_tables.borrow_mut().push(res.clone());
@@ -426,7 +426,7 @@ impl<'a> Parser<'a> {
   method!(comment_or_nl<Parser<'a>, &'a str, CommentOrNewLines>, mut self,
     alt!(
       complete!(call_m!(self.comment_nl))   => {|com| CommentOrNewLines::Comment(com)} |
-      complete!(call_m!(self.ws_newline))  => {|nl|  CommentOrNewLines::NewLines(Str::Str(nl))}
+      complete!(call_m!(self.ws_newline))  => {|nl: &'a str|  CommentOrNewLines::NewLines(nl.into())}
     )
   );
 
@@ -539,7 +539,7 @@ mod test {
   use ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
                      KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table,
                      TableType, Value};
-  use ::types::{DateTime, Date, Time, TimeOffset, TimeOffsetAmount, StrType, Str};
+  use ::types::{DateTime, Date, Time, TimeOffset, TimeOffsetAmount, StrType};
   use parser::{Parser, Key};
   use std::rc::Rc;
   use std::cell::{RefCell, Cell};

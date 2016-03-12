@@ -4,10 +4,11 @@ use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
+use std::borrow::Cow;
 use nom::IResult;
 use ast::structs::{Toml, ArrayType, HashValue, TableType, Value, Array, InlineTable,
                    ArrayValue, WSSep, TableKeyVal};
-use types::{ParseError, ParseResult, TOMLValue, Str, Children};
+use types::{ParseError, ParseResult, TOMLValue, Children};
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
 named!(all_lines<&str, Vec<&str> >, many0!(full_line));
@@ -21,7 +22,7 @@ pub fn count_lines(s: &str) -> usize {
 }
 
 pub enum Key<'a> {
-	Str(Str<'a>),
+	Str(Cow<'a, str>),
 	Index(Cell<usize>),
 }
 
@@ -104,9 +105,9 @@ impl<'a> Parser<'a> {
 		}
 		if self.leftover.len() > 0 {
 			if self.errors.borrow().len() > 0 {
-				return ParseResult::PartialError(Str::Str(self.leftover), &self.errors);
+				return ParseResult::PartialError(self.leftover.into(), &self.errors);
 			} else {
-				return ParseResult::Partial(Str::Str(self.leftover))
+				return ParseResult::Partial(self.leftover.into())
 			}
 		} else {
 			if self.errors.borrow().len() > 0 {
@@ -117,9 +118,10 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	pub fn get_value(self: &Parser<'a>, key: String) -> Option<TOMLValue<'a>> {
-		if self.map.contains_key(&key) {
-			let hashval = self.map.get(&key).unwrap();
+	pub fn get_value<S>(self: &Parser<'a>, key: S) -> Option<TOMLValue<'a>> where S: Into<String> {
+		let s_key = key.into();
+    if self.map.contains_key(&s_key) {
+			let hashval = self.map.get(&s_key).unwrap();
 			let clone = hashval.clone();
 			if let Some(val) = clone.value {
 				Some(to_tval!(&*val.borrow()))
@@ -146,9 +148,10 @@ impl<'a> Parser<'a> {
     }
   }
   
-  pub fn set_value(self: &mut Parser<'a>, key: String, tval: TOMLValue<'a>) -> bool {
+  pub fn set_value<S>(self: &mut Parser<'a>, key: S, tval: TOMLValue<'a>) -> bool where S: Into<String> {
+    let s_key = key.into();
     {
-      let val = match self.map.entry(key.clone()) {
+      let val = match self.map.entry(s_key.clone()) {
         Entry::Occupied(entry) => entry.into_mut(),
         _ => return false,
       };
@@ -164,7 +167,7 @@ impl<'a> Parser<'a> {
     }
     // if the inline table/array has a different structure, delete the existing
     // array/inline table from the map and rebuild it from the new value
-    let all_keys = self.get_all_subkeys(&key);
+    let all_keys = self.get_all_subkeys(&s_key);
     for key in all_keys.iter() {
       self.map.remove(key);
     }
@@ -182,8 +185,8 @@ impl<'a> Parser<'a> {
       },
       unknown => panic!("In Parser.set_value, new_value should only be an Array or InlineTable. Instead it's a {:?}", unknown),
     };
-    if self.map.contains_key(&key) {
-      let existing_value = match self.map.entry(key.clone()) {
+    if self.map.contains_key(&s_key) {
+      let existing_value = match self.map.entry(s_key.clone()) {
         Entry::Occupied(entry) => entry.into_mut(),
         _ => panic!("Map contains key, but map.entry returned a Vacant entry is set_value."),
       };
@@ -195,7 +198,7 @@ impl<'a> Parser<'a> {
       *val_rf.borrow_mut() = new_value;
     }
     let new_value_rc = Rc::new(RefCell::new(new_value_clone));
-    self.rebuild_vector(key.clone(), new_value_rc.clone(), true);
+    self.rebuild_vector(s_key.clone(), new_value_rc.clone(), true);
     true
   }
   
@@ -233,9 +236,9 @@ impl<'a> Parser<'a> {
           let value = value_opt.unwrap();
           let key_value;
           if i < it.len() - 1 {
-            key_value = TableKeyVal::default(&it[i].0, Rc::new(RefCell::new(value)));
+            key_value = TableKeyVal::default(it[i].0.clone().into_owned(), Rc::new(RefCell::new(value)));
           } else {
-            key_value = TableKeyVal::last(&it[i].0, Rc::new(RefCell::new(value)));
+            key_value = TableKeyVal::last(it[i].0.clone().into_owned(), Rc::new(RefCell::new(value)));
           }
           key_values.push(key_value);
         }
@@ -321,7 +324,7 @@ impl<'a> Parser<'a> {
         {
           let value = match self.map.entry(key.clone()) {
             Entry::Occupied(entry) => entry.into_mut(),
-            _ => panic!("Map contains key, but map.entry returned a Vacant entry is set_value."),
+            _ => panic!("Map contains array key, but map.entry returned a Vacant entry in set_value."),
           };
           if !skip {
             value.value = Some(val.clone());
@@ -337,14 +340,14 @@ impl<'a> Parser<'a> {
         {
           let value = match self.map.entry(key.clone()) {
             Entry::Occupied(entry) => entry.into_mut(),
-            _ => panic!("Map contains key, but map.entry returned a Vacant entry is set_value."),
+            _ => panic!("Map contains inline table key, but map.entry returned a Vacant entry is set_value."),
           };
           if !skip {
             value.value = Some(val.clone());
           }
           if let Children::Keys(ref child_keys) = value.subkeys {
             for i in 0..it.borrow().keyvals.len() {
-              Parser::insert(child_keys, string!(it.borrow().keyvals[i].keyval.key));
+              Parser::insert(child_keys, it.borrow().keyvals[i].keyval.key.clone().into_owned());
             }
           }
         }
@@ -428,7 +431,7 @@ impl<'a> Parser<'a> {
 	}
 	
 	pub fn sanitize_inline_table(it: Rc<RefCell<InlineTable<'a>>>) -> TOMLValue<'a> {
-		let mut result: Vec<(Str<'a>, TOMLValue)> = vec![];
+		let mut result: Vec<(Cow<'a, str>, TOMLValue)> = vec![];
 		for kv in it.borrow().keyvals.iter() {
 			result.push((kv.keyval.key.clone(), to_tval!(&*kv.keyval.val.borrow())));
 		}

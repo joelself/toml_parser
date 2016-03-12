@@ -57,3 +57,6 @@
 
 * tests/parser_tests.rs
 	- [ ] Add integration tests for parser, like unit tests, but load a larger document -> validate, do a bunch of gets -> validate, do a bunch of sets -> validate, then do a bunch of gets
+
+* types.rs
+  - [ ] Log an error on a return result of Result::Err

@@ -3,7 +3,9 @@ use std::fmt::Display;
 use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::option::Option;
-use ::types::{DateTime, StrType, Str, Bool, Children};
+use std::borrow::Cow;
+use ::types::{DateTime, StrType, Bool, Children, Time, TimeOffset, TimeOffsetAmount,
+              Date, PosNeg};
 
 
 /// Compares two Options that contain comparable structs
@@ -52,7 +54,7 @@ impl<'a> Toml<'a> {
 
 #[derive(Debug, Eq)]
 pub struct NLExpression<'a> {
-	pub nl: Str<'a>,
+	pub nl: Cow<'a, str>,
 	pub expr: Expression<'a>,
 }
 
@@ -72,10 +74,10 @@ impl<'a> Display for NLExpression<'a> {
 #[allow(dead_code)]
 impl<'a> NLExpression<'a> {
 	pub fn new_str(nl: &'a str, expr: Expression<'a>) -> NLExpression<'a> {
-		NLExpression{nl: Str::Str(nl), expr: expr}
+		NLExpression{nl: nl.into(), expr: expr}
 	}
 	pub fn new_string(nl: String, expr: Expression<'a>) -> NLExpression<'a> {
-		NLExpression{nl: Str::String(nl), expr: expr}
+		NLExpression{nl: nl.into(), expr: expr}
 	}
 }
 
@@ -124,12 +126,12 @@ impl<'a> Expression<'a> {
 
 #[derive(Debug, Eq, Clone)]
 pub enum Value<'a> {
-	Integer(Str<'a>),
-	Float(Str<'a>),
+	Integer(Cow<'a, str>),
+	Float(Cow<'a, str>),
 	Boolean(Bool),
 	DateTime(DateTime<'a>),
 	Array(Rc<RefCell<Array<'a>>>),
-	String(Str<'a>, StrType),
+	String(Cow<'a, str>, StrType),
 	InlineTable(Rc<RefCell<InlineTable<'a>>>),
 }
 
@@ -280,7 +282,7 @@ impl<'a> Display for TableType<'a> {
 // #<text>
 #[derive(Debug, Eq)]
 pub struct Comment<'a> {
-	pub text: Str<'a>,
+	pub text: Cow<'a, str>,
 }
 
 impl<'a> PartialEq for Comment<'a> {
@@ -298,17 +300,17 @@ impl<'a> Display for Comment<'a> {
 #[allow(dead_code)]
 impl<'a> Comment<'a> {
 	pub fn new_str(text: &'a str) -> Comment<'a> {
-		Comment{text: Str::Str(text)}
+		Comment{text: text.into()}
 	}
 	pub fn new_string(text: String) -> Comment<'a> {
-		Comment{text: Str::String(text)}
+		Comment{text:text.into()}
 	}
 }
 
 #[derive(Debug, Eq)]
 pub struct WSSep<'a> {
-	pub ws1: Str<'a>,
-	pub ws2: Str<'a>,
+	pub ws1: Cow<'a, str>,
+	pub ws2: Cow<'a, str>,
 }
 
 impl<'a> PartialEq for WSSep<'a> {
@@ -321,17 +323,17 @@ impl<'a> PartialEq for WSSep<'a> {
 #[allow(dead_code)]
 impl<'a> WSSep<'a> {
 	pub fn new_str(ws1: &'a str, ws2: &'a str) -> WSSep<'a> {
-		WSSep{ws1: Str::Str(ws1), ws2: Str::Str(ws2)}
+		WSSep{ws1: ws1.into(), ws2: ws2.into()}
 	}
 	pub fn new_string(ws1: String, ws2: String) -> WSSep<'a> {
-		WSSep{ws1: Str::String(ws1), ws2: Str::String(ws2)}
+		WSSep{ws1: ws1.into(), ws2: ws2.into()}
 	}
 }
 
 // <key><keyval_sep.ws1>=<keyval_sep.ws2><val>
 #[derive(Debug, Eq)]
 pub struct KeyVal<'a> {
-	pub key: Str<'a>,
+	pub key: Cow<'a, str>,
 	pub keyval_sep: WSSep<'a>,
 	pub val: Rc<RefCell<Value<'a>>>,
 }
@@ -353,10 +355,10 @@ impl<'a> Display for KeyVal<'a> {
 #[allow(dead_code)]
 impl<'a> KeyVal<'a> {
     pub fn new_str(key: &'a str, keyval_sep: WSSep<'a>, val: Rc<RefCell<Value<'a>>>) -> KeyVal<'a> {
-    	KeyVal{key: Str::Str(key), keyval_sep: keyval_sep, val: val}
+    	KeyVal{key: key.into(), keyval_sep: keyval_sep, val: val}
     }
     pub fn new_string(key: String, keyval_sep: WSSep<'a>, val: Rc<RefCell<Value<'a>>>) -> KeyVal<'a> {
-    	KeyVal{key: Str::String(key), keyval_sep: keyval_sep, val: val}
+    	KeyVal{key: key.into(), keyval_sep: keyval_sep, val: val}
     }
 }
 
@@ -364,7 +366,7 @@ impl<'a> KeyVal<'a> {
 #[derive(Debug, Eq)]
 pub struct WSKeySep<'a> {
 	pub ws: WSSep<'a>,
-	pub key: Str<'a>,
+	pub key: Cow<'a, str>,
 }
 
 impl<'a> PartialEq for WSKeySep<'a> {
@@ -383,10 +385,10 @@ impl<'a> Display for WSKeySep<'a> {
 #[allow(dead_code)]
 impl<'a> WSKeySep<'a> {
     pub fn new_str(ws: WSSep<'a>, key: &'a str) -> WSKeySep<'a> {
-    	WSKeySep{ws: ws, key: Str::Str(key)}
+    	WSKeySep{ws: ws, key: key.into()}
     }
     pub fn new_string(ws: WSSep<'a>, key: String) -> WSKeySep<'a> {
-    	WSKeySep{ws: ws, key: Str::String(key)}
+    	WSKeySep{ws: ws, key: key.into()}
     }
 }
 
@@ -395,7 +397,7 @@ pub fn get_last_keys(last_table: Option<&Table>, t: &Table) -> Vec<String> {
 		None => {
 			let mut last_keys = vec!["$Root$".to_string()];
 			for i in 0..t.keys.len() {
-				last_keys.push(string!(t.keys[i].key));
+				last_keys.push(t.keys[i].key.clone().into_owned());
 			}
 			last_keys
 		},
@@ -404,7 +406,7 @@ pub fn get_last_keys(last_table: Option<&Table>, t: &Table) -> Vec<String> {
 			let len = t.keys.len();
 			let mut last_keys = vec![];
 			for i in len_last..len {
-				last_keys.push(string!(t.keys[i].key));
+				last_keys.push(t.keys[i].key.clone().into_owned());
 			}
 			last_keys
 		}
@@ -415,10 +417,10 @@ pub fn format_keys(t: &Table) -> String {
 	let mut s = String::new();
 	if t.keys.len() > 0 {
 		for i in 0..t.keys.len() - 1 {
-			s.push_str(str!(t.keys[i].key));
+			s.push_str(&t.keys[i].key);
 			s.push('.');
 		}
-		s.push_str(str!(t.keys[t.keys.len() - 1].key));
+		s.push_str(&t.keys[t.keys.len() - 1].key);
 	}
 	s
 }
@@ -429,10 +431,10 @@ pub fn format_tt_keys(tabletype: &TableType) -> String {
 			let mut s = String::new();
 			if t.keys.len() > 0 {
 				for i in 0..t.keys.len() - 1 {
-					s.push_str(str!(t.keys[i].key));
+					s.push_str(&t.keys[i].key);
 					s.push('.');
 				}
-				s.push_str(str!(t.keys[t.keys.len() - 1].key));
+				s.push_str(&t.keys[t.keys.len() - 1].key);
 			}
 			s
 		}
@@ -501,9 +503,9 @@ impl<'a> TableType<'a> {
 // <comment><newlines+>
 #[derive(Debug, Eq)]
 pub struct CommentNewLines<'a> {
-	pub pre_ws_nl: Str<'a>,
+	pub pre_ws_nl: Cow<'a, str>,
 	pub comment: Comment<'a>,
-	pub newlines: Str<'a>,
+	pub newlines: Cow<'a, str>,
 }
 
 impl<'a> PartialEq for CommentNewLines<'a> {
@@ -524,20 +526,20 @@ impl<'a> Display for CommentNewLines<'a> {
 impl<'a> CommentNewLines<'a> {
     pub fn new_str(pre_ws_nl: &'a str, comment: Comment<'a>, newlines: &'a str)
     	-> CommentNewLines<'a> {
-    	CommentNewLines{pre_ws_nl: Str::Str(pre_ws_nl), comment: comment,
-    		newlines: Str::Str(newlines)}
+    	CommentNewLines{pre_ws_nl: pre_ws_nl.into(), comment: comment,
+    		newlines: newlines.into()}
     }
     pub fn new_string(pre_ws_nl: String, comment: Comment<'a>, newlines: String)
     	-> CommentNewLines<'a> {
-    	CommentNewLines{pre_ws_nl: Str::String(pre_ws_nl), comment: comment,
-    		newlines: Str::String(newlines)}
+    	CommentNewLines{pre_ws_nl: pre_ws_nl.into(), comment: comment,
+    		newlines: newlines.into()}
     }
 }
 
 #[derive(Debug, Eq)]
 pub enum CommentOrNewLines<'a> {
 	Comment(CommentNewLines<'a>),
-	NewLines(Str<'a>),
+	NewLines(Cow<'a, str>),
 }
 
 impl<'a> PartialEq for CommentOrNewLines<'a> {
@@ -556,6 +558,36 @@ impl<'a> Display for CommentOrNewLines<'a> {
       &CommentOrNewLines::Comment(ref c) => write!(f, "{}", c),
       &CommentOrNewLines::NewLines(ref n) => write!(f, "{}", n),
     }
+  }
+}
+
+impl<'a> Date<'a> {
+  pub fn new_str(year: &'a str, month: &'a str, day: &'a str) -> Date<'a> {
+  	Date{year: year.into(), month: month.into(), day: day.into()}
+  }
+}
+
+impl<'a> Time<'a> {
+  pub fn new_str(hour: &'a str, minute: &'a str, second: &'a str, fraction: Option<&'a str>, offset: Option<TimeOffset<'a>>) 
+  	-> Time<'a> {
+  	if let Some(s) = fraction {
+  		Time{hour: hour.into(), minute: minute.into(), second: second.into(),
+  			fraction: Some(s.into()), offset: offset}
+  	} else {
+  		Time{hour: hour.into(), minute: minute.into(), second: second.into(),
+  			fraction: None, offset: offset}
+    }
+  }
+}
+
+impl<'a> TimeOffsetAmount<'a> {
+  pub fn new_str(pos_neg: &'a str, hour: &'a str, minute: &'a str) -> TimeOffsetAmount<'a> {
+  	let pn = match pos_neg {
+  		"+" => PosNeg::Pos,
+  		"-"	=> PosNeg::Neg,
+      _   => {error!("PosNeg value is neither a '+' or a '-', defaulting to '+'."); PosNeg::Pos},
+  	};
+  	TimeOffsetAmount{pos_neg: pn, hour: hour.into(), minute: minute.into()}
   }
 }
 
@@ -687,29 +719,13 @@ impl<'a> TableKeyVal<'a> {
     pub fn new(keyval: KeyVal<'a>, kv_sep: Option<WSSep<'a>>, comment_nls: Vec<CommentOrNewLines<'a>>) -> TableKeyVal<'a> {
     	TableKeyVal{keyval: keyval, kv_sep: kv_sep, comment_nls: comment_nls}
     }
-    pub fn default(key: &Str<'a>, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> {
-      match key {
-        &Str::Str(s) => {
-          let keyval = KeyVal::new_str(s, WSSep::new_str(" ", " "), val);
-          TableKeyVal{keyval: keyval, kv_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
-        },
-        &Str::String(ref s) => {
-          let keyval = KeyVal::new_string(s.clone(), WSSep::new_str(" ", " "), val);
-          TableKeyVal{keyval: keyval, kv_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
-        }
-      }
+    pub fn default<S>(key: S, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> where S: Into<String> {
+      let keyval = KeyVal::new_string(key.into(), WSSep::new_str(" ", " "), val);
+      TableKeyVal{keyval: keyval, kv_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
     }
-    pub fn last(key: &Str<'a>, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> {
-      match key {
-        &Str::Str(s) => {
-          let keyval = KeyVal::new_str(s, WSSep::new_str(" ", " "), val);
-          TableKeyVal{keyval: keyval, kv_sep: None, comment_nls: vec![]}
-        },
-        &Str::String(ref s) => {
-          let keyval = KeyVal::new_string(s.clone(), WSSep::new_str(" ", " "), val);
-          TableKeyVal{keyval: keyval, kv_sep: None, comment_nls: vec![]}
-        }
-      }
+    pub fn last<S>(key: S, val: Rc<RefCell<Value<'a>>>) -> TableKeyVal<'a> where S: Into<String> {
+      let keyval = KeyVal::new_string(key.into(), WSSep::new_str(" ", " "), val);
+      TableKeyVal{keyval: keyval, kv_sep: None, comment_nls: vec![]}
     }
 }
 
