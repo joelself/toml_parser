@@ -49,7 +49,7 @@
 	- [x] Add unit tests for getting values
     - [x] Add unit tests for getting sub-keys
 	- [x] Add unit tests for setting values
-	- [ ] Add unit tests to check the map to make sure removed keys are gone
+	- [x] Add unit tests to check the map to make sure removed keys are gone
   
 * tests/assets.rs
 	- [ ] Add failure/error tests for invalid toml-test's
@@ -60,3 +60,4 @@
 
 * types.rs
   - [x] Log an error on a return result of Result::Err
+  - [ ] Add unit tests to convenience functions

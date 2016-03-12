@@ -782,11 +782,35 @@ Age = 44"#;
   }
   
   #[test]
+  fn test_truncate_array_check_keys() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    p.set_value("database.ports", TOMLValue::datetime_from_int(2000, 02, 16, 10, 31, 06).unwrap());
+    assert_eq!(p.get_value("database.ports[0]"), None);
+    assert_eq!(p.get_value("database.ports[1]"), None);
+    assert_eq!(p.get_value("database.ports[2]"), None);
+    assert_eq!(p.get_value("database.ports[2][0]"), None);
+    assert_eq!(p.get_value("database.ports[2][1]"), None);
+  }
+  
+  #[test]
+  fn test_truncate_inline_table_check_keys() {
+    let mut p = Parser::new();
+    p = p.parse(TT::get());
+    p.set_value("database.servers", TOMLValue::datetime_from_str("4000", "02", "27", "01", "59", "59").unwrap());
+    assert_eq!(p.get_value("database.servers.main"), None);
+    assert_eq!(p.get_value("database.servers.failover1"), None);
+    assert_eq!(p.get_value("database.servers.failover2"), None);
+    assert_eq!(p.get_value("database.servers.failover2.something"), None);
+    assert_eq!(p.get_value("database.servers.failover2.nothing"), None);
+  }
+  
+  #[test]
   fn test_output_after_set() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-     p.set_value("car.interior.seats.type", TOMLValue::basic_string("leather").unwrap());
-     p.set_value("car.interior.seats.type", TOMLValue::basic_string("vinyl").unwrap());
+    p.set_value("car.interior.seats.type", TOMLValue::basic_string("leather").unwrap());
+    p.set_value("car.interior.seats.type", TOMLValue::basic_string("vinyl").unwrap());
     p.set_value("car.owners[0].Age", TOMLValue::float_from_str("19.5").unwrap());
     p.set_value("car.owners[1].Name", TOMLValue::ml_basic_string("Steve Parker").unwrap());
     p.set_value("car.drivers[4].banned", TOMLValue::datetime_from_int(2013, 9, 23, 17, 34, 2).unwrap());
