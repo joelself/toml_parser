@@ -133,12 +133,13 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-  pub fn get_children(self: &Parser<'a>, key: String) -> Option<&Children> {
+  pub fn get_children<S>(self: &Parser<'a>, key: S) -> Option<&Children> where S: Into<String> {
+    let s_key = key.into();
     let k;
-    if key == "" {
+    if s_key == "" {
       k = "$Root$".to_string();
     } else {
-      k = key;
+      k = s_key;
     }
     if self.map.contains_key(&k) {
       let hashval = self.map.get(&k).unwrap();
@@ -450,7 +451,7 @@ mod test {
   use std::cell::{Cell, RefCell};
   use std::rc::Rc;
   use parser::Parser;
-  use types::{TOMLValue, Children, StrType, Str, Date, Time, DateTime, Bool};
+  use types::{TOMLValue, Children, StrType, Date, Time, DateTime, Bool};
   struct TT;
   impl TT {
     fn get<'a>() -> &'a str {
@@ -490,44 +491,44 @@ Age = 44"#;
   fn test_key_val() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.model".to_string()), res2opt!(TOMLValue::basic_string("Civic")));
+    assert_eq!(p.get_value("car.model"), res2opt!(TOMLValue::basic_string("Civic")));
   }
 
   #[test]
   fn test_quoted_key_val_int() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.\"ωλèèℓƨ\"".to_string()), res2opt!(TOMLValue::int_str("4")));
+    assert_eq!(p.get_value("car.\"ωλèèℓƨ\""), res2opt!(TOMLValue::int_from_str("4")));
   }
 
   #[test]
   fn test_quoted_key_val_float() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.\"ƭôƥ ƨƥèèδ\"".to_string()), res2opt!(TOMLValue::float_str("124.56")));
+    assert_eq!(p.get_value("car.\"ƭôƥ ƨƥèèδ\""), res2opt!(TOMLValue::float_from_str("124.56")));
   }
 
   #[test]
   fn test_key_array() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.drivers[0]".to_string()), res2opt!(TOMLValue::basic_string("Bob")));
-    assert_eq!(p.get_value("car.drivers[1]".to_string()), res2opt!(TOMLValue::basic_string("Jane")));
-    assert_eq!(p.get_value("car.drivers[2]".to_string()), res2opt!(TOMLValue::basic_string("John")));
-    assert_eq!(p.get_value("car.drivers[3]".to_string()), res2opt!(TOMLValue::basic_string("Michael")));
-    assert_eq!(p.get_value("car.drivers[4].disallowed".to_string()), res2opt!(TOMLValue::basic_string("Chris")));
-    assert_eq!(p.get_value("car.drivers[4].banned".to_string()), res2opt!(TOMLValue::basic_string("Sally")));
+    assert_eq!(p.get_value("car.drivers[0]"), res2opt!(TOMLValue::basic_string("Bob")));
+    assert_eq!(p.get_value("car.drivers[1]"), res2opt!(TOMLValue::basic_string("Jane")));
+    assert_eq!(p.get_value("car.drivers[2]"), res2opt!(TOMLValue::basic_string("John")));
+    assert_eq!(p.get_value("car.drivers[3]"), res2opt!(TOMLValue::basic_string("Michael")));
+    assert_eq!(p.get_value("car.drivers[4].disallowed"), res2opt!(TOMLValue::basic_string("Chris")));
+    assert_eq!(p.get_value("car.drivers[4].banned"), res2opt!(TOMLValue::basic_string("Sally")));
   }
 
   #[test]
   fn test_key_inline_table() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.properties.color".to_string()), res2opt!(TOMLValue::basic_string("red")));
-    assert_eq!(p.get_value("car.properties.\"plate number\"".to_string()), res2opt!(TOMLValue::basic_string("ABC 345")));
-    assert_eq!(p.get_value("car.properties.accident_dates[0]".to_string()), res2opt!(TOMLValue::date_str("2008", "09", "29")));
-    assert_eq!(p.get_value("car.properties.accident_dates[1]".to_string()), res2opt!(TOMLValue::date_int(2011, 1, 16)));
-    assert_eq!(p.get_value("car.properties.accident_dates[2]".to_string()), res2opt!(TOMLValue::datetime_str("2014", "11", "30", "03", "13", "54")));
+    assert_eq!(p.get_value("car.properties.color"), res2opt!(TOMLValue::basic_string("red")));
+    assert_eq!(p.get_value("car.properties.\"plate number\""), res2opt!(TOMLValue::basic_string("ABC 345")));
+    assert_eq!(p.get_value("car.properties.accident_dates[0]"), res2opt!(TOMLValue::date_from_str("2008", "09", "29")));
+    assert_eq!(p.get_value("car.properties.accident_dates[1]"), res2opt!(TOMLValue::date_from_int(2011, 1, 16)));
+    assert_eq!(p.get_value("car.properties.accident_dates[2]"), res2opt!(TOMLValue::datetime_from_str("2014", "11", "30", "03", "13", "54")));
   }
 
   #[test]
@@ -535,25 +536,25 @@ Age = 44"#;
     
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.interior.seats.type".to_string()), res2opt!(TOMLValue::ml_literal_string("fabric")));
-    assert_eq!(p.get_value("car.interior.seats.count".to_string()), res2opt!(TOMLValue::int_str("5")));
+    assert_eq!(p.get_value("car.interior.seats.type"), res2opt!(TOMLValue::ml_literal_string("fabric")));
+    assert_eq!(p.get_value("car.interior.seats.count"), res2opt!(TOMLValue::int_from_str("5")));
   }
 
   #[test]
   fn test_array_table() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_value("car.owners[0].Name".to_string()), res2opt!(TOMLValue::ml_basic_string("Bob Jones")));
-    assert_eq!(p.get_value("car.owners[0].Age".to_string()), Some(TOMLValue::int(25)));
-    assert_eq!(p.get_value("car.owners[1].Name".to_string()), res2opt!(TOMLValue::literal_string("Jane Doe")));
-    assert_eq!(p.get_value("car.owners[1].Age".to_string()), Some(TOMLValue::int(44)));
+    assert_eq!(p.get_value("car.owners[0].Name"), res2opt!(TOMLValue::ml_basic_string("Bob Jones")));
+    assert_eq!(p.get_value("car.owners[0].Age"), Some(TOMLValue::int(25)));
+    assert_eq!(p.get_value("car.owners[1].Name"), res2opt!(TOMLValue::literal_string("Jane Doe")));
+    assert_eq!(p.get_value("car.owners[1].Age"), Some(TOMLValue::int(44)));
   }
   
   #[test]
   fn test_get_root_children() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_children("".to_string()), Some(&Children::Keys(RefCell::new(vec!["animal".to_string(), "car".to_string()]))));
+    assert_eq!(p.get_children(""), Some(&Children::Keys(RefCell::new(vec!["animal".to_string(), "car".to_string()]))));
   }
   
   #[test]
@@ -570,14 +571,14 @@ Age = 44"#;
   fn test_get_array_children() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_children("car.drivers".to_string()), Some(&Children::Count(Cell::new(5))));
+    assert_eq!(p.get_children("car.drivers"), Some(&Children::Count(Cell::new(5))));
   }
   
   #[test]
   fn test_get_inline_table_children() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_children("car.properties".to_string()),
+    assert_eq!(p.get_children("car.properties"),
       Some(&Children::Keys(RefCell::new(vec!["color".to_string(), "\"plate number\"".to_string(), "accident_dates".to_string()]))));
   }
   
@@ -585,7 +586,7 @@ Age = 44"#;
   fn test_get_nested_inline_table_children() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_children("car.drivers[4]".to_string()),
+    assert_eq!(p.get_children("car.drivers[4]"),
       Some(&Children::Keys(RefCell::new(vec!["disallowed".to_string(), "banned".to_string()]))));
   }
   
@@ -593,14 +594,14 @@ Age = 44"#;
   fn test_get_nested_array_children() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_children("car.properties.accident_dates".to_string()), Some(&Children::Count(Cell::new(3))));
+    assert_eq!(p.get_children("car.properties.accident_dates"), Some(&Children::Count(Cell::new(3))));
   }
   
   #[test]
   fn test_implicit_table_children() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_children("car.interior.seats".to_string()),
+    assert_eq!(p.get_children("car.interior.seats"),
       Some(&Children::Keys(RefCell::new(vec!["type".to_string(), "count".to_string()]))));
   }
   
@@ -608,14 +609,14 @@ Age = 44"#;
   fn test_get_array_of_table_children() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_children("car.owners".to_string()), Some(&Children::Count(Cell::new(2))));
+    assert_eq!(p.get_children("car.owners"), Some(&Children::Count(Cell::new(2))));
   }
   
   #[test]
   fn test_get_array_of_table0_children() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_children("car.owners[0]".to_string()),
+    assert_eq!(p.get_children("car.owners[0]"),
       Some(&Children::Keys(RefCell::new(vec!["Name".to_string(), "Age".to_string()]))));
   }
   
@@ -623,7 +624,7 @@ Age = 44"#;
   fn test_get_array_of_table1_children() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    assert_eq!(p.get_children("car.owners[1]".to_string()),
+    assert_eq!(p.get_children("car.owners[1]"),
       Some(&Children::Keys(RefCell::new(vec!["Name".to_string(), "Age".to_string()]))));
   }
   
@@ -631,53 +632,53 @@ Age = 44"#;
   fn test_set_bare_key() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("animal".to_string(), TOMLValue::ml_basic_string("shark").unwrap());
-    assert_eq!(p.get_value("animal".to_string()),
-      Some(TOMLValue::String(Str::String("shark".to_string()), StrType::MLBasic)));
+    p.set_value("animal", TOMLValue::ml_basic_string("shark").unwrap());
+    assert_eq!(p.get_value("animal"),
+      Some(TOMLValue::String("shark".into(), StrType::MLBasic)));
   }
   
   #[test]
   fn test_set_table_key() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.model".to_string(), TOMLValue::literal_string("Accord").unwrap());
-    assert_eq!(p.get_value("car.model".to_string()),
-      Some(TOMLValue::String(Str::String("Accord".to_string()), StrType::Literal)));
+    p.set_value("car.model", TOMLValue::literal_string("Accord").unwrap());
+    assert_eq!(p.get_value("car.model"),
+      Some(TOMLValue::String("Accord".into(), StrType::Literal)));
   }
   
   #[test]
   fn test_set_array_element_key() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.drivers[1]".to_string(), TOMLValue::ml_literal_string("Mark").unwrap());
-    assert_eq!(p.get_value("car.drivers[1]".to_string()),
-      Some(TOMLValue::String(Str::String("Mark".to_string()), StrType::MLLiteral)));
+    p.set_value("car.drivers[1]", TOMLValue::ml_literal_string("Mark").unwrap());
+    assert_eq!(p.get_value("car.drivers[1]"),
+      Some(TOMLValue::String("Mark".into(), StrType::MLLiteral)));
   }
   
   #[test]
   fn test_set_nested_aray_element_key() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.properties.accident_dates[2]".to_string(), TOMLValue::float(3443.34));
-    assert_eq!(p.get_value("car.properties.accident_dates[2]".to_string()),
-      Some(TOMLValue::Float(Str::String("3443.34".to_string()))));
+    p.set_value("car.properties.accident_dates[2]", TOMLValue::float(3443.34));
+    assert_eq!(p.get_value("car.properties.accident_dates[2]"),
+      Some(TOMLValue::Float("3443.34".into())));
   }
   
   #[test]
   fn test_set_inline_table_element_key() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.properties.color".to_string(), TOMLValue::int(19));
-    assert_eq!(p.get_value("car.properties.color".to_string()),
-      Some(TOMLValue::Integer(Str::String("19".to_string()))));
+    p.set_value("car.properties.color", TOMLValue::int(19));
+    assert_eq!(p.get_value("car.properties.color"),
+      Some(TOMLValue::Integer("19".into())));
   }
   
   #[test]
   fn test_set_nested_inline_table_element_key() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.drivers[4].banned".to_string(), TOMLValue::datetime_int(2013, 9, 23, 17, 34, 2).unwrap());
-    assert_eq!(p.get_value("car.drivers[4].banned".to_string()),
+    p.set_value("car.drivers[4].banned", TOMLValue::datetime_from_int(2013, 9, 23, 17, 34, 2).unwrap());
+    assert_eq!(p.get_value("car.drivers[4].banned"),
       Some(TOMLValue::DateTime(DateTime::new(Date::new_str("2013", "09", "23"),
         Some(Time::new_str("17", "34", "02", None, None))))));
   }
@@ -686,13 +687,13 @@ Age = 44"#;
   fn test_truncate_array() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.drivers".to_string(), TOMLValue::Array(Rc::new(
+    p.set_value("car.drivers", TOMLValue::Array(Rc::new(
       vec![TOMLValue::basic_string("Phil").unwrap(), TOMLValue::basic_string("Mary").unwrap()]
     )));
-    assert_eq!(p.get_value("car.drivers".to_string()),
+    assert_eq!(p.get_value("car.drivers"),
       Some(TOMLValue::Array(Rc::new(
-        vec![TOMLValue::String(Str::String("Phil".to_string()), StrType::Basic),
-             TOMLValue::String(Str::String("Mary".to_string()), StrType::Basic)
+        vec![TOMLValue::String("Phil".into(), StrType::Basic),
+             TOMLValue::String("Mary".into(), StrType::Basic)
         ]
       ))));
   }
@@ -701,14 +702,14 @@ Age = 44"#;
   fn test_truncate_inline_table() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.properties".to_string(), TOMLValue::InlineTable(Rc::new(
-      vec![(Str::String("make".to_string()), TOMLValue::literal_string("Honda").unwrap()),
-           (Str::String("transmission".to_string()), TOMLValue::bool(true))]
+    p.set_value("car.properties", TOMLValue::InlineTable(Rc::new(
+      vec![("make".into(), TOMLValue::literal_string("Honda").unwrap()),
+           ("transmission".into(), TOMLValue::bool(true))]
     )));
-    assert_eq!(p.get_value("car.properties".to_string()),
+    assert_eq!(p.get_value("car.properties"),
       Some(TOMLValue::InlineTable(Rc::new(
-        vec![(Str::String("make".to_string()), TOMLValue::String(Str::String("Honda".to_string()), StrType::Literal)),
-             (Str::String("transmission".to_string()), TOMLValue::Boolean(Bool::True))]
+        vec![("make".into(), TOMLValue::String("Honda".into(), StrType::Literal)),
+             ("transmission".into(), TOMLValue::Boolean(Bool::True))]
       ))));
   }
   
@@ -716,20 +717,20 @@ Age = 44"#;
   fn test_extend_array() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.drivers".to_string(), TOMLValue::Array(Rc::new(
+    p.set_value("car.drivers", TOMLValue::Array(Rc::new(
       vec![TOMLValue::int(1), TOMLValue::int(2), TOMLValue::int(3), TOMLValue::int(4),
       TOMLValue::int(5), TOMLValue::int(6), TOMLValue::int(7), TOMLValue::int(8)]
     )));
-    assert_eq!(p.get_value("car.drivers".to_string()),
+    assert_eq!(p.get_value("car.drivers"),
       Some(TOMLValue::Array(Rc::new(
-        vec![TOMLValue::Integer(Str::String("1".to_string())),
-             TOMLValue::Integer(Str::String("2".to_string())),
-             TOMLValue::Integer(Str::String("3".to_string())),
-             TOMLValue::Integer(Str::String("4".to_string())),
-             TOMLValue::Integer(Str::String("5".to_string())),
-             TOMLValue::Integer(Str::String("6".to_string())),
-             TOMLValue::Integer(Str::String("7".to_string())),
-             TOMLValue::Integer(Str::String("8".to_string())),
+        vec![TOMLValue::Integer("1".into()),
+             TOMLValue::Integer("2".into()),
+             TOMLValue::Integer("3".into()),
+             TOMLValue::Integer("4".into()),
+             TOMLValue::Integer("5".into()),
+             TOMLValue::Integer("6".into()),
+             TOMLValue::Integer("7".into()),
+             TOMLValue::Integer("8".into()),
         ]
       ))));
   }
@@ -738,18 +739,18 @@ Age = 44"#;
   fn test_extend_inline_table() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.properties".to_string(), TOMLValue::InlineTable(Rc::new(
-      vec![(Str::String("prop1".to_string()), TOMLValue::bool_str("TrUe").unwrap()),
-           (Str::String("prop2".to_string()), TOMLValue::bool_str("FALSE").unwrap()),
-           (Str::String("prop3".to_string()), TOMLValue::bool_str("truE").unwrap()),
-           (Str::String("prop4".to_string()), TOMLValue::bool_str("false").unwrap())]
+    p.set_value("car.properties", TOMLValue::InlineTable(Rc::new(
+      vec![("prop1".into(), TOMLValue::bool_from_str("TrUe").unwrap()),
+           ("prop2".into(), TOMLValue::bool_from_str("FALSE").unwrap()),
+           ("prop3".into(), TOMLValue::bool_from_str("truE").unwrap()),
+           ("prop4".into(), TOMLValue::bool_from_str("false").unwrap())]
     )));
-    assert_eq!(p.get_value("car.properties".to_string()),
+    assert_eq!(p.get_value("car.properties"),
       Some(TOMLValue::InlineTable(Rc::new(
-        vec![(Str::String("prop1".to_string()), TOMLValue::Boolean(Bool::True)),
-             (Str::String("prop2".to_string()), TOMLValue::Boolean(Bool::False)),
-             (Str::String("prop3".to_string()), TOMLValue::Boolean(Bool::True)),
-             (Str::String("prop4".to_string()), TOMLValue::Boolean(Bool::False))]
+        vec![("prop1".into(), TOMLValue::Boolean(Bool::True)),
+             ("prop2".into(), TOMLValue::Boolean(Bool::False)),
+             ("prop3".into(), TOMLValue::Boolean(Bool::True)),
+             ("prop4".into(), TOMLValue::Boolean(Bool::False))]
       ))));
   }
   
@@ -757,60 +758,60 @@ Age = 44"#;
   fn test_set_implicit_table_key() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.interior.seats.type".to_string(), TOMLValue::basic_string("leather").unwrap());
-    assert_eq!(p.get_value("car.interior.seats.type".to_string()),
-      Some(TOMLValue::String(Str::String("leather".to_string()), StrType::Basic)));
+    p.set_value("car.interior.seats.type", TOMLValue::basic_string("leather").unwrap());
+    assert_eq!(p.get_value("car.interior.seats.type"),
+      Some(TOMLValue::String("leather".into(), StrType::Basic)));
   }
   
   #[test]
   fn test_set_array_of_table0_key() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.owners[0].Age".to_string(), TOMLValue::float_str("19.5").unwrap());
-    assert_eq!(p.get_value("car.owners[0].Age".to_string()),
-      Some(TOMLValue::Float(Str::String("19.5".to_string()))));
+    p.set_value("car.owners[0].Age", TOMLValue::float_from_str("19.5").unwrap());
+    assert_eq!(p.get_value("car.owners[0].Age"),
+      Some(TOMLValue::Float("19.5".into())));
   }
   
   #[test]
   fn test_set_array_of_table1_key() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-    p.set_value("car.owners[1].Name".to_string(), TOMLValue::ml_basic_string("Steve Parker").unwrap());
-    assert_eq!(p.get_value("car.owners[1].Name".to_string()),
-      Some(TOMLValue::String(Str::String("Steve Parker".to_string()), StrType::MLBasic)));
+    p.set_value("car.owners[1].Name", TOMLValue::ml_basic_string("Steve Parker").unwrap());
+    assert_eq!(p.get_value("car.owners[1].Name"),
+      Some(TOMLValue::String("Steve Parker".into(), StrType::MLBasic)));
   }
   
   #[test]
   fn test_output_after_set() {
     let mut p = Parser::new();
     p = p.parse(TT::get());
-     p.set_value("car.interior.seats.type".to_string(), TOMLValue::basic_string("leather").unwrap());
-     p.set_value("car.interior.seats.type".to_string(), TOMLValue::basic_string("vinyl").unwrap());
-    p.set_value("car.owners[0].Age".to_string(), TOMLValue::float_str("19.5").unwrap());
-    p.set_value("car.owners[1].Name".to_string(), TOMLValue::ml_basic_string("Steve Parker").unwrap());
-    p.set_value("car.drivers[4].banned".to_string(), TOMLValue::datetime_int(2013, 9, 23, 17, 34, 2).unwrap());
-    p.set_value("car.properties.color".to_string(), TOMLValue::int(19));
-    p.set_value("car.properties.accident_dates[2]".to_string(), TOMLValue::float(3443.34));
-    p.set_value("car.drivers[1]".to_string(), TOMLValue::ml_literal_string("Mark").unwrap());
-    p.set_value("car.properties".to_string(), TOMLValue::InlineTable(Rc::new(
-      vec![(Str::String("make".to_string()), TOMLValue::literal_string("Honda").unwrap()),
-           (Str::String("transmission".to_string()), TOMLValue::bool(true))]
+     p.set_value("car.interior.seats.type", TOMLValue::basic_string("leather").unwrap());
+     p.set_value("car.interior.seats.type", TOMLValue::basic_string("vinyl").unwrap());
+    p.set_value("car.owners[0].Age", TOMLValue::float_from_str("19.5").unwrap());
+    p.set_value("car.owners[1].Name", TOMLValue::ml_basic_string("Steve Parker").unwrap());
+    p.set_value("car.drivers[4].banned", TOMLValue::datetime_from_int(2013, 9, 23, 17, 34, 2).unwrap());
+    p.set_value("car.properties.color", TOMLValue::int(19));
+    p.set_value("car.properties.accident_dates[2]", TOMLValue::float(3443.34));
+    p.set_value("car.drivers[1]", TOMLValue::ml_literal_string("Mark").unwrap());
+    p.set_value("car.properties", TOMLValue::InlineTable(Rc::new(
+      vec![("make".into(), TOMLValue::literal_string("Honda").unwrap()),
+           ("transmission".into(), TOMLValue::bool(true))]
     )));
-    p.set_value("car.drivers".to_string(), TOMLValue::Array(Rc::new(
+    p.set_value("car.drivers", TOMLValue::Array(Rc::new(
       vec![TOMLValue::basic_string("Phil").unwrap(), TOMLValue::basic_string("Mary").unwrap()]
     )));
-    p.set_value("car.properties".to_string(), TOMLValue::InlineTable(Rc::new(
-      vec![(Str::String("prop1".to_string()), TOMLValue::bool_str("TrUe").unwrap()),
-           (Str::String("prop2".to_string()), TOMLValue::bool_str("FALSE").unwrap()),
-           (Str::String("prop3".to_string()), TOMLValue::bool_str("truE").unwrap()),
-           (Str::String("prop4".to_string()), TOMLValue::bool_str("false").unwrap())]
+    p.set_value("car.properties", TOMLValue::InlineTable(Rc::new(
+      vec![("prop1".into(), TOMLValue::bool_from_str("TrUe").unwrap()),
+           ("prop2".into(), TOMLValue::bool_from_str("FALSE").unwrap()),
+           ("prop3".into(), TOMLValue::bool_from_str("truE").unwrap()),
+           ("prop4".into(), TOMLValue::bool_from_str("false").unwrap())]
     )));
-    p.set_value("car.drivers".to_string(), TOMLValue::Array(Rc::new(
+    p.set_value("car.drivers", TOMLValue::Array(Rc::new(
       vec![TOMLValue::int(1), TOMLValue::int(2), TOMLValue::int(3), TOMLValue::int(4),
       TOMLValue::int(5), TOMLValue::int(6), TOMLValue::int(7), TOMLValue::int(8)]
     )));
-    p.set_value("car.model".to_string(), TOMLValue::literal_string("Accord").unwrap());
-    p.set_value("animal".to_string(), TOMLValue::ml_basic_string("shark").unwrap());
+    p.set_value("car.model", TOMLValue::literal_string("Accord").unwrap());
+    p.set_value("animal", TOMLValue::ml_basic_string("shark").unwrap());
     assert_eq!(r#"animal = """shark"""
 
 [car]

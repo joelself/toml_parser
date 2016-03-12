@@ -84,7 +84,7 @@ mod test {
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
                      TableType, Value, NLExpression, ArrayValue, Toml,
                      Array, CommentOrNewLines};
-  use types::{TimeOffsetAmount, DateTime, Date, Time, TimeOffset, StrType, Str, Bool};
+  use types::{TimeOffsetAmount, DateTime, Date, Time, TimeOffset, StrType, Bool};
   use std::rc::Rc;
   use std::cell::RefCell;
   
@@ -123,7 +123,7 @@ enabled = true"#).1, Done("",
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
               "title", WSSep::new_str(" ", " "),
-              Rc::new(RefCell::new(Value::String(Str::Str("TÓM£ Éжá₥ƥℓè"), StrType::Basic)))
+              Rc::new(RefCell::new(Value::String("TÓM£ Éжá₥ƥℓè".into(), StrType::Basic)))
             )),
             None, None
           )
@@ -142,7 +142,7 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
-              "name", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::String(Str::Str("Tô₥ Þřèƨƭôñ-Wèřñèř"), StrType::Basic)))
+              "name", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::String("Tô₥ Þřèƨƭôñ-Wèřñèř".into(), StrType::Basic)))
             )), None, None
           )
         ),
@@ -175,7 +175,7 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
-              "server", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::String(Str::Str("192.168.1.1"), StrType::Basic)))
+              "server", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::String("192.168.1.1".into(), StrType::Basic)))
             )),
             None, None
           )
@@ -186,16 +186,16 @@ enabled = true"#).1, Done("",
               "ports", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
                 vec![
                   ArrayValue::new(
-                    Rc::new(RefCell::new(Value::Integer(Str::Str("8001")))), Some(WSSep::new_str("", " " )), vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                    Rc::new(RefCell::new(Value::Integer("8001".into()))), Some(WSSep::new_str("", " " )), vec![CommentOrNewLines::NewLines("".into())]
                   ),
                   ArrayValue::new(
-                    Rc::new(RefCell::new(Value::Integer(Str::Str("8001")))), Some(WSSep::new_str("", " ")), vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                    Rc::new(RefCell::new(Value::Integer("8001".into()))), Some(WSSep::new_str("", " ")), vec![CommentOrNewLines::NewLines("".into())]
                   ),
                   ArrayValue::new(
-                    Rc::new(RefCell::new(Value::Integer(Str::Str("8002")))), None, vec![CommentOrNewLines::NewLines(Str::Str(" "))]
+                    Rc::new(RefCell::new(Value::Integer("8002".into()))), None, vec![CommentOrNewLines::NewLines(" ".into())]
                   )
                 ],
-                vec![CommentOrNewLines::NewLines(Str::Str(" "))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                vec![CommentOrNewLines::NewLines(" ".into())], vec![CommentOrNewLines::NewLines("".into())]
               ))))))
             )),
             None, None
@@ -204,7 +204,7 @@ enabled = true"#).1, Done("",
         NLExpression::new_str(
           "\n", Expression::new(
             WSSep::new_str("", ""), Some(KeyVal::new_str(
-              "connection_max", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Integer(Str::Str("5000"))))
+              "connection_max", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Integer("5000".into())))
             )),
             None, None
           )
@@ -242,7 +242,7 @@ enabled = true"#).1, Done("",
           NLExpression::new_str(
             "\r\n", Expression::new(
               WSSep::new_str("", ""), Some(KeyVal::new_str(
-                "key", WSSep::new_str("", ""), Rc::new(RefCell::new(Value::String(Str::Str("value"), StrType::Basic)))
+                "key", WSSep::new_str("", ""), Rc::new(RefCell::new(Value::String("value".into(), StrType::Basic)))
               )),
               None, Some(Comment::new_str("wλïƭeƨƥáçè"))
             )
@@ -284,7 +284,7 @@ enabled = true"#).1, Done("",
       Done("\r\n", NLExpression::new_str(
         "\r\n", Expression::new(
          WSSep::new_str("   ", "     "), Some(KeyVal::new_str(
-            "SimpleKey", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Integer(Str::Str("1_2_3_4_5"))))
+            "SimpleKey", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Integer("1_2_3_4_5".into())))
           )),
          None, Some(Comment::new_str("  áñ áƭƭè₥ƥƭ ƭô δèƒïñè TÓM£"))
         )
@@ -312,7 +312,7 @@ enabled = true"#).1, Done("",
       Done("\n",
         Expression::new(
           WSSep::new_str("\t\t\t", "  "), Some(KeyVal::new_str(
-            "\"řúññïñϱôúƭôƒωôřδƨ\"", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Float(Str::Str("0.1"))))
+            "\"řúññïñϱôúƭôƒωôřδƨ\"", WSSep::new_str(" ", " "), Rc::new(RefCell::new(Value::Float("0.1".into())))
           )),
           None, Some(Comment::new_str("Â₥èřïçáñ Éжƥřèƨƨ"))
         )

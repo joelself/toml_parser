@@ -553,7 +553,7 @@ mod test {
   use ast::structs::{WSSep, Array, ArrayValue, KeyVal,
                      InlineTable, TableKeyVal, Value,
                      CommentOrNewLines};
-  use ::types::{DateTime, Time, Date, TimeOffsetAmount, TimeOffset, StrType, Bool, Str};
+  use ::types::{DateTime, Time, Date, TimeOffsetAmount, TimeOffset, StrType, Bool};
   use parser::Parser;
   use std::rc::Rc;
   use std::cell::RefCell;
@@ -606,26 +606,26 @@ mod test {
   #[test]
   fn test_string() {
     let mut p = Parser::new();
-    assert_eq!(p.string("\"Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±\"").1, Done("", Value::String(Str::Str("Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±"), StrType::Basic)));
+    assert_eq!(p.string("\"Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±\"").1, Done("", Value::String("Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±".into(), StrType::Basic)));
     p = Parser::new();
     assert_eq!(p.string(r#""""â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
 Ã±Ãºâ‚¥Î²Ã¨Å™_Æ­Ï‰Ã´
 NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
-""""#).1, Done("", Value::String(Str::Str(r#"â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
+""""#).1, Done("", Value::String(r#"â‚¥â„“_Î²Ã¡Æ¨Ã¯Ã§_Æ¨Æ­Å™Ã¯Ã±Ï±
 Ã±Ãºâ‚¥Î²Ã¨Å™_Æ­Ï‰Ã´
 NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
-"#), StrType::MLBasic)));
+"#.into(), StrType::MLBasic)));
     p = Parser::new();
-    assert_eq!(p.string("'Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG'").1, Done("", Value::String(Str::Str("Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG"), StrType::Literal)));
+    assert_eq!(p.string("'Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG'").1, Done("", Value::String("Â£ÃŒTÃ‰RÃ‚Â£Â§TRÃ¯NG".into(), StrType::Literal)));
     p = Parser::new();
     assert_eq!(p.string(r#"'''Â§Æ¥Å™Ã¯Æ­Ã¨
 Ã‡Ã´Æ™Ã¨
 ÃžÃ¨Æ¥Æ¨Ã¯
 '''"#).1,
-      Done("", Value::String(Str::Str(r#"Â§Æ¥Å™Ã¯Æ­Ã¨
+      Done("", Value::String(r#"Â§Æ¥Å™Ã¯Æ­Ã¨
 Ã‡Ã´Æ™Ã¨
 ÃžÃ¨Æ¥Æ¨Ã¯
-"#), StrType::MLLiteral)));
+"#.into(), StrType::MLLiteral)));
   }
 
   #[test]
@@ -722,15 +722,15 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
       Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
         vec![
           ArrayValue::new(
-            Rc::new(RefCell::new(Value::Integer(Str::Str("4")))), Some(WSSep::new_str("", "")),
-            vec![CommentOrNewLines::NewLines(Str::Str(""))]
+            Rc::new(RefCell::new(Value::Integer("4".into()))), Some(WSSep::new_str("", "")),
+            vec![CommentOrNewLines::NewLines("".into())]
           ),
           ArrayValue::new(
-            Rc::new(RefCell::new(Value::Integer(Str::Str("9")))), None,
-            vec![CommentOrNewLines::NewLines(Str::Str(""))]
+            Rc::new(RefCell::new(Value::Integer("9".into()))), None,
+            vec![CommentOrNewLines::NewLines("".into())]
           ),
         ],
-        vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+        vec![CommentOrNewLines::NewLines("".into())], vec![CommentOrNewLines::NewLines("".into())]
       ))
     ))))));
     p = Parser::new();
@@ -740,7 +740,7 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
           TableKeyVal::new(
             KeyVal::new_str(
               "\"Â§Ã´â‚¥Ã¨ ÃžÃ¯Ï±\"", WSSep::new_str("", ""),
-              Rc::new(RefCell::new(Value::String(Str::Str("TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™"), StrType::Literal)))
+              Rc::new(RefCell::new(Value::String("TÃ¡Æ¨Æ­Â¥ ÃžÃ´Å™Æ™".into(), StrType::Literal)))
             ),
             None,
             vec![]
@@ -754,15 +754,15 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
         Some(TimeOffset::Time(TimeOffsetAmount::new_str("-", "11", "30"))
     )))))))));
     p = Parser::new();
-    assert_eq!(p.val("3487.3289E+22").1, Done("", Rc::new(RefCell::new(Value::Float(Str::Str("3487.3289E+22"))))));
+    assert_eq!(p.val("3487.3289E+22").1, Done("", Rc::new(RefCell::new(Value::Float("3487.3289E+22".into())))));
     p = Parser::new();
-    assert_eq!(p.val("8932838").1, Done("", Rc::new(RefCell::new(Value::Integer(Str::Str("8932838"))))));
+    assert_eq!(p.val("8932838").1, Done("", Rc::new(RefCell::new(Value::Integer("8932838".into())))));
     p = Parser::new();
     assert_eq!(p.val("false").1, Done("", Rc::new(RefCell::new(Value::Boolean(Bool::False)))));
     p = Parser::new();
     assert_eq!(p.val("true").1, Done("", Rc::new(RefCell::new(Value::Boolean(Bool::True)))));
     p = Parser::new();
-    assert_eq!(p.val("'Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±'").1, Done("", Rc::new(RefCell::new(Value::String(Str::Str("Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±"), StrType::Literal)))));
+    assert_eq!(p.val("'Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±'").1, Done("", Rc::new(RefCell::new(Value::String("Â§Ã´â‚¥Ã¨ Â§Æ­Å™Ã¯Ã±Ï±".into(), StrType::Literal)))));
   }
 
   #[test]
@@ -770,7 +770,7 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
     let p = Parser::new();
     assert_eq!(p.keyval("Boolean = 84.67").1, Done("", KeyVal::new_str(
       "Boolean", WSSep::new_str(" ", " "),
-      Rc::new(RefCell::new(Value::Float(Str::Str("84.67"))))
+      Rc::new(RefCell::new(Value::Float("84.67".into())))
     )));
   }
 }

@@ -645,7 +645,7 @@ mod test {
       ))
     ));
     p = Parser::new();
-    assert_eq!(p.comment_or_nl("\n\t\r\n ").1, Done("", CommentOrNewLines::NewLines(Str::Str("\n\t\r\n "))));
+    assert_eq!(p.comment_or_nl("\n\t\r\n ").1, Done("", CommentOrNewLines::NewLines("\n\t\r\n ".into())));
   }
 
   #[test]
@@ -654,7 +654,7 @@ mod test {
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("54.6, \n#çô₥₥èñƭ\n\n").1,
       Done("",ArrayValue::new(
-        Rc::new(RefCell::new(Value::Float(Str::Str("54.6")))), Some(WSSep::new_str("", " ")),
+        Rc::new(RefCell::new(Value::Float("54.6".into()))), Some(WSSep::new_str("", " ")),
         vec![CommentOrNewLines::Comment(CommentNewLines::new_str(
           "\n", Comment::new_str("çô₥₥èñƭ"), "\n\n"
         ))]
@@ -664,15 +664,15 @@ mod test {
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("\"ƨƥáϱλèƭƭï\"").1,
       Done("",ArrayValue::new(
-        Rc::new(RefCell::new(Value::String(Str::Str("ƨƥáϱλèƭƭï"), StrType::Basic))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
+        Rc::new(RefCell::new(Value::String("ƨƥáϱλèƭƭï".into(), StrType::Basic))), None, vec![CommentOrNewLines::NewLines("".into())]
       ))
     );
     p = Parser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("44_9 , ").1,
       Done("",ArrayValue::new(
-        Rc::new(RefCell::new(Value::Integer(Str::Str("44_9")))), Some(WSSep::new_str(" ", " ")),
-        vec![CommentOrNewLines::NewLines(Str::Str(""))]
+        Rc::new(RefCell::new(Value::Integer("44_9".into()))), Some(WSSep::new_str(" ", " ")),
+        vec![CommentOrNewLines::NewLines("".into())]
       ))
     );
   }
@@ -682,21 +682,21 @@ mod test {
     let mut p = Parser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_values("1, 2, 3").1, Done("", vec![
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer(Str::Str("1")))), Some(WSSep::new_str("", " ")),
-      vec![CommentOrNewLines::NewLines(Str::Str(""))]),
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer(Str::Str("2")))), Some(WSSep::new_str("", " ")),
-      vec![CommentOrNewLines::NewLines(Str::Str(""))]),
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer(Str::Str("3")))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))])
+      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("1".into()))), Some(WSSep::new_str("", " ")),
+      vec![CommentOrNewLines::NewLines("".into())]),
+      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("2".into()))), Some(WSSep::new_str("", " ")),
+      vec![CommentOrNewLines::NewLines("".into())]),
+      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("3".into()))), None, vec![CommentOrNewLines::NewLines("".into())])
     ]));
     p = Parser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_values("1, 2, #çô₥₥èñƭ\n3, ").1, Done("", vec![
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer(Str::Str("1")))), Some(WSSep::new_str("", " ")),
-      vec![CommentOrNewLines::NewLines(Str::Str(""))]),
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer(Str::Str("2")))), Some(WSSep::new_str("", " ")),
+      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("1".into()))), Some(WSSep::new_str("", " ")),
+      vec![CommentOrNewLines::NewLines("".into())]),
+      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("2".into()))), Some(WSSep::new_str("", " ")),
         vec![CommentOrNewLines::Comment(CommentNewLines::new_str("", Comment::new_str("çô₥₥èñƭ"), "\n"))]),
-      ArrayValue::new(Rc::new(RefCell::new(Value::Integer(Str::Str("3")))), Some(WSSep::new_str("", " ")),
-      vec![CommentOrNewLines::NewLines(Str::Str(""))])
+      ArrayValue::new(Rc::new(RefCell::new(Value::Integer("3".into()))), Some(WSSep::new_str("", " ")),
+      vec![CommentOrNewLines::NewLines("".into())])
     ]));
   }
 
@@ -711,16 +711,16 @@ mod test {
               Some(TimeOffset::Zulu)
           )))))),
           Some(WSSep::new_str("", " ")),
-          vec![CommentOrNewLines::NewLines(Str::Str(""))]
+          vec![CommentOrNewLines::NewLines("".into())]
         ),
         ArrayValue::new(
           Rc::new(RefCell::new(Value::DateTime(DateTime::new(
             Date::new_str("1950", "03", "30"), Some(Time::new_str("21", "04", "14", Some("123"),
             Some(TimeOffset::Time(TimeOffsetAmount::new_str("+", "05", "00")))
           )))))),
-          None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
+          None, vec![CommentOrNewLines::NewLines("".into())]
         )],
-        vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+        vec![CommentOrNewLines::NewLines("".into())], vec![CommentOrNewLines::NewLines("".into())]
       ))))
     );
   }
@@ -735,47 +735,47 @@ mod test {
             Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
               vec![
                 ArrayValue::new(
-                  Rc::new(RefCell::new(Value::Integer(Str::Str("3")))), Some(WSSep::new_str("", "")),
-                  vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                  Rc::new(RefCell::new(Value::Integer("3".into()))), Some(WSSep::new_str("", "")),
+                  vec![CommentOrNewLines::NewLines("".into())]
                 ),
                 ArrayValue::new(
-                  Rc::new(RefCell::new(Value::Integer(Str::Str("4")))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                  Rc::new(RefCell::new(Value::Integer("4".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
                 )
               ],
-              vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+              vec![CommentOrNewLines::NewLines("".into())], vec![CommentOrNewLines::NewLines("".into())]
             )))))),
             Some(WSSep::new_str("", " ")),
-            vec![CommentOrNewLines::NewLines(Str::Str(""))]
+            vec![CommentOrNewLines::NewLines("".into())]
           ),
           ArrayValue::new(
             Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
               vec![
                 ArrayValue::new(
-                  Rc::new(RefCell::new(Value::Integer(Str::Str("4")))), Some(WSSep::new_str("", "")),
-                  vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                  Rc::new(RefCell::new(Value::Integer("4".into()))), Some(WSSep::new_str("", "")),
+                  vec![CommentOrNewLines::NewLines("".into())]
                 ),
                 ArrayValue::new(
-                    Rc::new(RefCell::new(Value::Integer(Str::Str("5")))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                    Rc::new(RefCell::new(Value::Integer("5".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
                 )
               ],
-              vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+              vec![CommentOrNewLines::NewLines("".into())], vec![CommentOrNewLines::NewLines("".into())]
             )))))),
             Some(WSSep::new_str("", " ")),
-            vec![CommentOrNewLines::NewLines(Str::Str(""))]
+            vec![CommentOrNewLines::NewLines("".into())]
           ),
           ArrayValue::new(
             Rc::new(RefCell::new(Value::Array(Rc::new(RefCell::new(Array::new(
               vec![
                 ArrayValue::new(
-                  Rc::new(RefCell::new(Value::Integer(Str::Str("6")))), None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
+                  Rc::new(RefCell::new(Value::Integer("6".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
                 )
               ],
-             vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+             vec![CommentOrNewLines::NewLines("".into())], vec![CommentOrNewLines::NewLines("".into())]
             )))))),
-            None, vec![CommentOrNewLines::NewLines(Str::Str(""))]
+            None, vec![CommentOrNewLines::NewLines("".into())]
           )
         ],
-        vec![CommentOrNewLines::NewLines(Str::Str(""))], vec![CommentOrNewLines::NewLines(Str::Str(""))]
+        vec![CommentOrNewLines::NewLines("".into())], vec![CommentOrNewLines::NewLines("".into())]
       ))))
     );
   }
@@ -785,7 +785,7 @@ mod test {
     let p = Parser::new();
     assert_eq!(p.table_keyval("\"Ì WúƲ Húϱƨ!\"\t=\t'Mè ƭôô!' ").1, Done("", TableKeyVal::new(
       KeyVal::new_str(
-        "\"Ì WúƲ Húϱƨ!\"", WSSep::new_str("\t", "\t"), Rc::new(RefCell::new(Value::String(Str::Str("Mè ƭôô!"), StrType::Literal)))
+        "\"Ì WúƲ Húϱƨ!\"", WSSep::new_str("\t", "\t"), Rc::new(RefCell::new(Value::String("Mè ƭôô!".into(), StrType::Literal)))
       ),
       None,
       vec![]
@@ -800,7 +800,7 @@ mod test {
         TableKeyVal::new(
           KeyVal::new_str(
             "Key", WSSep::new_str(" ", "\t"),
-            Rc::new(RefCell::new(Value::Integer(Str::Str("54"))))
+            Rc::new(RefCell::new(Value::Integer("54".into())))
           ),
           Some(WSSep::new_str("", "")),
           vec![]
@@ -808,7 +808,7 @@ mod test {
         TableKeyVal::new(
           KeyVal::new_str(
             "\"Key2\"", WSSep::new_str( " ", " "),
-            Rc::new(RefCell::new(Value::String(Str::Str("34.99"), StrType::Literal)))
+            Rc::new(RefCell::new(Value::String("34.99".into(), StrType::Literal)))
           ),
           None,
           vec![]
@@ -826,17 +826,17 @@ mod test {
           TableKeyVal::new(
             KeyVal::new_str(
               "Key", WSSep::new_str(" ", " "),
-              Rc::new(RefCell::new(Value::Float(Str::Str("3.14E+5"))))
+              Rc::new(RefCell::new(Value::Float("3.14E+5".into())))
             ),
             Some(WSSep::new_str(" ", " ")),
-            vec![CommentOrNewLines::NewLines(Str::Str(""))]
+            vec![CommentOrNewLines::NewLines("".into())]
           ),
           TableKeyVal::new(
             KeyVal::new_str("\"Key2\"", WSSep::new_str(" ", " "),
-              Rc::new(RefCell::new(Value::String(Str::Str("New\nLine"), StrType::MLLiteral)))
+              Rc::new(RefCell::new(Value::String("New\nLine".into(), StrType::MLLiteral)))
             ),
             None,
-            vec![CommentOrNewLines::NewLines(Str::Str("\t"))]
+            vec![CommentOrNewLines::NewLines("\t".into())]
           )
         ],
         WSSep::new_str("\t", "")
