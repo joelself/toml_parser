@@ -82,7 +82,7 @@ mod test {
   use nom::IResult::Done;
   use parser::TOMLParser;
   use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
-                     TableType, TOMLValue, NLExpression, ArrayTOMLValue, Toml,
+                     TableType, TOMLValue, NLExpression, ArrayValue, Toml,
                      Array, CommentOrNewLines};
   use types::{TimeOffsetAmount, DateTime, Date, Time, TimeOffset, StrType};
   use std::rc::Rc;
@@ -185,13 +185,13 @@ enabled = true"#).1, Done("",
             WSSep::new_str("", ""), Some(KeyVal::new_str(
               "ports", WSSep::new_str(" ", " "), Rc::new(RefCell::new(TOMLValue::Array(Rc::new(RefCell::new(Array::new(
                 vec![
-                  ArrayTOMLValue::new(
+                  ArrayValue::new(
                     Rc::new(RefCell::new(TOMLValue::Integer("8001".into()))), Some(WSSep::new_str("", " " )), vec![CommentOrNewLines::NewLines("".into())]
                   ),
-                  ArrayTOMLValue::new(
+                  ArrayValue::new(
                     Rc::new(RefCell::new(TOMLValue::Integer("8001".into()))), Some(WSSep::new_str("", " ")), vec![CommentOrNewLines::NewLines("".into())]
                   ),
-                  ArrayTOMLValue::new(
+                  ArrayValue::new(
                     Rc::new(RefCell::new(TOMLValue::Integer("8002".into()))), None, vec![CommentOrNewLines::NewLines(" ".into())]
                   )
                 ],

@@ -602,21 +602,21 @@ impl<'a> TimeOffsetAmount<'a> {
 
 // <val><<array_sep.ws1>,<array_sep.ws2>?><comment_nl?><array_vals?>
 #[derive(Debug, Eq)]
-pub struct ArrayTOMLValue<'a> {
+pub struct ArrayValue<'a> {
 	pub val: Rc<RefCell<TOMLValue<'a>>>,
 	pub array_sep: Option<WSSep<'a>>,
 	pub comment_nls: Vec<CommentOrNewLines<'a>>,
 }
 
-impl<'a> PartialEq for ArrayTOMLValue<'a> {
-	fn eq(&self, other: &ArrayTOMLValue<'a>) -> bool {
+impl<'a> PartialEq for ArrayValue<'a> {
+	fn eq(&self, other: &ArrayValue<'a>) -> bool {
 		self.val == other.val &&
 		comp_opt(&self.array_sep, &other.array_sep) &&
 		self.comment_nls == other.comment_nls
 	}
 }
 
-impl<'a> Display for ArrayTOMLValue<'a> {
+impl<'a> Display for ArrayValue<'a> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     if self.comment_nls.len() > 0 {
       match self.array_sep {
@@ -636,23 +636,23 @@ impl<'a> Display for ArrayTOMLValue<'a> {
   }
 }
 
-impl<'a> ArrayTOMLValue<'a> {
+impl<'a> ArrayValue<'a> {
   pub fn new(val: Rc<RefCell<TOMLValue<'a>>>, array_sep: Option<WSSep<'a>>,
-  	comment_nls: Vec<CommentOrNewLines<'a>>) -> ArrayTOMLValue<'a> {
-  	ArrayTOMLValue{val: val, array_sep: array_sep, comment_nls: comment_nls}
+  	comment_nls: Vec<CommentOrNewLines<'a>>) -> ArrayValue<'a> {
+  	ArrayValue{val: val, array_sep: array_sep, comment_nls: comment_nls}
   }
-  pub fn default(val: Rc<RefCell<TOMLValue<'a>>>) -> ArrayTOMLValue<'a> {
-    ArrayTOMLValue{val: val, array_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
+  pub fn default(val: Rc<RefCell<TOMLValue<'a>>>) -> ArrayValue<'a> {
+    ArrayValue{val: val, array_sep: Some(WSSep::new_str("", " ")), comment_nls: vec![]}
   }
-  pub fn last(val: Rc<RefCell<TOMLValue<'a>>>) -> ArrayTOMLValue<'a> {
-    ArrayTOMLValue{val: val, array_sep: None, comment_nls: vec![]}
+  pub fn last(val: Rc<RefCell<TOMLValue<'a>>>) -> ArrayValue<'a> {
+    ArrayValue{val: val, array_sep: None, comment_nls: vec![]}
   }
 }
 
 // [<ws.ws1><values?><ws.ws2>]
 #[derive(Debug, Eq)]
 pub struct Array<'a> {
-	pub values: Vec<ArrayTOMLValue<'a>>,
+	pub values: Vec<ArrayValue<'a>>,
 	pub comment_nls1: Vec<CommentOrNewLines<'a>>,
 	pub comment_nls2: Vec<CommentOrNewLines<'a>>,
 }
@@ -682,7 +682,7 @@ impl<'a> Display for Array<'a> {
 }
 
 impl<'a> Array<'a> {
-  pub fn new(values: Vec<ArrayTOMLValue<'a>>, comment_nls1: Vec<CommentOrNewLines<'a>>,
+  pub fn new(values: Vec<ArrayValue<'a>>, comment_nls1: Vec<CommentOrNewLines<'a>>,
   	comment_nls2: Vec<CommentOrNewLines<'a>>,) -> Array<'a> {
   	Array{values: values, comment_nls1: comment_nls1, comment_nls2: comment_nls2}
   }

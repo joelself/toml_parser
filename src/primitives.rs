@@ -596,7 +596,7 @@ impl<'a> TOMLParser<'a> {
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use ast::structs::{WSSep, Array, ArrayTOMLValue, KeyVal,
+  use ast::structs::{WSSep, Array, ArrayValue, KeyVal,
                      InlineTable, TableKeyVal, TOMLValue,
                      CommentOrNewLines};
   use ::types::{DateTime, Time, Date, TimeOffsetAmount, TimeOffset, StrType};
@@ -767,11 +767,11 @@ NÃ›MÃŸÃ‰R-THRÃ‰Ã‰
     assert_eq!(p.val("[4,9]").1, Done("",
       Rc::new(RefCell::new(TOMLValue::Array(Rc::new(RefCell::new(Array::new(
         vec![
-          ArrayTOMLValue::new(
+          ArrayValue::new(
             Rc::new(RefCell::new(TOMLValue::Integer("4".into()))), Some(WSSep::new_str("", "")),
             vec![CommentOrNewLines::NewLines("".into())]
           ),
-          ArrayTOMLValue::new(
+          ArrayValue::new(
             Rc::new(RefCell::new(TOMLValue::Integer("9".into()))), None,
             vec![CommentOrNewLines::NewLines("".into())]
           ),

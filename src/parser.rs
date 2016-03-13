@@ -7,7 +7,7 @@ use std::collections::hash_map::Entry;
 use std::borrow::Cow;
 use nom::IResult;
 use ast::structs::{Toml, ArrayType, HashValue, TableType, TOMLValue, Array, InlineTable,
-                   ArrayTOMLValue, WSSep, TableKeyVal};
+                   ArrayValue, WSSep, TableKeyVal};
 use types::{ParseError, ParseResult, Value, Children};
 
 named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
@@ -220,9 +220,9 @@ impl<'a> TOMLParser<'a> {
           let value = value_opt.unwrap();
           let array_value;
           if i < arr.len() - 1 {
-            array_value = ArrayTOMLValue::default(Rc::new(RefCell::new(value)));
+            array_value = ArrayValue::default(Rc::new(RefCell::new(value)));
           } else {
-            array_value = ArrayTOMLValue::last(Rc::new(RefCell::new(value)));
+            array_value = ArrayValue::last(Rc::new(RefCell::new(value)));
           }
           values.push(array_value);
         }
@@ -838,60 +838,5 @@ properties = { color = "red", "plate number" = "ABC 345",
     assert_eq!(p.get_value("database.servers.failover2"), None);
     assert_eq!(p.get_value("database.servers.failover2.something"), None);
     assert_eq!(p.get_value("database.servers.failover2.nothing"), None);
-  }
-  
-  #[test]
-  fn test_output_after_set() {
-    let _ = env_logger::init();
-    let p = TOMLParser::new();
-    let (mut p, _) = p.parse(TT::get());
-    p.set_value("car.interior.seats.type", Value::basic_string("leather").unwrap());
-    p.set_value("car.interior.seats.type", Value::basic_string("vinyl").unwrap());
-    p.set_value("car.owners[0].Age", Value::float_from_str("19.5").unwrap());
-    p.set_value("car.owners[1].Name", Value::ml_basic_string("Steve Parker").unwrap());
-    p.set_value("car.drivers[4].banned", Value::datetime_from_int(2013, 9, 23, 17, 34, 2).unwrap());
-    p.set_value("car.properties.color", Value::int(19));
-    p.set_value("car.properties.accident_dates[2]", Value::float(3443.34));
-    p.set_value("car.drivers[1]", Value::ml_literal_string("Mark").unwrap());
-    p.set_value("car.properties", Value::InlineTable(Rc::new(
-      vec![("make".into(), Value::literal_string("Honda").unwrap()),
-           ("transmission".into(), Value::bool(true))]
-    )));
-    p.set_value("car.drivers", Value::Array(Rc::new(
-      vec![Value::basic_string("Phil").unwrap(), Value::basic_string("Mary").unwrap()]
-    )));
-    p.set_value("car.properties", Value::InlineTable(Rc::new(
-      vec![("prop1".into(), Value::bool_from_str("TrUe").unwrap()),
-           ("prop2".into(), Value::bool_from_str("FALSE").unwrap()),
-           ("prop3".into(), Value::bool_from_str("truE").unwrap()),
-           ("prop4".into(), Value::bool_from_str("false").unwrap())]
-    )));
-    p.set_value("car.drivers", Value::Array(Rc::new(
-      vec![Value::int(1), Value::int(2), Value::int(3), Value::int(4),
-      Value::int(5), Value::int(6), Value::int(7), Value::int(8)]
-    )));
-    p.set_value("car.model", Value::literal_string("Accord").unwrap());
-    p.set_value("animal", Value::ml_basic_string("shark").unwrap());
-    assert_eq!(r#"animal = """shark"""
-
-[[car.owners]]
-Name = """Bob Jones"""
-Age = 19.5
-[[car.owners]]
-Name = """Steve Parker"""
-Age = 44
-
-[car.interior.seats]
-type = "vinyl"
-count = 5
-
-[car]
-model = 'Accord'
-"ωλèèℓƨ" = 4
-"ƭôƥ ƨƥèèδ" = 124.56
-"Date of Manufacture" = 2007-05-16T10:12:13.2324+04:00
-drivers = [1, 2, 3, 4, 5, 6, 7, 8]
-properties = { prop1 = true, prop2 = false, prop3 = true, prop4 = false }
-"#, format!("{}", p));
   }
 }
