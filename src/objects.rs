@@ -1,7 +1,7 @@
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
                    CommentOrNewLines, ArrayTOMLValue, Array, TOMLValue,
                    InlineTable, WSSep, TableKeyVal, ArrayType,
-                   HashTOMLValue, format_tt_keys};
+                   HashValue, format_tt_keys};
 use parser::{TOMLParser, Key};
 use types::{ParseError, Children};
 use std::cell::RefCell;
@@ -21,6 +21,7 @@ fn map_val_to_array_type(val: &TOMLValue) -> ArrayType {
     &TOMLValue::Array(_)          => ArrayType::Array,
     &TOMLValue::String(_,_)       => ArrayType::String,
     &TOMLValue::InlineTable(_)    => ArrayType::InlineTable,
+    &TOMLValue::Table             => panic!("Cannot have a table in an array"),
   }
 }
 
@@ -75,10 +76,13 @@ impl<'a> TOMLParser<'a> {
     }
   }
 
-  fn add_implicit_tables(map: &RefCell<&mut HashMap<String, HashTOMLValue<'a>>>,
+  fn add_implicit_tables(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>,
     tables_index: &RefCell<Vec<usize>>, table: Rc<TableType<'a>>) {
-    let mut last_key = TOMLParser::get_array_table_key(map, tables, tables_index);
+    let (valid, mut last_key, _) = TOMLParser::get_array_table_key(map, tables, tables_index);
+    if !valid {
+      return;
+    }
     let mut len = tables.borrow().len();
     let mut pop = false;
     // TODO: Need to add an array_table_root key that points to all of it's Children
@@ -97,7 +101,7 @@ impl<'a> TOMLParser<'a> {
         match *table {
           TableType::Array(ref tb) | TableType::Standard(ref tb) => {
             let mut first = true;
-            debug!("last_at.keys.len() - 1: {}, tb.keys.len() - 1: {}", last_at.keys.len() - 1, tb.keys.len() - 1);
+            debug!("last_at.keys.len(): {}, tb.keys.len(): {}", last_at.keys.len(), tb.keys.len());
             for i in 0..last_at.keys.len() {
               debug!("key {}: {}", i, last_at.keys[i].key);
             }
@@ -111,34 +115,38 @@ impl<'a> TOMLParser<'a> {
               debug!("index: {}, last_key: {}", i, last_key);
               if let Entry::Occupied(mut o) = borrow.entry(last_key.clone()) {
                 if first {
+
                   insert = match &o.get_mut().subkeys {
-                    &Children::Keys(ref vec_rf) => TOMLParser::insert(vec_rf, tb.keys[i].key.clone().into_owned()),
-                    &Children::Count(ref cell) => { cell.set(cell.get() + 1); true },
+                    &Children::Keys(ref vec_rf) => {debug!("Inserting subkey: {}", tb.keys[i].key); TOMLParser::insert(vec_rf, tb.keys[i].key.clone().into_owned())},
+                    &Children::Count(ref cell) => { debug!("Incrementing subkey count: {}", cell.get() + 1); cell.set(cell.get() + 1); true },
                   };
                   first = false;
                 } else {
+                  debug!("Inserting subkey: {}", tb.keys[i].key);
                   insert = match &o.get_mut().subkeys {
                     &Children::Keys(ref vec_rf) => TOMLParser::insert(vec_rf, tb.keys[i].key.clone().into_owned()),
                     _ => panic!("Implicit tables can only be Standard Tables: \"{}\"", format!("{}.{}", last_key, tb.keys[i].key)),
                   };
                 }
               }
-              if last_key != "$Root$" {
-                last_key.push_str(".");
-              } else {
-                last_key.truncate(0);
-              }
-              last_key.push_str(&tb.keys[i].key);
-              if insert {
-                debug!("insert last_key {}", last_key);
-                if i == tb.keys.len() - 1 {
-                  if let TableType::Array(_) = *table {
-                    borrow.insert(last_key.clone(), HashTOMLValue::one_count());
-                  } else {
-                    borrow.insert(last_key.clone(), HashTOMLValue::none_keys());
-                  }
+              if i < tb.keys.len() - 1 {
+                if last_key != "$Root$" {
+                  last_key.push_str(".");
                 } else {
-                  borrow.insert(last_key.clone(), HashTOMLValue::none_keys());
+                  last_key.truncate(0);
+                }
+                last_key.push_str(&tb.keys[i].key);
+                if insert {
+                  debug!("insert last_key {}", last_key);
+                  if i == tb.keys.len() - 1 {
+                    if let TableType::Array(_) = *table {
+                      borrow.insert(last_key.clone(), HashValue::one_count());
+                    } else {
+                      borrow.insert(last_key.clone(), HashValue::none_keys());
+                    }
+                  } else {
+                    borrow.insert(last_key.clone(), HashValue::none_keys());
+                  }
                 }
               }
             }
@@ -152,7 +160,7 @@ impl<'a> TOMLParser<'a> {
     debug!("Returning from add_implicit_tables");
   }
 
-  fn increment_array_table_index(map: &RefCell<&mut HashMap<String, HashTOMLValue<'a>>>,
+  fn increment_array_table_index(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,) {
     let parent_key = TOMLParser::get_key_parent(tables, tables_index);
     debug!("increment_array_table_index: {}", parent_key);
@@ -168,7 +176,7 @@ impl<'a> TOMLParser<'a> {
     tables_index.borrow_mut()[len - 1] = last_index + 1;
   }
 
-  fn add_to_table_set(map: &RefCell<&mut HashMap<String, HashTOMLValue<'a>>>,
+  fn add_to_table_set(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>, key: &str) -> bool{
     let parent_key = TOMLParser::get_key_parent(tables, tables_index);
     debug!("add_to_table_set: {}", parent_key);
@@ -233,10 +241,11 @@ impl<'a> TOMLParser<'a> {
         }
         let map = RefCell::new(&mut self.map);
         let mut table_key = "".to_string();
+        let mut parent_key = "$Root$".to_string();
         debug!("Before get len");
         let mut len = self.last_array_tables.borrow().len();
+        let current_key = format_tt_keys(&*res);
         if len > 0 {
-          let current_key = format_tt_keys(&*res);
           let last_key = format_tt_keys(&self.last_array_tables.borrow()[len - 1]);
           if current_key == last_key {
             error = true;
@@ -255,25 +264,30 @@ impl<'a> TOMLParser<'a> {
                 }
               }
             }
-            if len > 0 && current_key == format_tt_keys(&self.last_array_tables.borrow()[len - 1]) {
-              error = true;
-            } else {
-              self.last_array_tables.borrow_mut().push(res.clone());
-              self.last_array_tables_index.borrow_mut().push(0);
-              table_key = TOMLParser::get_array_table_key(&map, &self.last_array_tables, &self.last_array_tables_index);
-              self.last_array_tables.borrow_mut().pop();
-              self.last_array_tables_index.borrow_mut().pop();
-              debug!("Standard Table Key: {}", table_key);
-              if map.borrow().contains_key(&table_key) {
-                let map_borrow = map.borrow();
-                let hash_val_opt = map_borrow.get(&table_key);
-                if let Some(ref hash_val) = hash_val_opt {
-                  if let Children::Count(_) = hash_val.subkeys {
+          }
+        }
+        if len > 0 && current_key == format_tt_keys(&self.last_array_tables.borrow()[len - 1]) {
+          error = true;
+        } else {
+          self.last_array_tables.borrow_mut().push(res.clone());
+          self.last_array_tables_index.borrow_mut().push(0);
+          let tuple = TOMLParser::get_array_table_key(&map, &self.last_array_tables, &self.last_array_tables_index);
+          table_key = tuple.1;
+          parent_key = tuple.2;
+          self.last_array_tables.borrow_mut().pop();
+          self.last_array_tables_index.borrow_mut().pop();
+          if !tuple.0 {
+            error = true;
+          } else {
+            debug!("Standard Table Key: {}", table_key);
+            if map.borrow().contains_key(&table_key) {
+              let map_borrow = map.borrow();
+              let hash_val_opt = map_borrow.get(&table_key);
+              if let Some(ref hash_val) = hash_val_opt {
+                if let Some(ref rc_rc_val) = hash_val.value {
+                  if let TOMLValue::Table = *rc_rc_val.borrow() {
+                    debug!("Table error {}, table already defined", table_key);
                     error = true;
-                  } else if let Children::Keys(ref keys) = hash_val.subkeys {
-                    if keys.borrow().len() > 0 {
-                      error = true;
-                    }
                   }
                 }
               }
@@ -284,9 +298,11 @@ impl<'a> TOMLParser<'a> {
         if error {
           self.last_array_tables.borrow_mut().push(res.clone());
           self.last_array_tables_index.borrow_mut().push(0);
+          let array_table_key = TOMLParser::get_array_table_key(&map, &self.last_array_tables,
+            &self.last_array_tables_index).1;
+          debug!("Setting Invalid Table {} in Standard Table", array_table_key);
           self.errors.borrow_mut().push(ParseError::InvalidTable(
-            TOMLParser::get_array_table_key(&map, &self.last_array_tables,
-            &self.last_array_tables_index), self.line_count.get(),
+            array_table_key, self.line_count.get(),
             RefCell::new(HashMap::new())
           ));
           self.last_array_tables.borrow_mut().pop();
@@ -299,7 +315,24 @@ impl<'a> TOMLParser<'a> {
             TOMLParser::add_to_table_set(&map, &self.last_array_tables,
               &self.last_array_tables_index, &tbl.keys[keys_len - 1].key);
             self.array_error.set(false);
-            map.borrow_mut().insert(table_key, HashTOMLValue::none_keys());
+            debug!("insert table_key: {}", table_key);
+            let contains_key = map.borrow().contains_key(&table_key);
+            if contains_key {
+              debug!("contains table key {}", table_key);
+              if let Entry::Occupied(mut o) = map.borrow_mut().entry(table_key.clone()) {
+                o.get_mut().value = Some(Rc::new(RefCell::new(TOMLValue::Table)));
+                debug!("table key {}'s children: {:?}", table_key, o.get().subkeys)
+              }
+            } else {
+              debug!("insert new table key {}", table_key);
+              map.borrow_mut().insert(table_key.clone(), HashValue::table_keys());
+            }
+            if let Entry::Occupied(mut o) = map.borrow_mut().entry(parent_key) {
+              match &o.get_mut().subkeys {
+                &Children::Keys(ref vec_rf) => {TOMLParser::insert(vec_rf, tbl.keys[keys_len - 1].key.clone().into_owned());},
+                _ => panic!("Trying to add a key to an array: \"{}\"", table_key),
+              }
+            }
             self.last_array_tables.borrow_mut().push(res.clone());
             self.last_array_tables_index.borrow_mut().push(0);
             self.last_table = Some(res.clone());
@@ -381,17 +414,27 @@ impl<'a> TOMLParser<'a> {
             self.last_array_tables_index.borrow_mut().push(0);
           }
           debug!("Before call to get_array_table_key");
-          let full_key = TOMLParser::get_array_table_key(&map, &self.last_array_tables,
+          let (valid, full_key, parent_key) = TOMLParser::get_array_table_key(&map, &self.last_array_tables,
             &self.last_array_tables_index);
-          debug!("After call to get_array_table_key");
-          let contains_key = map.borrow().contains_key(&full_key);
-          if !contains_key {
-            map.borrow_mut().insert(full_key, HashTOMLValue::none_keys());
+          if !valid {
+            debug!("Setting Invalid Table {}", full_key);
+            self.errors.borrow_mut().push(ParseError::InvalidTable(
+              full_key, self.line_count.get(),
+              RefCell::new(HashMap::new())
+            ));
           } else {
-            TOMLParser::increment_array_table_index(&map, &self.last_array_tables,
-              &self.last_array_tables_index);
+            debug!("After call to get_array_table_key");
+            let contains_key = map.borrow().contains_key(&parent_key);
+            if !contains_key {
+              debug!("Insert new array of table key: {}", full_key);
+              map.borrow_mut().insert(parent_key, HashValue::one_count());
+              map.borrow_mut().insert(full_key, HashValue::none_keys());
+            } else {
+              debug!("Increment existing array of table key: {}", full_key);
+              map.borrow_mut().insert(full_key, HashValue::none_keys());
+            }
+            self.last_table = Some(res.clone());
           }
-          self.last_table = Some(res.clone());
         }
         res
       }
@@ -469,7 +512,7 @@ impl<'a> TOMLParser<'a> {
 
   pub fn array(mut self: TOMLParser<'a>, input: &'a str) -> (TOMLParser<'a>, IResult<&'a str, Rc<RefCell<Array>>>) {
     // Initialize last array type to None, we need a stack because arrays can be nested
-    debug!("*** array called on input:\t\t\t{}", input);
+    //debug!("*** array called on input:\t\t\t{}", input);
     self.last_array_type.borrow_mut().push(ArrayType::None);
     self.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     let (tmp, res) = self.array_internal(input);
@@ -479,7 +522,7 @@ impl<'a> TOMLParser<'a> {
       self.errors.borrow_mut().push(ParseError::MixedArray(
         TOMLParser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
           &self.last_array_tables_index, &self.keychain
-        ).0, self.line_count.get()
+        ).1, self.line_count.get()
       ));
     }
     self.keychain.borrow_mut().pop();

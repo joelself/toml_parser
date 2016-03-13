@@ -133,6 +133,7 @@ pub enum TOMLValue<'a> {
 	Array(Rc<RefCell<Array<'a>>>),
 	String(Cow<'a, str>, StrType),
 	InlineTable(Rc<RefCell<InlineTable<'a>>>),
+  Table,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -148,12 +149,12 @@ pub enum ArrayType {
 }
 
 #[derive(Debug, Eq, Clone)]
-pub struct HashTOMLValue<'a> {
+pub struct HashValue<'a> {
 	pub value: Option<Rc<RefCell<TOMLValue<'a>>>>, 
 	pub subkeys: Children,
 }
 
-impl<'a> Display for HashTOMLValue<'a> {
+impl<'a> Display for HashValue<'a> {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self.subkeys {
       Children::Count(ref c) => try!(write!(f, "Subkey Count: {}, ", c.get())),
@@ -173,47 +174,53 @@ impl<'a> Display for HashTOMLValue<'a> {
 }
 
 #[allow(dead_code)]
-impl<'a> HashTOMLValue<'a> {
-	pub fn new_keys(value: Rc<RefCell<TOMLValue<'a>>>) -> HashTOMLValue<'a> {
-		HashTOMLValue {
+impl<'a> HashValue<'a> {
+	pub fn new_keys(value: Rc<RefCell<TOMLValue<'a>>>) -> HashValue<'a> {
+		HashValue {
 			value: Some(value),
 			subkeys: Children::Keys(RefCell::new(vec![])),
 		}
 	}
-	pub fn none_keys() -> HashTOMLValue<'a> {
-		HashTOMLValue {
+	pub fn none_keys() -> HashValue<'a> {
+		HashValue {
 			value: None,
 			subkeys: Children::Keys(RefCell::new(vec![])),
 		}
 	}
-  pub fn one_keys(key: String) -> HashTOMLValue<'a> {
-    HashTOMLValue {
+  pub fn one_keys(key: String) -> HashValue<'a> {
+    HashValue {
       value: None,
       subkeys: Children::Keys(RefCell::new(vec![key])),
     }
   }
-	pub fn new_count(value: Rc<RefCell<TOMLValue<'a>>>) -> HashTOMLValue<'a> {
-		HashTOMLValue {
+	pub fn new_count(value: Rc<RefCell<TOMLValue<'a>>>) -> HashValue<'a> {
+		HashValue {
 			value: Some(value),
 			subkeys: Children::Count(Cell::new(0)),
 		}
 	}
-  pub fn none_count() -> HashTOMLValue<'a> {
-    HashTOMLValue {
+  pub fn none_count() -> HashValue<'a> {
+    HashValue {
       value: None,
       subkeys: Children::Count(Cell::new(0)),
     }
   }
-  pub fn one_count() -> HashTOMLValue<'a> {
-    HashTOMLValue {
+  pub fn one_count() -> HashValue<'a> {
+    HashValue {
       value: None,
       subkeys: Children::Count(Cell::new(1)),
     }
   }
+  pub fn table_keys() -> HashValue<'a> {
+    HashValue {
+      value: Some(Rc::new(RefCell::new(TOMLValue::Table))),
+      subkeys: Children::Keys(RefCell::new(vec![])),
+    }
+  }
 }
 
-impl<'a> PartialEq for HashTOMLValue<'a> {
-	fn eq(&self, other: &HashTOMLValue<'a>) -> bool {
+impl<'a> PartialEq for HashValue<'a> {
+	fn eq(&self, other: &HashValue<'a>) -> bool {
 		self.value == other.value
 	}
 }
@@ -228,6 +235,7 @@ impl<'a> PartialEq for TOMLValue<'a> {
 			(&TOMLValue::Array(ref i), &TOMLValue::Array(ref j)) if i == j => true,
 			(&TOMLValue::String(ref i, _), &TOMLValue::String(ref j, _)) if i == j => true,
 			(&TOMLValue::InlineTable(ref i), &TOMLValue::InlineTable(ref j)) if i == j => true,
+      (&TOMLValue::Table, &TOMLValue::Table) => true,
 			_ => false
 		}
 	}
@@ -250,8 +258,9 @@ impl<'a> Display for TOMLValue<'a> {
 					&StrType::MLLiteral => write!(f, "'''{}'''", i),
 				}
 			},
+      &TOMLValue::Table => write!(f, "$Table"),
 		}
-   }
+  }
 }
 
 #[derive(Debug, Eq)]

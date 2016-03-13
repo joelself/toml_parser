@@ -9,6 +9,7 @@ macro_rules! to_tval(
       &TOMLValue::Array(ref arr) => TOMLParser::sanitize_array(arr.clone()),
       &TOMLValue::String(ref s, t) => Value::String(s.clone(), t.clone()),
       &TOMLValue::InlineTable(ref it) => TOMLParser::sanitize_inline_table(it.clone()),
+      &TOMLValue::Table => panic!("Cannot convert a Table to a Value"),
     }
   );
 );

@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use ast::structs::{KeyVal, WSSep, TOMLValue, ErrorCode,
-                   HashTOMLValue, TableType, Table,
+                   HashValue, TableType, Table,
                    get_last_keys};
 use ::types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
               Children, Value};
@@ -36,6 +36,7 @@ impl<'a> TOMLParser<'a> {
           key_parent.push('.');
         }
         let keys = get_last_keys(last_table, t);
+        debug!("get_key_parent last_keys: {:?}", keys);
         for j in prev_end..keys.len() {
           if keys[j] != "$Root$" {
             key_parent.push_str(&keys[j]);
@@ -43,6 +44,7 @@ impl<'a> TOMLParser<'a> {
               key_parent.push('.');
             }
           }
+          debug!("get_key_parent key_parent: {}", key_parent);
         }
         prev_end = keys.len();
         let index = tables_index.borrow()[i];
@@ -51,16 +53,19 @@ impl<'a> TOMLParser<'a> {
         }
       }
     }
+    debug!("get_key_parent final key_parent: {}", key_parent);
     key_parent
   }
 
 
-  pub fn get_array_table_key(map: &RefCell<&mut HashMap<String, HashTOMLValue<'a>>>, tables: &RefCell<Vec<Rc<TableType<'a>>>>,
-    tables_index: &RefCell<Vec<usize>>) -> String {
+  pub fn get_array_table_key(map: &RefCell<&mut HashMap<String, HashValue<'a>>>, tables: &RefCell<Vec<Rc<TableType<'a>>>>,
+    tables_index: &RefCell<Vec<usize>>) -> (bool, String, String) {
     let mut full_key: String = String::new();
     let last_table: Option<&Table> = None;
     let tables_len = tables_index.borrow().len();
     let mut prev_end = 0;
+    let mut valid = true;
+    let mut parent_key = "$Root$".to_string();
     for i in 0..tables_len {
       match  &*tables.borrow()[i] {
         &TableType::Array(ref t) => {
@@ -83,7 +88,7 @@ impl<'a> TOMLParser<'a> {
                     }
                   },
                   Children::Keys(ref hs_rf) => {
-                    if hs_rf.borrow().contains(&keys[j+1]) {
+                    if hs_rf.borrow().contains(&keys[j+1]) || j+1 == len - 1 {
                       if full_key == "$Root$" {
                         full_key.truncate(0);
                       } else {
@@ -100,29 +105,60 @@ impl<'a> TOMLParser<'a> {
           }
           prev_end = len;
           full_key.push_str(&keys[len-1]);
+          let map_borrow = map.borrow();
+          debug!("Check if key \"{}\" has a value.", full_key);
+          let hash_value_opt = map_borrow.get(&full_key);
+          if let Some(hash_value) = hash_value_opt {
+            if let Some(_) = hash_value.value {
+              debug!("Key \"{}\" has a value.", full_key);
+              valid = false;
+            } else if let Children::Keys(_) = hash_value.subkeys {
+              debug!("Array Key \"{}\" conflicts with table key.", full_key);
+              valid = false;
+            }
+          }
+          //valid = valid && !TOMLParser::key_has_value(&full_key, map);
           let index = tables_index.borrow()[i];
           if i < tables_len - 1 {
             full_key.push_str(&format!("[{}].", index));
           } else {
+            parent_key = full_key.clone();
             full_key.push_str(&format!("[{}]", index));
           }
         },
         &TableType::Standard(ref t) => {
           // Standard tables can't be nested so this has to be the last table in the vector
           let keys = get_last_keys(last_table, t);
+          debug!("get_last_keys {:?}, prev_end: {}", keys, prev_end);
           for j in prev_end..keys.len() - 1 {
             if keys[j] == "$Root$" {
               continue;
             }
             full_key.push_str(&keys[j]);
+            valid = valid && !TOMLParser::key_has_value(&full_key, map);
             full_key.push('.');
           }
+          parent_key = full_key.clone();
           full_key.push_str(&keys[keys.len() - 1]);
+          valid = valid && !TOMLParser::key_has_value(&full_key, map);
         }
       }
     }
-    debug!("full_key: {}", full_key);
-    full_key
+    debug!("valid: {}, full_key: {}, parent_key: {}", valid, full_key, parent_key);
+    (valid, full_key, parent_key)
+  }
+
+  fn key_has_value(key: &str, map: &RefCell<&mut HashMap<String, HashValue<'a>>>) -> bool {
+    let map_borrow = map.borrow();
+    debug!("Check if key \"{}\" has a value.", key);
+    let hash_value_opt = map_borrow.get(key);
+    if let Some(hash_value) = hash_value_opt {
+      if let Some(_) = hash_value.value {
+        debug!("/================= Key \"{}\" has a value.", key);
+        return true;
+      }
+    }
+    return false;
   }
 
   fn get_keychain_key(keychain: &RefCell<Vec<Key<'a>>>) -> (String, String) {
@@ -146,11 +182,11 @@ impl<'a> TOMLParser<'a> {
     return (key, parent_key);
   }
 
-  pub fn get_full_key(map: &RefCell<&mut HashMap<String, HashTOMLValue<'a>>>,
+  pub fn get_full_key(map: &RefCell<&mut HashMap<String, HashValue<'a>>>,
     tables: &RefCell<Vec<Rc<TableType<'a>>>>, tables_index: &RefCell<Vec<usize>>,
-    keychain: &RefCell<Vec<Key<'a>>>) -> (String, String) {
+    keychain: &RefCell<Vec<Key<'a>>>) -> (bool, String, String) {
 
-    let array_key = TOMLParser::get_array_table_key(map, tables, tables_index);
+    let (valid, array_key, _) = TOMLParser::get_array_table_key(map, tables, tables_index);
     let (chain_key, parent_chain_key) = TOMLParser::get_keychain_key(keychain);
     debug!("array_key: {}, chain_key: {}, parent_chain_key: {}", array_key, chain_key, parent_chain_key);
     let mut full_key = String::new();
@@ -165,8 +201,8 @@ impl<'a> TOMLParser<'a> {
     }
     full_key.push_str(&chain_key);
     parent_key.push_str(&parent_chain_key);
-    debug!("full_key: {}, parent_key: {}", full_key, parent_key);
-    return (full_key, parent_key);
+    debug!("valid: {}, full_key: {}, parent_key: {}", valid, full_key, parent_key);
+    return (valid, full_key, parent_key);
   }
 
   pub fn insert_keyval_into_map(&mut self, val: Rc<RefCell<TOMLValue<'a>>>) {
@@ -214,8 +250,8 @@ impl<'a> TOMLParser<'a> {
             self.last_array_tables.borrow_mut().push(ttype.clone());
             let tuple = TOMLParser::get_full_key(&map, &self.last_array_tables,
               &self.last_array_tables_index, &self.keychain);
-            full_key = tuple.0;
-            parent_key = tuple.1;
+            full_key = tuple.1;
+            parent_key = tuple.2;
             self.last_array_tables.borrow_mut().pop();
             let map_borrow = map.borrow();
             let hv_opt = map_borrow.get(&full_key);
@@ -232,8 +268,8 @@ impl<'a> TOMLParser<'a> {
           TableType::Array(_) => {
             let tuple = TOMLParser::get_full_key(&map, &self.last_array_tables,
               &self.last_array_tables_index, &self.keychain);
-            full_key = tuple.0;
-            parent_key = tuple.1;
+            full_key = tuple.1;
+            parent_key = tuple.2;
             let map_borrow = map.borrow();
             let hv_opt = map_borrow.get(&full_key);
             if let Some(hv) = hv_opt {
@@ -270,8 +306,8 @@ impl<'a> TOMLParser<'a> {
       } else if insert {
         debug!("Insert full_key: {}, parent_key: {}, val: {}", full_key, parent_key, *(*val).borrow());
         match *val.borrow() {
-          TOMLValue::InlineTable(_) => map.borrow_mut().insert(full_key.clone(), HashTOMLValue::new_keys(val.clone())),
-          _                     => map.borrow_mut().insert(full_key.clone(), HashTOMLValue::new_count(val.clone())),
+          TOMLValue::InlineTable(_) => map.borrow_mut().insert(full_key.clone(), HashValue::new_keys(val.clone())),
+          _                     => map.borrow_mut().insert(full_key.clone(), HashValue::new_count(val.clone())),
         };
       }
 
@@ -295,10 +331,10 @@ impl<'a> TOMLParser<'a> {
             debug!("vacant parent");
             if let Key::Index(_) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
               debug!("initialize to 1");
-              v.insert(HashTOMLValue::one_count());
+              v.insert(HashValue::one_count());
             } else if let Key::Str(ref s) = self.keychain.borrow()[self.keychain.borrow().len() - 1] {
               debug!("initialize to string: {}", s);
-              v.insert(HashTOMLValue::one_keys(s.clone().into_owned()));
+              v.insert(HashValue::one_keys(s.clone().into_owned()));
             }
           },
         }
@@ -475,7 +511,7 @@ impl<'a> TOMLParser<'a> {
             self.errors.borrow_mut().push(ParseError::InvalidDateTime(
               TOMLParser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
                 &self.last_array_tables_index, &self.keychain
-              ).0, self.line_count.get()
+              ).1, self.line_count.get()
             ));
           }
           res

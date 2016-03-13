@@ -6,7 +6,7 @@ use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use std::borrow::Cow;
 use nom::IResult;
-use ast::structs::{Toml, ArrayType, HashTOMLValue, TableType, TOMLValue, Array, InlineTable,
+use ast::structs::{Toml, ArrayType, HashValue, TableType, TOMLValue, Array, InlineTable,
                    ArrayTOMLValue, WSSep, TableKeyVal};
 use types::{ParseError, ParseResult, Value, Children};
 
@@ -36,7 +36,7 @@ impl<'a> Key<'a> {
 
 pub struct TOMLParser<'a> {
 	pub root: RefCell<Toml<'a>>,
-	pub map: HashMap<String, HashTOMLValue<'a>>,
+	pub map: HashMap<String, HashValue<'a>>,
 	pub errors: RefCell<Vec<ParseError<'a>>>,
 	pub leftover: &'a str,
 	pub line_count: Cell<usize>,
@@ -54,7 +54,7 @@ pub struct TOMLParser<'a> {
 impl<'a> TOMLParser<'a> {
 	pub fn new() -> TOMLParser<'a> {
 		let mut map = HashMap::new();
-		map.insert("$Root$".to_string(), HashTOMLValue::none_keys());
+		map.insert("$Root$".to_string(), HashValue::none_keys());
 		TOMLParser{ root: RefCell::new(Toml{ exprs: vec![] }), map: map,
 						errors: RefCell::new(vec![]), leftover: "",
 						line_count: Cell::new(0), last_array_tables: RefCell::new(vec![]),
@@ -360,7 +360,7 @@ impl<'a> TOMLParser<'a> {
       },
       _ => {
         self.map.entry(key.clone()).or_insert(
-          HashTOMLValue::new_count(val.clone())
+          HashValue::new_count(val.clone())
         );
       },
     }
@@ -449,6 +449,7 @@ impl<'a> Display for TOMLParser<'a> {
 
 #[cfg(test)]
 mod test {
+  extern crate env_logger;
   use std::cell::{Cell, RefCell};
   use std::rc::Rc;
   use parser::TOMLParser;
@@ -458,6 +459,17 @@ mod test {
     fn get<'a>() -> &'a str {
       return r#"animal = "bear"
 
+[[car.owners]]
+Name = """Bob Jones"""
+Age = 25
+[[car.owners]]
+Name = 'Jane Doe'
+Age = 44
+
+[car.interior.seats]
+type = '''fabric'''
+count = 5
+
 [car]
 model = "Civic"
 "ωλèèℓƨ" = 4
@@ -466,23 +478,14 @@ model = "Civic"
 drivers = ["Bob", "Jane", "John", "Michael", { disallowed = "Chris", banned="Sally"}]
 properties = { color = "red", "plate number" = "ABC 345",
                accident_dates = [2008-09-29, 2011-01-16, 2014-11-30T03:13:54]}
-
-[car.interior.seats]
-type = '''fabric'''
-count = 5
-
-[[car.owners]]
-Name = """Bob Jones"""
-Age = 25
-[[car.owners]]
-Name = 'Jane Doe'
-Age = 44"#;
+"#;
     }
   }
   
 
   #[test]
   fn test_bare_key() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_value("animal".to_string()), res2opt!(Value::basic_string("bear")));
@@ -490,6 +493,7 @@ Age = 44"#;
 
   #[test]
   fn test_key_val() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_value("car.model"), res2opt!(Value::basic_string("Civic")));
@@ -497,6 +501,7 @@ Age = 44"#;
 
   #[test]
   fn test_quoted_key_val_int() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_value("car.\"ωλèèℓƨ\""), res2opt!(Value::int_from_str("4")));
@@ -504,6 +509,7 @@ Age = 44"#;
 
   #[test]
   fn test_quoted_key_val_float() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_value("car.\"ƭôƥ ƨƥèèδ\""), res2opt!(Value::float_from_str("124.56")));
@@ -511,6 +517,7 @@ Age = 44"#;
 
   #[test]
   fn test_key_array() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_value("car.drivers[0]"), res2opt!(Value::basic_string("Bob")));
@@ -523,6 +530,7 @@ Age = 44"#;
 
   #[test]
   fn test_key_inline_table() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_value("car.properties.color"), res2opt!(Value::basic_string("red")));
@@ -534,7 +542,7 @@ Age = 44"#;
 
   #[test]
   fn test_implicit_table() {
-    
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_value("car.interior.seats.type"), res2opt!(Value::ml_literal_string("fabric")));
@@ -543,6 +551,7 @@ Age = 44"#;
 
   #[test]
   fn test_array_table() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_value("car.owners[0].Name"), res2opt!(Value::ml_basic_string("Bob Jones")));
@@ -553,6 +562,7 @@ Age = 44"#;
   
   #[test]
   fn test_get_root_children() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_children(""), Some(&Children::Keys(RefCell::new(vec!["animal".to_string(), "car".to_string()]))));
@@ -560,16 +570,18 @@ Age = 44"#;
   
   #[test]
   fn test_get_table_children() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_children("car".to_string()),
-      Some(&Children::Keys(RefCell::new(vec!["model".to_string(), "\"ωλèèℓƨ\"".to_string(), "\"ƭôƥ ƨƥèèδ\"".to_string(),
-        "\"Date of Manufacture\"".to_string(), "drivers".to_string(), "properties".to_string(), "interior".to_string(),
-        "owners".to_string()]))));
+      Some(&Children::Keys(RefCell::new(vec!["owners".to_string(), "interior".to_string(), "model".to_string(), "\"ωλèèℓƨ\"".to_string(), "\"ƭôƥ ƨƥèèδ\"".to_string(),
+        "\"Date of Manufacture\"".to_string(), "drivers".to_string(), "properties".to_string(),
+      ]))));
   }
   
   #[test]
   fn test_get_array_children() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_children("car.drivers"), Some(&Children::Count(Cell::new(5))));
@@ -577,6 +589,7 @@ Age = 44"#;
   
   #[test]
   fn test_get_inline_table_children() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_children("car.properties"),
@@ -585,6 +598,7 @@ Age = 44"#;
   
   #[test]
   fn test_get_nested_inline_table_children() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_children("car.drivers[4]"),
@@ -593,6 +607,7 @@ Age = 44"#;
   
   #[test]
   fn test_get_nested_array_children() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_children("car.properties.accident_dates"), Some(&Children::Count(Cell::new(3))));
@@ -600,6 +615,7 @@ Age = 44"#;
   
   #[test]
   fn test_implicit_table_children() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_children("car.interior.seats"),
@@ -608,6 +624,7 @@ Age = 44"#;
   
   #[test]
   fn test_get_array_of_table_children() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_children("car.owners"), Some(&Children::Count(Cell::new(2))));
@@ -615,6 +632,7 @@ Age = 44"#;
   
   #[test]
   fn test_get_array_of_table0_children() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_children("car.owners[0]"),
@@ -623,6 +641,7 @@ Age = 44"#;
   
   #[test]
   fn test_get_array_of_table1_children() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (p, _) = p.parse(TT::get());
     assert_eq!(p.get_children("car.owners[1]"),
@@ -631,6 +650,7 @@ Age = 44"#;
   
   #[test]
   fn test_set_bare_key() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("animal", Value::ml_basic_string("shark").unwrap());
@@ -640,6 +660,7 @@ Age = 44"#;
   
   #[test]
   fn test_set_table_key() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.model", Value::literal_string("Accord").unwrap());
@@ -649,6 +670,7 @@ Age = 44"#;
   
   #[test]
   fn test_set_array_element_key() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.drivers[1]", Value::ml_literal_string("Mark").unwrap());
@@ -658,6 +680,7 @@ Age = 44"#;
   
   #[test]
   fn test_set_nested_aray_element_key() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.properties.accident_dates[2]", Value::float(3443.34));
@@ -667,6 +690,7 @@ Age = 44"#;
   
   #[test]
   fn test_set_inline_table_element_key() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.properties.color", Value::int(19));
@@ -676,6 +700,7 @@ Age = 44"#;
   
   #[test]
   fn test_set_nested_inline_table_element_key() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.drivers[4].banned", Value::datetime_from_int(2013, 9, 23, 17, 34, 2).unwrap());
@@ -686,6 +711,7 @@ Age = 44"#;
   
   #[test]
   fn test_truncate_array() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.drivers", Value::Array(Rc::new(
@@ -701,6 +727,7 @@ Age = 44"#;
   
   #[test]
   fn test_truncate_inline_table() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.properties", Value::InlineTable(Rc::new(
@@ -716,6 +743,7 @@ Age = 44"#;
   
   #[test]
   fn test_extend_array() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.drivers", Value::Array(Rc::new(
@@ -738,6 +766,7 @@ Age = 44"#;
   
   #[test]
   fn test_extend_inline_table() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.properties", Value::InlineTable(Rc::new(
@@ -757,6 +786,7 @@ Age = 44"#;
   
   #[test]
   fn test_set_implicit_table_key() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.interior.seats.type", Value::basic_string("leather").unwrap());
@@ -766,6 +796,7 @@ Age = 44"#;
   
   #[test]
   fn test_set_array_of_table0_key() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.owners[0].Age", Value::float_from_str("19.5").unwrap());
@@ -775,6 +806,7 @@ Age = 44"#;
   
   #[test]
   fn test_set_array_of_table1_key() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.owners[1].Name", Value::ml_basic_string("Steve Parker").unwrap());
@@ -784,6 +816,7 @@ Age = 44"#;
   
   #[test]
   fn test_truncate_array_check_keys() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("database.ports", Value::datetime_from_int(2000, 02, 16, 10, 31, 06).unwrap());
@@ -796,6 +829,7 @@ Age = 44"#;
   
   #[test]
   fn test_truncate_inline_table_check_keys() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("database.servers", Value::datetime_from_str("4000", "02", "27", "01", "59", "59").unwrap());
@@ -808,6 +842,7 @@ Age = 44"#;
   
   #[test]
   fn test_output_after_set() {
+    let _ = env_logger::init();
     let p = TOMLParser::new();
     let (mut p, _) = p.parse(TT::get());
     p.set_value("car.interior.seats.type", Value::basic_string("leather").unwrap());
@@ -839,6 +874,17 @@ Age = 44"#;
     p.set_value("animal", Value::ml_basic_string("shark").unwrap());
     assert_eq!(r#"animal = """shark"""
 
+[[car.owners]]
+Name = """Bob Jones"""
+Age = 19.5
+[[car.owners]]
+Name = """Steve Parker"""
+Age = 44
+
+[car.interior.seats]
+type = "vinyl"
+count = 5
+
 [car]
 model = 'Accord'
 "ωλèèℓƨ" = 4
@@ -846,16 +892,6 @@ model = 'Accord'
 "Date of Manufacture" = 2007-05-16T10:12:13.2324+04:00
 drivers = [1, 2, 3, 4, 5, 6, 7, 8]
 properties = { prop1 = true, prop2 = false, prop3 = true, prop4 = false }
-
-[car.interior.seats]
-type = "vinyl"
-count = 5
-
-[[car.owners]]
-Name = """Bob Jones"""
-Age = 19.5
-[[car.owners]]
-Name = """Steve Parker"""
-Age = 44"#, format!("{}", p));
+"#, format!("{}", p));
   }
 }

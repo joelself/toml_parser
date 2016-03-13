@@ -13,8 +13,8 @@ use nom::IResult;
 
 pub enum ParseResult<'a> {
 	Full,
-	Partial(Cow<'a, str>, usize, usize),
 	FullError,
+	Partial(Cow<'a, str>, usize, usize),
 	PartialError(Cow<'a, str>, usize, usize),
 	Failure(usize, usize),
 }
@@ -536,7 +536,7 @@ impl Display for TOMLError {
 
 impl TOMLError {
   fn new(msg: String) -> TOMLError {
-    error!("{}", msg);
+    warn!("{}", msg);
     TOMLError{message: msg}
   }
 }
@@ -618,7 +618,7 @@ impl<'a> TimeOffsetAmount<'a> {
   	let pn = match pos_neg.into().as_ref() {
   		"+" => PosNeg::Pos,
   		"-"	=> PosNeg::Neg,
-      _   => {error!("PosNeg value is neither a '+' or a '-', defaulting to '+'."); PosNeg::Pos},
+      _   => {warn!("PosNeg value is neither a '+' or a '-', defaulting to '+'."); PosNeg::Pos},
   	};
   	TimeOffsetAmount{pos_neg: pn, hour: hour.into().into(), minute: minute.into().into()}
   }

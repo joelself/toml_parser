@@ -19,7 +19,7 @@
   - [x] DateTime validation
 
 * ast/structs.rs
-	- [x] Re-implement HashTOMLValue to have a list of children or max index of children
+	- [x] Re-implement HashValue to have a list of children or max index of children
 	- [x] Fix DateTime to allow only Date, only DateTime (no fractional seconds), only DateTime (with fractional seconds), Full DateTime with offset
 	- [x] Change TimeOffset::Z to TimeOffset::Zulu?
 	- [x] Change '+'/'-' to enum
@@ -52,11 +52,11 @@
     - [x] Add unit tests for getting sub-keys
 	- [x] Add unit tests for setting values
 	- [x] Add unit tests to check the map to make sure removed keys are gone
-  - [ ] Have parse return a tuple with the parser and the result
+  - [x] Have parse return a tuple with the parser and the result
   
 * tests/assets.rs
-	- [ ] Add failure/error tests for invalid toml-test's
-	- [ ] Add toml/examples/example-v0.4.0.toml to success tests
+	- [x] Add failure/error tests for invalid toml-test's
+	- [x] Add toml/examples/example-v0.4.0.toml to success tests
 
 * tests/parser_tests.rs
 	- [ ] Add integration tests for parser, like unit tests, but load a larger document -> validate, do a bunch of gets -> validate, do a bunch of sets -> validate, then do a bunch of gets
