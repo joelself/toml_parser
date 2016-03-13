@@ -13,9 +13,9 @@ use nom::IResult;
 
 pub enum ParseResult<'a> {
 	Full,
-	Partial(Cow<'a, str>),
-	FullError(&'a RefCell<Vec<ParseError<'a>>>),
-	PartialError(Cow<'a, str>, &'a RefCell<Vec<ParseError<'a>>>),
+	Partial(Cow<'a, str>, usize, usize),
+	FullError,
+	PartialError(Cow<'a, str>, usize, usize),
 	Failure(usize, usize),
 }
 

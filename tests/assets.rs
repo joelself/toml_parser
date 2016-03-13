@@ -7,7 +7,7 @@ use std::io::{Read, BufReader};
 fn verify(input: String) -> (bool, Option<(String, String)>) {
     let input_copy = input.clone();
     let parser = TOMLParser::new();
-    let parser = parser.parse(&input_copy);
+    let (parser, _) = parser.parse(&input_copy);
     let result = format!("{}", parser);
     if result != input  {
         return (false, Some((input, result)));

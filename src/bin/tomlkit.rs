@@ -9,7 +9,7 @@ use tomllib::types::{StrType, Value, TimeOffsetAmount, TimeOffset,
 fn main() {
   env_logger::init().unwrap();
 	let parser = TOMLParser::new();
-	let mut parser = parser.parse(r#"# This is a TOML document.
+	let (mut parser, _) = parser.parse(r#"# This is a TOML document.
 
 title = "TOML Example"
 
