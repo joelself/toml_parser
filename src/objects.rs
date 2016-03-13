@@ -403,6 +403,15 @@ impl<'a> TOMLParser<'a> {
                     &self.last_array_tables_index,  res.clone());
                   self.last_array_tables.borrow_mut().push(res.clone());
                   self.last_array_tables_index.borrow_mut().push(0);
+                  let parent_key = TOMLParser::get_key_parent(&self.last_array_tables,
+                    &self.last_array_tables_index);
+                  debug!("Got parent key: {}", parent_key);
+                  let contains_key = map.borrow().contains_key(&parent_key);
+                  if contains_key {
+                    debug!("Increment array table index the third");
+                    TOMLParser::increment_array_table_index(&map, &self.last_array_tables,
+                      &self.last_array_tables_index);
+                  }
                 }
               }
             }

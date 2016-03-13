@@ -2,7 +2,7 @@
 	- [x] Switch back to using nom now that the new version has been released
   - [x] Logging
   - [x] Add line numbers to errors
-  - [ ] Add documentation to public enums, structs, functions, methods and macros
+  - [ ] **Add documentation to public enums, structs, functions, methods and macros**
   - [x] Switch names of TOMLValue and Value
   - [x] Rename TOMLParser to TOMLTOMLParser
 
@@ -59,7 +59,7 @@
 	- [x] Add toml/examples/example-v0.4.0.toml to success tests
 
 * tests/parser_tests.rs
-	- [ ] Add integration tests for parser, like unit tests, but load a larger document -> validate, do a bunch of gets -> validate, do a bunch of sets -> validate, then do a bunch of gets
+	- [ ] __Add integration tests for parser, like unit tests, but load a larger document -> validate, do a bunch of gets -> validate, do a bunch of sets -> validate, then do a bunch of gets (*in progress*)__
 
 * types.rs
   - [x] Log an error on a return result of Result::Err

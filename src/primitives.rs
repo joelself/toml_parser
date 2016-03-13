@@ -117,8 +117,18 @@ impl<'a> TOMLParser<'a> {
               valid = false;
             }
           }
-          //valid = valid && !TOMLParser::key_has_value(&full_key, map);
-          let index = tables_index.borrow()[i];
+          let map_borrow = map.borrow();
+          let hash_value_opt = map_borrow.get(&full_key);
+          let index;
+          match hash_value_opt {
+            Some(hash_value) =>  {
+              index = match hash_value.subkeys {
+                Children::Count(ref c) => c.get() - 1,
+                _ => tables_index.borrow()[i],
+              };
+            },
+            _ => { index = tables_index.borrow()[i]; },
+          }
           if i < tables_len - 1 {
             full_key.push_str(&format!("[{}].", index));
           } else {
@@ -154,7 +164,7 @@ impl<'a> TOMLParser<'a> {
     let hash_value_opt = map_borrow.get(key);
     if let Some(hash_value) = hash_value_opt {
       if let Some(_) = hash_value.value {
-        debug!("/================= Key \"{}\" has a value.", key);
+        debug!("/== Key \"{}\" has a value.", key);
         return true;
       }
     }
@@ -274,6 +284,7 @@ impl<'a> TOMLParser<'a> {
             let hv_opt = map_borrow.get(&full_key);
             if let Some(hv) = hv_opt {
               if let Some(_) = hv.value {
+                debug!("{} hash value exists in table.", full_key);
                 error = true;
               } else {
                 setvalue = true;
