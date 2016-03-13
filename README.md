@@ -35,7 +35,7 @@ Next steps for the first release are:
 - [x] Unit tests for key look-up
   - [x] Unit tests for sub-key look-up
 - [x] Unit tests for key modification
-- [ ] An integration test that fails or returns errors for each invalid toml-test
+- [x] An integration test that fails or returns errors for each invalid toml-test
 - [ ] Add documentation on public structs, enums, functions, methods, and macros
 - [ ] Add example code somewhere, possibly part of the documentation, probably some in the README too.
 
