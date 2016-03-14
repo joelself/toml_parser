@@ -1,8 +1,9 @@
 extern crate tomllib;
 extern crate env_logger;
 use tomllib::parser::TOMLParser;
-use tomllib::types::{ParseResult, Value, ParseError};
+use tomllib::types::{ParseResult, Value, ParseError, Children};
 use std::rc::Rc;
+use std::cell::{Cell, RefCell};
 
 
 
@@ -120,35 +121,8 @@ fn test_mixed_tables() {
   let _ = env_logger::init();
 
   let parser = TOMLParser::new();
-  let (parser, result) = parser.parse(TT::get());
-  let mut get_errors = false;
-  let mut leftover = "".to_string();
-  match result {
-    ParseResult::FullError => {get_errors = true;},
-    ParseResult::Partial(l,_,_) => {leftover = l.into_owned();},
-    ParseResult::PartialError(l,_,_) => {get_errors = true; leftover = l.into_owned();},
-    ParseResult::Failure(line,_) => {panic!("failed at line number: {}", line);},
-    _ => (),
-  }
-  let mut full_panic = "".to_string();
-  if get_errors {
-    let errors = parser.get_errors();
-    for error in errors.borrow().iter() {
-      match error {
-        &ParseError::MixedArray(ref key, _) => full_panic.push_str(&format!("MixedArray error: {}\n", key)),
-        &ParseError::DuplicateKey(ref key, _, _) => full_panic.push_str(&format!("Duplicate key error: {}\n", key)),
-        &ParseError::InvalidTable(ref key, _, _) => full_panic.push_str(&format!("Invalid table error: {}\n", key)),
-        &ParseError::InvalidDateTime(ref key, _) => full_panic.push_str(&format!("Invalid datetime error: {}\n", key)),
-      }
-    }
-  }
-  if leftover != "" {
-    full_panic.push_str(&format!("$$ Leftover =\n\"{}\"", leftover));
-  }
-  parser.print_keys_and_values_debug();
-  if full_panic != "" {
-    assert!(false, full_panic);
-  }
+  let (_, result) = parser.parse(TT::get());
+  assert!(result == ParseResult::Full, "Parse of mixed tables document had errors when it shouldn't have.");
 }
 
 fn check_errors(parser: &TOMLParser, result: &ParseResult) -> (bool, String){
@@ -270,4 +244,41 @@ fn test_basic_get_on_mixed_tables() {
   assert_eq!(Value::ml_basic_string("bye").unwrap(), parser.get_value("foo.\"bar\"[2].array[2].you[1]").unwrap());
   assert_eq!(Value::basic_string("truck").unwrap(), parser.get_value("foo.\"bar\"[2].array[2].fire").unwrap());
   assert_eq!(Value::int(3), parser.get_value("foo.\"bar\"[2].array[3].three").unwrap());
+}
+
+#[test]
+fn test_get_children_on_mixed_tables() {
+  let _ = env_logger::init();
+
+  let parser = TOMLParser::new();
+  let (parser, _) = parser.parse(TT::get());
+  parser.print_keys_and_values();
+  // test getting bare key
+  // Children::Count(Cell::new())
+  // Children::Keys(RefCell::new(vec![]))
+  assert_eq!(&Children::Count(Cell::new(0)), parser.get_children("fish").unwrap());
+  // test table key lookup
+  assert_eq!(&Children::Count(Cell::new(0)), parser.get_children("foo.\"δïáϱñôƨïƨ\"").unwrap());
+  // test array table key lookup
+  assert_eq!(&Children::Count(Cell::new(3)), parser.get_children("foo.\"bar\"").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["baz".to_string(), "qux".to_string()])), parser.get_children("foo.\"bar\"[0]").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["baz".to_string(), "qux".to_string()])), parser.get_children("foo.\"bar\"[1]").unwrap());
+  assert_eq!(&Children::Count(Cell::new(2)), parser.get_children("foo.quality").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["furniture".to_string(), "machine".to_string(), "labor".to_string()])), parser.get_children("foo.quality[0]").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["\"ƥèřïôδ\"".to_string(), "\"inline table\"".to_string()])), parser.get_children("foo.quality[0].machine.parts.service").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["drink".to_string(), "meal".to_string(), "dessert".to_string()])), parser.get_children("foo.quality[0].machine.parts.service.\"inline table\"").unwrap());
+  assert_eq!(&Children::Count(Cell::new(2)), parser.get_children("foo.quality[0].machine.parts.service.\"inline table\".meal").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["start".to_string(), "end".to_string()])), parser.get_children("foo.quality[0].machine.parts.service.\"inline table\".meal[1]").unwrap());
+  assert_eq!(&Children::Count(Cell::new(2)), parser.get_children("foo.quality[0].labor").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["Name".to_string()])), parser.get_children("foo.quality[0].labor[0]").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["Name".to_string()])), parser.get_children("foo.quality[0].labor[1]").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["money".to_string()])), parser.get_children("foo.quality[1]").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["baz".to_string(), "qux".to_string(), "array".to_string()])), parser.get_children("foo.\"bar\"[2]").unwrap());
+  assert_eq!(&Children::Count(Cell::new(4)), parser.get_children("foo.\"bar\"[2].array").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["one".to_string()])), parser.get_children("foo.\"bar\"[2].array[0]").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["two".to_string()])), parser.get_children("foo.\"bar\"[2].array[1]").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["you".to_string(), "fire".to_string()])), parser.get_children("foo.\"bar\"[2].array[2]").unwrap());
+  assert_eq!(&Children::Count(Cell::new(2)), parser.get_children("foo.\"bar\"[2].array[2].you").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["three".to_string()])), parser.get_children("foo.\"bar\"[2].array[3]").unwrap());
+  assert_eq!(&Children::Keys(RefCell::new(vec!["\"bar\"".to_string(), "quality".to_string(), "\"δïáϱñôƨïƨ\"".to_string(), "\"ƥřôϱñôƨïƨ\"".to_string(), "hypnosis".to_string()])), parser.get_children("foo").unwrap());
 }

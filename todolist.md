@@ -59,7 +59,12 @@
 	- [x] Add toml/examples/example-v0.4.0.toml to success tests
 
 * tests/parser_tests.rs
-	- [ ] __Add integration tests for parser, like unit tests, but load a larger document -> validate, do a bunch of gets -> validate, do a bunch of sets -> validate, then do a bunch of gets (*in progress*)__
+	- [ ] Add integration tests for parser: 
+    - [x] load a larger document -> validate
+    - [x] do a bunch of gets -> validate
+    - [x] do a bunch of get_children -> validate
+    - [ ] do a bunch of sets, then do a bunch of gets -> validate
+    - [ ] Add failure tests for the other 3 types of error
 
 * types.rs
   - [x] Log an error on a return result of Result::Err

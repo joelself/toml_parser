@@ -10,7 +10,7 @@ use std::borrow::Cow;
 use parser::TOMLParser;
 use nom::IResult;
 
-
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum ParseResult<'a> {
 	Full,
 	FullError,
