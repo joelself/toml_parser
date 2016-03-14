@@ -61,7 +61,6 @@ fn test_all_assets(valid: bool) {
       let mut contents = BufReader::new(&file);
       let mut buffer = String::new();
       if contents.read_to_string(&mut buffer).is_ok() {
-        println!("Testing file \"{}\"", filename);
         if valid {
           let (success, in_out) = verify_valid(buffer);
           if !success {

@@ -19,6 +19,13 @@ pub enum ParseResult<'a> {
 	Failure(usize, usize),
 }
 
+pub enum ParseError<'a> {
+	MixedArray(String, usize),
+	DuplicateKey(String, usize, Value<'a>),
+	InvalidTable(String, usize, RefCell<HashMap<String, Value<'a>>>),
+  InvalidDateTime(String, usize)
+}
+
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum StrType {
 	Basic,
@@ -854,14 +861,6 @@ impl<'a> DateTime<'a> {
     return true;
   }
 }
-
-pub enum ParseError<'a> {
-	MixedArray(String, usize),
-	DuplicateKey(String, usize, Value<'a>),
-	InvalidTable(String, usize, RefCell<HashMap<String, Value<'a>>>),
-  InvalidDateTime(String, usize)
-}
-
 
 #[cfg(test)]
 mod test {

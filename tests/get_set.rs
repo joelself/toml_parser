@@ -252,10 +252,7 @@ fn test_get_children_on_mixed_tables() {
 
   let parser = TOMLParser::new();
   let (parser, _) = parser.parse(TT::get());
-  parser.print_keys_and_values();
   // test getting bare key
-  // Children::Count(Cell::new())
-  // Children::Keys(RefCell::new(vec![]))
   assert_eq!(&Children::Count(Cell::new(0)), parser.get_children("fish").unwrap());
   // test table key lookup
   assert_eq!(&Children::Count(Cell::new(0)), parser.get_children("foo.\"δïáϱñôƨïƨ\"").unwrap());
@@ -357,4 +354,82 @@ fn test_basic_set_then_get_on_mixed_tables() {
   assert_eq!(Value::int(5), parser.get_value("foo.\"bar\"[2].array[2]").unwrap());
   assert_eq!(Value::int(6), parser.get_value("foo.\"bar\"[2].array[3]").unwrap());
   assert_eq!(Value::int(7), parser.get_value("foo.\"bar\"[2].array[4]").unwrap());
+}
+
+#[test]
+fn test_invalid_table_fail() {
+  let _ = env_logger::init();
+
+  let parser = TOMLParser::new();
+  let (parser, result) = parser.parse(r#"[foo.quality]
+"ƥèřïôδ" = 24.7
+[owner]
+a_key = "a value"
+[foo.quality]
+KEYONE = "VALUEONE"
+KEYTWO = "VALUETWO"
+"#);
+  assert!(check_errors(&parser, &result).0, "There should have been an invalid table error, but there wasn't.");
+  let errors = parser.get_errors();
+  let error = &errors.borrow()[0];
+  if let &ParseError::InvalidTable(ref key, line, ref rc_hm) = error {
+    assert!(key == "foo.quality" && line == 5,
+      "key should be \"foo.quality\", but is: \"{}\", line number should be 5, but is: {}",
+        key, line);
+     assert_eq!(&Value::basic_string("VALUEONE").unwrap(), rc_hm.borrow().get("KEYONE").unwrap());
+     assert_eq!(&Value::basic_string("VALUETWO").unwrap(), rc_hm.borrow().get("KEYTWO").unwrap());
+  } else {
+    assert!(false, "The first error should have been an invalid table error, but it wasn't.");
+  }
+}
+
+#[test]
+fn test_duplicate_key_fail() {
+  let _ = env_logger::init();
+
+  let parser = TOMLParser::new();
+  let (parser, result) = parser.parse(r#"[foo.quality]
+"ƥèřïôδ" = 24.7
+[owner]
+a_key = "a value"
+a_key = 'ANOTHER VALUE'
+[foo.quality]
+KEYONE = "VALUEONE"
+"#);
+  assert!(check_errors(&parser, &result).0, "There should have been a duplicate key error, but there wasn't.");
+  let errors = parser.get_errors();
+  let error = &errors.borrow()[0];
+  if let &ParseError::DuplicateKey(ref key, line, ref val) = error {
+    assert!(key == "owner.a_key" && line == 5,
+      "key should be \"owner.a_key\", but is: \"{}\", line number should be 5, but is: {}",
+        key, line);
+     assert_eq!(&Value::literal_string("ANOTHER VALUE").unwrap(), val);
+  } else {
+    assert!(false, "The first error should have been a duplicate key error, but it wasn't.");
+  }
+}
+
+#[test]
+fn test_invalid_datetime_fail() {
+  let _ = env_logger::init();
+
+  let parser = TOMLParser::new();
+  let (parser, result) = parser.parse(r#"[foo.quality]
+"ƥèřïôδ" = 24.7
+[owner]
+a_key = "a value"
+b_key = 2010-02-29T03:03:03.3333Z
+[foo.quality]
+KEYONE = "VALUEONE"
+"#);
+  assert!(check_errors(&parser, &result).0, "There should have been an invalid datetime error, but there wasn't.");
+  let errors = parser.get_errors();
+  let error = &errors.borrow()[0];
+  if let &ParseError::InvalidDateTime(ref key, line) = error {
+    assert!(key == "owner.b_key" && line == 5,
+      "key should be \"owner.b_key\", but is: \"{}\", line number should be 5, but is: {}",
+        key, line);
+  } else {
+    assert!(false, "The first error should have been an invalid datetime error, but it wasn't.");
+  }
 }
