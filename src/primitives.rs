@@ -10,10 +10,7 @@ use ::types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, St
 use parser::{TOMLParser, Key, count_lines};
 use nom;
 use nom::{IResult, InputLength};
-// TODO LIST:
-// Make sure empty key is accepted
-// Allow Date only. Right now we require time and offset for a full date-time
-//
+
 #[inline(always)]
 fn is_keychar(chr: char) -> bool {
   let uchr = chr as u32;
@@ -300,7 +297,7 @@ impl<'a> TOMLParser<'a> {
     if error {
       debug!("Error: {}", *(*val).borrow());
       self.errors.borrow_mut().push(ParseError::DuplicateKey(
-        full_key, self.line_count.get() ,to_tval!(&*val.borrow())
+        full_key, self.line_count.get(), 0, to_tval!(&*val.borrow())
       ));
     } else if setvalue  || insert {
       if setvalue {
@@ -512,19 +509,32 @@ impl<'a> TOMLParser<'a> {
     )
   );
 
-  method!(pub date_time<TOMLParser<'a>, &'a str, DateTime>, mut self,
+  pub fn date_time(mut self: TOMLParser<'a>, input: &'a str) -> (TOMLParser<'a>, IResult<&'a str, DateTime>) {
+    let before_len = input.len();
+    let (tmp, result) = self.date_time_internal(input);
+    self = tmp;
+    match result {
+      IResult::Done(i, o) => {
+        if !o.validate() {
+          let parsed_len = before_len - i.len();
+          self.errors.borrow_mut().push(ParseError::InvalidDateTime(
+            TOMLParser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
+              &self.last_array_tables_index, &self.keychain
+            ).1, self.line_count.get(), 0, input[0..parsed_len].into()
+          ));
+        }
+        (self, IResult::Done(i, o))
+      },
+      other => (self, other),
+    }
+  }
+  
+  method!(date_time_internal<TOMLParser<'a>, &'a str, DateTime>, mut self,
     chain!(
      date: call_m!(self.date)             ~
      time: complete!(call_m!(self.time))?  ,
         ||{
           let res = DateTime::new(date, time);
-          if !res.validate() {
-            self.errors.borrow_mut().push(ParseError::InvalidDateTime(
-              TOMLParser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
-                &self.last_array_tables_index, &self.keychain
-              ).1, self.line_count.get()
-            ));
-          }
           res
         }
     )
@@ -576,7 +586,7 @@ impl<'a> TOMLParser<'a> {
         if self.array_error.get() {
           debug!("array_error");
           let err = self.errors.borrow_mut().pop().unwrap();
-          if let ParseError::InvalidTable(_, _, ref map) = err {
+          if let ParseError::InvalidTable(_, _, _, ref map) = err {
             debug!("InvalidTable");
             map.borrow_mut().insert(res.key.to_string(), to_tval!(&*res.val.borrow()));
           }

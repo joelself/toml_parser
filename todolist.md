@@ -17,7 +17,6 @@
 	- [x] Inserting a value insert's its key in it's parent's children 
 	- [x] Re-implement get_array_table_key to take into account implicit tables are always standard tables
   - [x] DateTime validation
-    - [ ] Add the invalid datetime string to the InvalidDateTime error
 
 * ast/structs.rs
 	- [x] Re-implement HashValue to have a list of children or max index of children
@@ -60,7 +59,7 @@
 	- [x] Add toml/examples/example-v0.4.0.toml to success tests
 
 * tests/parser_tests.rs
-	- [ ] Add integration tests for parser: 
+	- [x] Add integration tests for parser: 
     - [x] load a larger document -> validate
     - [x] do a bunch of gets -> validate
     - [x] do a bunch of get_children -> validate
@@ -70,3 +69,6 @@
 * types.rs
   - [x] Log an error on a return result of Result::Err
   - [x] Add unit tests to convenience functions
+  - [x] Add future error types to ParseError
+  - [x] Add column number to all error types
+  - [x] Add the invalid datetime string to the InvalidDateTime error

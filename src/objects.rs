@@ -85,9 +85,6 @@ impl<'a> TOMLParser<'a> {
     }
     let mut len = tables.borrow().len();
     let mut pop = false;
-    // TODO: Need to add an array_table_root key that points to all of it's Children
-    //       And a std_table_root that points to all of it's children, neither root should
-    //       be part of the key
     if len == 0 {
       tables.borrow_mut().push(Rc::new(TableType::Standard(
         Table::new_str(WSSep::new_str("", ""), "$Root$", vec![])
@@ -302,7 +299,7 @@ impl<'a> TOMLParser<'a> {
             &self.last_array_tables_index).1;
           debug!("Setting Invalid Table {} in Standard Table", array_table_key);
           self.errors.borrow_mut().push(ParseError::InvalidTable(
-            array_table_key, self.line_count.get(),
+            array_table_key, self.line_count.get(), 0,
             RefCell::new(HashMap::new())
           ));
           self.last_array_tables.borrow_mut().pop();
@@ -428,7 +425,7 @@ impl<'a> TOMLParser<'a> {
           if !valid {
             debug!("Setting Invalid Table {}", full_key);
             self.errors.borrow_mut().push(ParseError::InvalidTable(
-              full_key, self.line_count.get(),
+              full_key, self.line_count.get(), 0,
               RefCell::new(HashMap::new())
             ));
           } else {
@@ -501,7 +498,7 @@ impl<'a> TOMLParser<'a> {
               let err_len = self.errors.borrow().len();
               let mut mixed = false;
               if err_len > 0 {
-                if let ParseError::MixedArray(ref key, _) = self.errors.borrow()[err_len - 1] {
+                if let ParseError::MixedArray(ref key, _, _) = self.errors.borrow()[err_len - 1] {
                   debug!("Check mixed array previous: {}, current: {}", key, tuple.1);
                   if !tuple.1.starts_with(key) {
                     mixed = true;
@@ -514,7 +511,7 @@ impl<'a> TOMLParser<'a> {
               }
               if mixed {
                 self.errors.borrow_mut().push(ParseError::MixedArray(
-                  tuple.2, self.line_count.get()
+                  tuple.2, self.line_count.get(), 0
                 ));
               }
             }

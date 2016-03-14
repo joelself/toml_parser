@@ -140,10 +140,11 @@ fn check_errors(parser: &TOMLParser, result: &ParseResult) -> (bool, String){
     let errors = parser.get_errors();
     for error in errors.borrow().iter() {
       match error {
-        &ParseError::MixedArray(ref key, _) => full_error.push_str(&format!("MixedArray error: {}\n", key)),
-        &ParseError::DuplicateKey(ref key, _, _) => full_error.push_str(&format!("Duplicate key error: {}\n", key)),
-        &ParseError::InvalidTable(ref key, _, _) => full_error.push_str(&format!("Invalid table error: {}\n", key)),
-        &ParseError::InvalidDateTime(ref key, _) => full_error.push_str(&format!("Invalid datetime error: {}\n", key)),
+        &ParseError::MixedArray(ref key, _, _) => full_error.push_str(&format!("MixedArray error: {}\n", key)),
+        &ParseError::DuplicateKey(ref key, _, _, _) => full_error.push_str(&format!("Duplicate key error: {}\n", key)),
+        &ParseError::InvalidTable(ref key, _, _, _) => full_error.push_str(&format!("Invalid table error: {}\n", key)),
+        &ParseError::InvalidDateTime(ref key, _, _, _) => full_error.push_str(&format!("Invalid datetime error: {}\n", key)),
+        _ => full_error.push_str("Some other error was encountered."),
       }
     }
   }
@@ -170,7 +171,7 @@ a_key = "a value"
   assert!(check_errors(&parser, &result).0, "There should have been a mixed array error, but there wasn't.");
   let errors = parser.get_errors();
   let error = &errors.borrow()[0];
-  if let &ParseError::MixedArray(ref key, line) = error {
+  if let &ParseError::MixedArray(ref key, line, _col) = error {
     assert!(key == "foo.\"bar\"[0].array" && line == 4,
       "key should be \"foo.\"bar\"[0].array\", but is: \"{}\", line number should be 4, but is: {}",
         key, line);
@@ -193,7 +194,7 @@ a_key = "a value"
   assert!(check_errors(&parser, &result).0, "There should have been a mixed array error, but there wasn't.");
   let errors = parser.get_errors();
   let error = &errors.borrow()[0];
-  if let &ParseError::MixedArray(ref key, line) = error {
+  if let &ParseError::MixedArray(ref key, line, _col) = error {
     assert!(key == "foo.quality.machine.parts.service.\"inline table\".meal" && line == 3,
       "key should be \"foo.quality.machine.parts.service.\"inline table\".meal\", but is: \"{}\", line number should be 3, but is: {}",
         key, line);
@@ -372,7 +373,7 @@ KEYTWO = "VALUETWO"
   assert!(check_errors(&parser, &result).0, "There should have been an invalid table error, but there wasn't.");
   let errors = parser.get_errors();
   let error = &errors.borrow()[0];
-  if let &ParseError::InvalidTable(ref key, line, ref rc_hm) = error {
+  if let &ParseError::InvalidTable(ref key, line, _col, ref rc_hm) = error {
     assert!(key == "foo.quality" && line == 5,
       "key should be \"foo.quality\", but is: \"{}\", line number should be 5, but is: {}",
         key, line);
@@ -399,7 +400,7 @@ KEYONE = "VALUEONE"
   assert!(check_errors(&parser, &result).0, "There should have been a duplicate key error, but there wasn't.");
   let errors = parser.get_errors();
   let error = &errors.borrow()[0];
-  if let &ParseError::DuplicateKey(ref key, line, ref val) = error {
+  if let &ParseError::DuplicateKey(ref key, line, _col, ref val) = error {
     assert!(key == "owner.a_key" && line == 5,
       "key should be \"owner.a_key\", but is: \"{}\", line number should be 5, but is: {}",
         key, line);
@@ -425,10 +426,10 @@ KEYONE = "VALUEONE"
   assert!(check_errors(&parser, &result).0, "There should have been an invalid datetime error, but there wasn't.");
   let errors = parser.get_errors();
   let error = &errors.borrow()[0];
-  if let &ParseError::InvalidDateTime(ref key, line) = error {
-    assert!(key == "owner.b_key" && line == 5,
-      "key should be \"owner.b_key\", but is: \"{}\", line number should be 5, but is: {}",
-        key, line);
+  if let &ParseError::InvalidDateTime(ref key, line, _col, ref val) = error {
+    assert!(key == "owner.b_key" && line == 5 && val == "2010-02-29T03:03:03.3333Z",
+      "key should be \"owner.b_key\", but is: \"{}\", line number should be 5, but is: {}, parsed datetime should be 2010-02-29T03:03:03.3333Z, but is {}",
+        key, line, val);
   } else {
     assert!(false, "The first error should have been an invalid datetime error, but it wasn't.");
   }

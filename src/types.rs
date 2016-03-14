@@ -20,10 +20,31 @@ pub enum ParseResult<'a> {
 }
 
 pub enum ParseError<'a> {
-	MixedArray(String, usize),
-	DuplicateKey(String, usize, Value<'a>),
-	InvalidTable(String, usize, RefCell<HashMap<String, Value<'a>>>),
-  InvalidDateTime(String, usize)
+	MixedArray(String, usize, usize),
+	DuplicateKey(String, usize, usize, Value<'a>),
+	InvalidTable(String, usize, usize, RefCell<HashMap<String, Value<'a>>>),
+  InvalidDateTime(String, usize, usize, Cow<'a, str>),
+	IntegerOverflow(String, usize, usize, Cow<'a, str>),
+	IntegerUnderflow(String, usize, usize, Cow<'a, str>),
+	InvalidInteger(String, usize, usize, Cow<'a, str>),
+	Infinity(String, usize, usize, Cow<'a, str>),
+	NegativeInfinity(String, usize, usize, Cow<'a, str>),
+	LossOfPrecision(String, usize, usize, Cow<'a, str>),
+	InvalidFloat(String, usize, usize, Cow<'a, str>),
+  InvalidBoolean(String, usize, usize, Cow<'a, str>),
+  InvalidString(String, usize, usize, Cow<'a, str>, StrType),
+  GenericError(String, usize, usize, Option<Cow<'a, str>>, String),
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Value<'a> {
+	Integer(Cow<'a, str>),
+	Float(Cow<'a, str>),
+	Boolean(bool),
+	DateTime(DateTime<'a>),
+	String(Cow<'a, str>, StrType),
+	Array(Rc<Vec<Value<'a>>>),
+	InlineTable(Rc<Vec<(Cow<'a, str>, Value<'a>)>>)
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -81,17 +102,6 @@ impl Children {
     }
     return all_keys;
   }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum Value<'a> {
-	Integer(Cow<'a, str>),
-	Float(Cow<'a, str>),
-	Boolean(bool),
-	DateTime(DateTime<'a>),
-	String(Cow<'a, str>, StrType),
-	Array(Rc<Vec<Value<'a>>>),
-	InlineTable(Rc<Vec<(Cow<'a, str>, Value<'a>)>>)
 }
 
 impl<'a> Display for Value<'a> {
