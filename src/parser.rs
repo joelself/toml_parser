@@ -6,33 +6,10 @@ use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use std::borrow::Cow;
 use nom::IResult;
-use ast::structs::{Toml, ArrayType, HashValue, TableType, TOMLValue, Array, InlineTable,
+use internals::primitives::Key;
+use internals::ast::structs::{Toml, ArrayType, HashValue, TableType, TOMLValue, Array, InlineTable,
                    ArrayValue, WSSep, TableKeyVal};
 use types::{ParseError, ParseResult, Value, Children};
-
-named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
-named!(all_lines<&str, Vec<&str> >, many0!(full_line));
-
-pub fn count_lines(s: &str) -> usize {
-	let r = all_lines(s);
-	match &r {
-    &IResult::Done(_, ref o) => o.len() as usize,
-    _						 => 0 as usize,
-	}
-}
-
-pub enum Key<'a> {
-	Str(Cow<'a, str>),
-	Index(Cell<usize>),
-}
-
-impl<'a> Key<'a> {
-	pub fn inc(&mut self) {
-		if let &mut Key::Index(ref mut i) = self {
-			i.set(i.get() + 1);
-		}
-	}
-}
 
 pub struct TOMLParser<'a> {
 	pub root: RefCell<Toml<'a>>,
@@ -125,7 +102,7 @@ impl<'a> TOMLParser<'a> {
 			let hashval = self.map.get(&s_key).unwrap();
 			let clone = hashval.clone();
 			if let Some(val) = clone.value {
-				Some(to_tval!(&*val.borrow()))
+				Some(to_val!(&*val.borrow()))
 			} else {
 				None
 			}
@@ -427,7 +404,7 @@ impl<'a> TOMLParser<'a> {
   pub fn sanitize_array(arr: Rc<RefCell<Array<'a>>>) -> Value<'a> {
 		let mut result: Vec<Value> = vec![];
 		for av in arr.borrow().values.iter() {
-			result.push(to_tval!(&*av.val.borrow()));
+			result.push(to_val!(&*av.val.borrow()));
 		}
 		Value::Array(Rc::new(result))
 	}
@@ -435,7 +412,7 @@ impl<'a> TOMLParser<'a> {
 	pub fn sanitize_inline_table(it: Rc<RefCell<InlineTable<'a>>>) -> Value<'a> {
 		let mut result: Vec<(Cow<'a, str>, Value)> = vec![];
 		for kv in it.borrow().keyvals.iter() {
-			result.push((kv.keyval.key.clone(), to_tval!(&*kv.keyval.val.borrow())));
+			result.push((kv.keyval.key.clone(), to_val!(&*kv.keyval.val.borrow())));
 		}
 		return Value::InlineTable(Rc::new(result));
 	}

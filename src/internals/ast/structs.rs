@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::{RefCell, Cell};
 use std::option::Option;
 use std::borrow::Cow;
-use ::types::{DateTime, StrType, Children, Time, TimeOffset, TimeOffsetAmount,
+use types::{DateTime, StrType, Children, Time, TimeOffset, TimeOffsetAmount,
               Date, PosNeg};
 
 
@@ -773,7 +773,7 @@ impl<'a> InlineTable<'a> {
 
 #[cfg(test)]
 mod test {
-	use ast::structs::comp_opt;
+	use internals::ast::structs::comp_opt;
 	#[test]
 	fn test_comp_opt() {
   	let (a, b) = (Some("value"), Some("value"));

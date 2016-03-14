@@ -1,15 +1,28 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use ast::structs::{KeyVal, WSSep, TOMLValue, ErrorCode,
-                   HashValue, TableType, Table,
-                   get_last_keys};
-use ::types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
-              Children, Value};
-use parser::{TOMLParser, Key, count_lines};
+use std::borrow::Cow;
+use internals::ast::structs::{KeyVal, WSSep, TOMLValue, ErrorCode,
+  HashValue, TableType, Table, get_last_keys};
+use types::{Date, Time, DateTime, TimeOffset, TimeOffsetAmount, ParseError, StrType,
+            Children, Value};
+use parser::TOMLParser;
 use nom;
 use nom::{IResult, InputLength};
+
+pub enum Key<'a> {
+	Str(Cow<'a, str>),
+	Index(Cell<usize>),
+}
+
+impl<'a> Key<'a> {
+	pub fn inc(&mut self) {
+		if let &mut Key::Index(ref mut i) = self {
+			i.set(i.get() + 1);
+		}
+	}
+}
 
 #[inline(always)]
 fn is_keychar(chr: char) -> bool {
@@ -18,6 +31,17 @@ fn is_keychar(chr: char) -> bool {
   uchr >= 0x61 && uchr <= 0x7A || // a-z
   uchr >= 0x30 && uchr <= 0x39 || // 0-9
   uchr == 0x2D || uchr == 0x5f    // "-", "_"
+}
+
+named!(full_line<&str, &str>, re_find!("^(.*?)(\n|(\r\n))"));
+named!(all_lines<&str, Vec<&str> >, many0!(full_line));
+
+pub fn count_lines(s: &str) -> usize {
+	let r = all_lines(s);
+	match &r {
+    &IResult::Done(_, ref o) => o.len() as usize,
+    _						 => 0 as usize,
+	}
 }
 
 impl<'a> TOMLParser<'a> {
@@ -297,7 +321,7 @@ impl<'a> TOMLParser<'a> {
     if error {
       debug!("Error: {}", *(*val).borrow());
       self.errors.borrow_mut().push(ParseError::DuplicateKey(
-        full_key, self.line_count.get(), 0, to_tval!(&*val.borrow())
+        full_key, self.line_count.get(), 0, to_val!(&*val.borrow())
       ));
     } else if setvalue  || insert {
       if setvalue {
@@ -588,7 +612,7 @@ impl<'a> TOMLParser<'a> {
           let err = self.errors.borrow_mut().pop().unwrap();
           if let ParseError::InvalidTable(_, _, _, ref map) = err {
             debug!("InvalidTable");
-            map.borrow_mut().insert(res.key.to_string(), to_tval!(&*res.val.borrow()));
+            map.borrow_mut().insert(res.key.to_string(), to_val!(&*res.val.borrow()));
           }
           self.errors.borrow_mut().push(err);
         } else {
@@ -606,10 +630,10 @@ impl<'a> TOMLParser<'a> {
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use ast::structs::{WSSep, Array, ArrayValue, KeyVal,
+  use internals::ast::structs::{WSSep, Array, ArrayValue, KeyVal,
                      InlineTable, TableKeyVal, TOMLValue,
                      CommentOrNewLines};
-  use ::types::{DateTime, Time, Date, TimeOffsetAmount, TimeOffset, StrType};
+  use types::{DateTime, Time, Date, TimeOffsetAmount, TimeOffset, StrType};
   use parser::TOMLParser;
   use std::rc::Rc;
   use std::cell::RefCell;

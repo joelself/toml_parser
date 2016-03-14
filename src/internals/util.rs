@@ -1,4 +1,4 @@
-use ast::structs::Comment;
+use internals::ast::structs::Comment;
 use parser::TOMLParser;
 
 fn not_eol(chr: char) -> bool {
@@ -33,7 +33,7 @@ impl<'a> TOMLParser<'a> {
 mod test {
   use nom::IResult::Done;
   use parser::TOMLParser;
-  use ast::structs::Comment;
+  use internals::ast::structs::Comment;
 
   #[test]
   fn test_newline() {

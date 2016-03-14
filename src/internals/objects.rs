@@ -1,8 +1,8 @@
-use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
-                   CommentOrNewLines, ArrayValue, Array, TOMLValue,
-                   InlineTable, WSSep, TableKeyVal, ArrayType,
-                   HashValue, format_tt_keys};
-use parser::{TOMLParser, Key};
+use internals::ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
+  CommentOrNewLines, ArrayValue, Array, TOMLValue, InlineTable, WSSep,
+  TableKeyVal, ArrayType, HashValue, format_tt_keys};
+use parser::TOMLParser;
+use internals::primitives::Key;
 use types::{ParseError, Children};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -597,14 +597,14 @@ impl<'a> TOMLParser<'a> {
 
 #[cfg(test)]
 mod test {
-  use nom::IResult::Done;
-  use ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
-                     KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table,
-                     TableType, TOMLValue};
-  use ::types::{DateTime, Date, Time, TimeOffset, TimeOffsetAmount, StrType};
-  use parser::{TOMLParser, Key};
   use std::rc::Rc;
   use std::cell::{RefCell, Cell};
+  use nom::IResult::Done;
+  use types::{DateTime, Date, Time, TimeOffset, TimeOffsetAmount, StrType};
+  use parser::TOMLParser;
+  use internals::ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
+    KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table, TableType, TOMLValue};
+  use internals::primitives::Key;
 
   #[test]
   fn test_table() {

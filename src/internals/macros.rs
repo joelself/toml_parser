@@ -1,5 +1,5 @@
 #[macro_export]
-macro_rules! to_tval(
+macro_rules! to_val(
   ($tval:expr) => (
     match $tval {
       &TOMLValue::Integer(ref v) => Value::Integer(v.clone()),

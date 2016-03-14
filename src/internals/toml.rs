@@ -1,4 +1,4 @@
-use ast::structs::{Toml, NLExpression, Expression, WSSep};
+use internals::ast::structs::{Toml, NLExpression, Expression, WSSep};
 use parser::TOMLParser;
 
 impl<'a> TOMLParser<'a> {
@@ -79,14 +79,14 @@ impl<'a> TOMLParser<'a> {
 
 #[cfg(test)]
 mod test {
-  use nom::IResult::Done;
-  use parser::TOMLParser;
-  use ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
-                     TableType, TOMLValue, NLExpression, ArrayValue, Toml,
-                     Array, CommentOrNewLines};
-  use types::{TimeOffsetAmount, DateTime, Date, Time, TimeOffset, StrType};
   use std::rc::Rc;
   use std::cell::RefCell;
+  use nom::IResult::Done;
+  use parser::TOMLParser;
+  use types::{TimeOffsetAmount, DateTime, Date, Time, TimeOffset, StrType};
+  use internals::ast::structs::{Expression, Comment, WSSep, KeyVal, Table, WSKeySep,
+                     TableType, TOMLValue, NLExpression, ArrayValue, Toml,
+                     Array, CommentOrNewLines};
   
 
   #[test]
