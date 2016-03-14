@@ -282,3 +282,79 @@ fn test_get_children_on_mixed_tables() {
   assert_eq!(&Children::Keys(RefCell::new(vec!["three".to_string()])), parser.get_children("foo.\"bar\"[2].array[3]").unwrap());
   assert_eq!(&Children::Keys(RefCell::new(vec!["\"bar\"".to_string(), "quality".to_string(), "\"δïáϱñôƨïƨ\"".to_string(), "\"ƥřôϱñôƨïƨ\"".to_string(), "hypnosis".to_string()])), parser.get_children("foo").unwrap());
 }
+
+#[test]
+fn test_basic_set_then_get_on_mixed_tables() {
+  let _ = env_logger::init();
+
+  let parser = TOMLParser::new();
+  let (mut parser, _) = parser.parse(TT::get());
+  // test setting bare key
+  assert!(parser.set_value("fish", Value::int(1)));
+  // test table key set
+  assert!(parser.set_value("foo.\"δïáϱñôƨïƨ\"", Value::int(2)));
+  assert!(parser.set_value("foo.\"ƥřôϱñôƨïƨ\"", Value::float(1.2)));
+  assert!(parser.set_value("foo.hypnosis", Value::float(2.3)));
+  // test array table key set
+  assert!(parser.set_value("foo.\"bar\"[0].baz", Value::float(3.4)));
+  assert!(parser.set_value("foo.\"bar\"[0].qux", Value::Boolean(true)));
+  assert!(parser.set_value("foo.\"bar\"[1].baz", Value::Boolean(false)));
+  assert!(parser.set_value("foo.\"bar\"[1].qux", Value::basic_string("ONE").unwrap()));
+  // Test sibling array of tables set
+  assert!(parser.set_value("foo.quality[0].furniture", Value::date_from_int(2000, 1, 1).unwrap()));
+  // Test standard table nested in array of tables set
+  assert!(parser.set_value("foo.quality[0].machine.parts.service.\"ƥèřïôδ\"", Value::datetime_from_int(2001, 2, 2, 1, 1, 1).unwrap()));
+  // Test inline table value set
+  assert!(parser.set_value("foo.quality[0].machine.parts.service.\"inline table\"", Value::InlineTable(
+    Rc::new(vec![
+      ("KEYONE".into(), Value::literal_string("VALUEONE").unwrap()),
+      ("KEYTWO".into(), Value::literal_string("VALUETWO").unwrap())
+    ])
+  )));
+  // Test child array of tables set
+  assert!(parser.set_value("foo.quality[0].labor[0].Name", Value::ml_basic_string("TWO").unwrap()));
+  assert!(parser.set_value("foo.quality[0].labor[1].Name", Value::ml_literal_string("THREE").unwrap()));
+  // Test new parent array of tables set
+  assert!(parser.set_value("foo.quality[1].money", Value::datetime_parse("2002-03-03T02:02:02.01234-08:35").unwrap()));
+  // Test restarting adding tables to previously defined array of tables set
+  assert!(parser.set_value("foo.\"bar\"[2].baz", Value::datetime_parse("2003-04-04").unwrap()));
+  assert!(parser.set_value("foo.\"bar\"[2].qux", Value::datetime_parse("2004-05-05T03:03:03").unwrap()));
+  // Test resetting array
+  assert!(parser.set_value("foo.\"bar\"[2].array", Value::Array(Rc::new(vec![
+    Value::int(3), Value::int(4), Value::int(5), Value::int(6), Value::int(7)
+  ]))));
+  
+  
+  // test getting bare key
+  assert_eq!(Value::int(1), parser.get_value("fish").unwrap());
+  // test table key lookup
+  assert_eq!(Value::int(2), parser.get_value("foo.\"δïáϱñôƨïƨ\"").unwrap());
+  assert_eq!(Value::float(1.2), parser.get_value("foo.\"ƥřôϱñôƨïƨ\"").unwrap());
+  assert_eq!(Value::float(2.3), parser.get_value("foo.hypnosis").unwrap());
+  // test array table key lookup
+  assert_eq!(Value::float(3.4), parser.get_value("foo.\"bar\"[0].baz").unwrap());
+  assert_eq!(Value::Boolean(true), parser.get_value("foo.\"bar\"[0].qux").unwrap());
+  assert_eq!(Value::Boolean(false), parser.get_value("foo.\"bar\"[1].baz").unwrap());
+  assert_eq!(Value::basic_string("ONE").unwrap(), parser.get_value("foo.\"bar\"[1].qux").unwrap());
+  //Test sibling array of tables
+  assert_eq!(Value::date_from_int(2000, 1, 1).unwrap(), parser.get_value("foo.quality[0].furniture").unwrap());
+  // Test standard table nested in array of tables
+  assert_eq!(Value::datetime_from_int(2001, 2, 2, 1, 1, 1).unwrap(), parser.get_value("foo.quality[0].machine.parts.service.\"ƥèřïôδ\"").unwrap());
+  // Test inline table value
+  assert_eq!(Value::literal_string("VALUEONE").unwrap(), parser.get_value("foo.quality[0].machine.parts.service.\"inline table\".KEYONE").unwrap());
+  assert_eq!(Value::literal_string("VALUETWO").unwrap(), parser.get_value("foo.quality[0].machine.parts.service.\"inline table\".KEYTWO").unwrap());
+  // Test child array of tables
+  assert_eq!(Value::ml_basic_string("TWO").unwrap(), parser.get_value("foo.quality[0].labor[0].Name").unwrap());
+  assert_eq!(Value::ml_literal_string("THREE").unwrap(), parser.get_value("foo.quality[0].labor[1].Name").unwrap());
+  // Test new parent array of tables
+  assert_eq!(Value::datetime_parse("2002-03-03T02:02:02.01234-08:35").unwrap(), parser.get_value("foo.quality[1].money").unwrap());
+  // Test restarting adding tables to previously defined array of tables
+  assert_eq!(Value::datetime_parse("2003-04-04").unwrap(), parser.get_value("foo.\"bar\"[2].baz").unwrap());
+  assert_eq!(Value::datetime_parse("2004-05-05T03:03:03").unwrap(), parser.get_value("foo.\"bar\"[2].qux").unwrap());
+  // Test inline table nested in array
+  assert_eq!(Value::int(3), parser.get_value("foo.\"bar\"[2].array[0]").unwrap());
+  assert_eq!(Value::int(4), parser.get_value("foo.\"bar\"[2].array[1]").unwrap());
+  assert_eq!(Value::int(5), parser.get_value("foo.\"bar\"[2].array[2]").unwrap());
+  assert_eq!(Value::int(6), parser.get_value("foo.\"bar\"[2].array[3]").unwrap());
+  assert_eq!(Value::int(7), parser.get_value("foo.\"bar\"[2].array[4]").unwrap());
+}

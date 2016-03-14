@@ -63,7 +63,7 @@
     - [x] load a larger document -> validate
     - [x] do a bunch of gets -> validate
     - [x] do a bunch of get_children -> validate
-    - [ ] do a bunch of sets, then do a bunch of gets -> validate
+    - [x] do a bunch of sets, then do a bunch of gets -> validate
     - [ ] Add failure tests for the other 3 types of error
 
 * types.rs
