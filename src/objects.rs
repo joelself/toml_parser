@@ -1,5 +1,5 @@
 use ast::structs::{TableType, WSKeySep, Table, CommentNewLines,
-                   CommentOrNewLines, ArrayTOMLValue, Array, TOMLValue,
+                   CommentOrNewLines, ArrayValue, Array, TOMLValue,
                    InlineTable, WSSep, TableKeyVal, ArrayType,
                    HashValue, format_tt_keys};
 use parser::{TOMLParser, Key};
@@ -485,7 +485,7 @@ impl<'a> TOMLParser<'a> {
   method!(comment_or_nls<TOMLParser<'a>, &'a str, Vec<CommentOrNewLines> >, mut self,
     many1!(call_m!(self.comment_or_nl)));
   
-  method!(array_value<TOMLParser<'a>, &'a str, ArrayTOMLValue>, mut self,
+  method!(array_value<TOMLParser<'a>, &'a str, ArrayValue>, mut self,
         chain!(
           val: call_m!(self.val)                        ~
     array_sep: complete!(call_m!(self.array_sep))?      ~
@@ -495,19 +495,40 @@ impl<'a> TOMLParser<'a> {
             let len = self.last_array_type.borrow().len();
             if len > 0 && self.last_array_type.borrow()[len - 1] != ArrayType::None &&
                self.last_array_type.borrow()[len - 1] != t {
-              self.mixed_array.set(true);
+              let tuple = TOMLParser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
+                &self.last_array_tables_index, &self.keychain
+              );
+              let err_len = self.errors.borrow().len();
+              let mut mixed = false;
+              if err_len > 0 {
+                if let ParseError::MixedArray(ref key, _) = self.errors.borrow()[err_len - 1] {
+                  debug!("Check mixed array previous: {}, current: {}", key, tuple.1);
+                  if !tuple.1.starts_with(key) {
+                    mixed = true;
+                    debug!("Mixed array error insert: {}", tuple.1);
+                  }
+                }
+              } else {
+                mixed = true;
+                debug!("Mixed array error insert: {}", tuple.1);
+              }
+              if mixed {
+                self.errors.borrow_mut().push(ParseError::MixedArray(
+                  tuple.2, self.line_count.get()
+                ));
+              }
             }
             self.last_array_type.borrow_mut().pop();
             self.last_array_type.borrow_mut().push(t);
             let keychain_len = self.keychain.borrow().len();
             self.insert_keyval_into_map(val.clone());
             self.keychain.borrow_mut()[keychain_len - 1].inc();
-            ArrayTOMLValue::new(val, array_sep, comment_nls)
+            ArrayValue::new(val, array_sep, comment_nls)
           }
         )
   );
 
-  method!(array_values<TOMLParser<'a>, &'a str, Vec<ArrayTOMLValue> >, mut self,
+  method!(array_values<TOMLParser<'a>, &'a str, Vec<ArrayValue> >, mut self,
     chain!(
      vals: many0!(call_m!(self.array_value)) ,
      ||{
@@ -526,14 +547,6 @@ impl<'a> TOMLParser<'a> {
     self.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     let (tmp, res) = self.array_internal(input);
     self = tmp; // Restore self
-    if self.mixed_array.get() {
-      self.mixed_array.set(false);
-      self.errors.borrow_mut().push(ParseError::MixedArray(
-        TOMLParser::get_full_key(&RefCell::new(& mut self.map), &self.last_array_tables,
-          &self.last_array_tables_index, &self.keychain
-        ).1, self.line_count.get()
-      ));
-    }
     self.keychain.borrow_mut().pop();
     self.last_array_type.borrow_mut().pop();
     (self, res)
@@ -588,7 +601,7 @@ impl<'a> TOMLParser<'a> {
 #[cfg(test)]
 mod test {
   use nom::IResult::Done;
-  use ast::structs::{Array, ArrayTOMLValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
+  use ast::structs::{Array, ArrayValue, WSSep, TableKeyVal, InlineTable, WSKeySep,
                      KeyVal, CommentNewLines, Comment, CommentOrNewLines, Table,
                      TableType, TOMLValue};
   use ::types::{DateTime, Date, Time, TimeOffset, TimeOffsetAmount, StrType};
@@ -705,7 +718,7 @@ mod test {
     let mut p = TOMLParser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("54.6, \n#çô₥₥èñƭ\n\n").1,
-      Done("",ArrayTOMLValue::new(
+      Done("",ArrayValue::new(
         Rc::new(RefCell::new(TOMLValue::Float("54.6".into()))), Some(WSSep::new_str("", " ")),
         vec![CommentOrNewLines::Comment(CommentNewLines::new_str(
           "\n", Comment::new_str("çô₥₥èñƭ"), "\n\n"
@@ -715,14 +728,14 @@ mod test {
     p = TOMLParser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("\"ƨƥáϱλèƭƭï\"").1,
-      Done("",ArrayTOMLValue::new(
+      Done("",ArrayValue::new(
         Rc::new(RefCell::new(TOMLValue::String("ƨƥáϱλèƭƭï".into(), StrType::Basic))), None, vec![CommentOrNewLines::NewLines("".into())]
       ))
     );
     p = TOMLParser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_value("44_9 , ").1,
-      Done("",ArrayTOMLValue::new(
+      Done("",ArrayValue::new(
         Rc::new(RefCell::new(TOMLValue::Integer("44_9".into()))), Some(WSSep::new_str(" ", " ")),
         vec![CommentOrNewLines::NewLines("".into())]
       ))
@@ -734,20 +747,20 @@ mod test {
     let mut p = TOMLParser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_values("1, 2, 3").1, Done("", vec![
-      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("1".into()))), Some(WSSep::new_str("", " ")),
+      ArrayValue::new(Rc::new(RefCell::new(TOMLValue::Integer("1".into()))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines("".into())]),
-      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("2".into()))), Some(WSSep::new_str("", " ")),
+      ArrayValue::new(Rc::new(RefCell::new(TOMLValue::Integer("2".into()))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines("".into())]),
-      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("3".into()))), None, vec![CommentOrNewLines::NewLines("".into())])
+      ArrayValue::new(Rc::new(RefCell::new(TOMLValue::Integer("3".into()))), None, vec![CommentOrNewLines::NewLines("".into())])
     ]));
     p = TOMLParser::new();
     p.keychain.borrow_mut().push(Key::Index(Cell::new(0)));
     assert_eq!(p.array_values("1, 2, #çô₥₥èñƭ\n3, ").1, Done("", vec![
-      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("1".into()))), Some(WSSep::new_str("", " ")),
+      ArrayValue::new(Rc::new(RefCell::new(TOMLValue::Integer("1".into()))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines("".into())]),
-      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("2".into()))), Some(WSSep::new_str("", " ")),
+      ArrayValue::new(Rc::new(RefCell::new(TOMLValue::Integer("2".into()))), Some(WSSep::new_str("", " ")),
         vec![CommentOrNewLines::Comment(CommentNewLines::new_str("", Comment::new_str("çô₥₥èñƭ"), "\n"))]),
-      ArrayTOMLValue::new(Rc::new(RefCell::new(TOMLValue::Integer("3".into()))), Some(WSSep::new_str("", " ")),
+      ArrayValue::new(Rc::new(RefCell::new(TOMLValue::Integer("3".into()))), Some(WSSep::new_str("", " ")),
       vec![CommentOrNewLines::NewLines("".into())])
     ]));
   }
@@ -757,7 +770,7 @@ mod test {
     let p = TOMLParser::new();
     assert_eq!(p.array("[2010-10-10T10:10:10.33Z, 1950-03-30T21:04:14.123+05:00]").1,
       Done("", Rc::new(RefCell::new(Array::new(
-        vec![ArrayTOMLValue::new(
+        vec![ArrayValue::new(
           Rc::new(RefCell::new(TOMLValue::DateTime(DateTime::new(
             Date::new_str("2010", "10", "10"), Some(Time::new_str("10", "10", "10", Some("33"),
               Some(TimeOffset::Zulu)
@@ -765,7 +778,7 @@ mod test {
           Some(WSSep::new_str("", " ")),
           vec![CommentOrNewLines::NewLines("".into())]
         ),
-        ArrayTOMLValue::new(
+        ArrayValue::new(
           Rc::new(RefCell::new(TOMLValue::DateTime(DateTime::new(
             Date::new_str("1950", "03", "30"), Some(Time::new_str("21", "04", "14", Some("123"),
             Some(TimeOffset::Time(TimeOffsetAmount::new_str("+", "05", "00")))
@@ -783,14 +796,14 @@ mod test {
     assert_eq!(p.array("[[3,4], [4,5], [6]]").1,
       Done("", Rc::new(RefCell::new(Array::new(
         vec![
-          ArrayTOMLValue::new(
+          ArrayValue::new(
             Rc::new(RefCell::new(TOMLValue::Array(Rc::new(RefCell::new(Array::new(
               vec![
-                ArrayTOMLValue::new(
+                ArrayValue::new(
                   Rc::new(RefCell::new(TOMLValue::Integer("3".into()))), Some(WSSep::new_str("", "")),
                   vec![CommentOrNewLines::NewLines("".into())]
                 ),
-                ArrayTOMLValue::new(
+                ArrayValue::new(
                   Rc::new(RefCell::new(TOMLValue::Integer("4".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
                 )
               ],
@@ -799,14 +812,14 @@ mod test {
             Some(WSSep::new_str("", " ")),
             vec![CommentOrNewLines::NewLines("".into())]
           ),
-          ArrayTOMLValue::new(
+          ArrayValue::new(
             Rc::new(RefCell::new(TOMLValue::Array(Rc::new(RefCell::new(Array::new(
               vec![
-                ArrayTOMLValue::new(
+                ArrayValue::new(
                   Rc::new(RefCell::new(TOMLValue::Integer("4".into()))), Some(WSSep::new_str("", "")),
                   vec![CommentOrNewLines::NewLines("".into())]
                 ),
-                ArrayTOMLValue::new(
+                ArrayValue::new(
                     Rc::new(RefCell::new(TOMLValue::Integer("5".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
                 )
               ],
@@ -815,10 +828,10 @@ mod test {
             Some(WSSep::new_str("", " ")),
             vec![CommentOrNewLines::NewLines("".into())]
           ),
-          ArrayTOMLValue::new(
+          ArrayValue::new(
             Rc::new(RefCell::new(TOMLValue::Array(Rc::new(RefCell::new(Array::new(
               vec![
-                ArrayTOMLValue::new(
+                ArrayValue::new(
                   Rc::new(RefCell::new(TOMLValue::Integer("6".into()))), None, vec![CommentOrNewLines::NewLines("".into())]
                 )
               ],
